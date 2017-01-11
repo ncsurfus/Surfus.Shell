@@ -64,10 +64,6 @@
     <Compile Include="Extensions\MemoryStreamExtensions.cs" />
     <Compile Include="Extensions\NameList.cs" />
     <Compile Include="Extensions\NetworkStreamExtensions.cs" />
-    <Compile Include="KeyExchange\DiffieHellmanGroupExchange\DiffieHellmanGroupKeyExchange.cs" />
-    <Compile Include="KeyExchange\DiffieHellman\DiffieHellmanGroup14Sha1.cs" />
-    <Compile Include="KeyExchange\DiffieHellman\DiffieHellmanGroup1Sha1.cs" />
-    <Compile Include="KeyExchange\DiffieHellman\DiffieHellmanKeyExchange.cs" />
     <Compile Include="KeyExchange\KexInitExchangeResult.cs" />
     <Compile Include="KeyExchange\KeyExchangeAlgorithm.cs" />
     <Compile Include="MessageAuthentication\HmacSha1B96MacAlgorithm.cs" />

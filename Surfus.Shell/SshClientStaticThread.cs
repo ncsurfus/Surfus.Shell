@@ -41,7 +41,19 @@ namespace Surfus.Shell
         {
             await AddClientTaskAsync(new ClientTask { Client = client, TaskFunction = async () =>
             {
-                await ExchangeVersionAsync(client, cancellationToken);
+                try
+                {
+                    client.ConnectionInfo.ServerVersion = await ExchangeVersionAsync(client, cancellationToken);
+                    await ReadMessageAsync(client, cancellationToken);
+                    logger.Debug($"{client.ConnectionInfo.Hostname}:{client.ConnectionInfo.Port}: {nameof(client.ConnectionInfo.ServerVersion)} is {client.ConnectionInfo.ServerVersion}");
+                    client.ConnectTaskSource.TrySetResult(true);
+                }
+                catch (Exception ex)
+                {
+                    logger.Error($"Exception at nameof(ConnectAsync): {ex}");
+                    client.ConnectTaskSource.TrySetException(ex);
+                    throw;
+                }
             } });
         }
 
@@ -89,75 +101,61 @@ namespace Surfus.Shell
             }
         }
 
-        private static async Task ExchangeVersionAsync(SshClient client, CancellationToken cancellationToken)
+        private static async Task<string> ExchangeVersionAsync(SshClient client, CancellationToken cancellationToken)
         {
-            try
+            await client.TcpConnection.ConnectAsync(client.ConnectionInfo.Hostname, client.ConnectionInfo.Port);
+            var serverVersionFilter = new Regex(@"^SSH-(?<ProtoVersion>\d\.\d+)-(?<SoftwareVersion>\S+)(?<Comments>\s[^\r\n]+)?", RegexOptions.Compiled);
+
+            // Send our version first.
+            var clientVersionBytes = Encoding.UTF8.GetBytes(client.ConnectionInfo.ClientVersion + "\n");
+            await client.TcpStream.WriteAsync(
+                    clientVersionBytes,
+                    0,
+                    clientVersionBytes.Length, cancellationToken);
+            await client.TcpStream.FlushAsync(cancellationToken);
+
+            // Buffer to receive their version.
+            var buffer = new byte[ushort.MaxValue];
+            var bufferPosition = 0;
+
+            while (client.TcpStream.CanRead)
             {
-                await client.TcpConnection.ConnectAsync(client.ConnectionInfo.Hostname, client.ConnectionInfo.Port);
-                var serverVersionFilter = new Regex(@"^SSH-(?<ProtoVersion>\d\.\d+)-(?<SoftwareVersion>\S+)(?<Comments>\s[^\r\n]+)?", RegexOptions.Compiled);
-
-                // Send our version first.
-                var clientVersionBytes = Encoding.UTF8.GetBytes(client.ConnectionInfo.ClientVersion + "\n");
-                await client.TcpStream.WriteAsync(
-                        clientVersionBytes,
-                        0,
-                        clientVersionBytes.Length, cancellationToken);
-                await client.TcpStream.FlushAsync(cancellationToken);
-
-                // Buffer to receive their version.
-                var buffer = new byte[ushort.MaxValue];
-                var bufferPosition = 0;
-
-                while (client.TcpStream.CanRead)
+                if (bufferPosition == ushort.MaxValue)
                 {
-                    if (bufferPosition == ushort.MaxValue)
-                    {
-                        throw new ArgumentOutOfRangeException();
-                    }
-
-                    var readAmount = await client.TcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken);
-                    if (readAmount <= 0)
-                    {
-                        throw new EndOfStreamException();
-                    }
-
-                    if (buffer[bufferPosition] == '\0')
-                    {
-                        throw new InvalidDataException();
-                    }
-
-                    if (bufferPosition > 1 && buffer[bufferPosition] == '\n')
-                    {
-                        var serverVersion = buffer[bufferPosition - 1] == '\r'
-                                                ? Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 2)
-                                                : Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 1);
-                        var serverVersionMatch = serverVersionFilter.Match(serverVersion);
-                        if (serverVersionMatch.Success)
-                        {
-                            if (serverVersionMatch.Groups["ProtoVersion"].Value == "2.0" || serverVersionMatch.Groups["ProtoVersion"].Value == "1.99")
-                            {
-                                client.ConnectionInfo.ServerVersion = serverVersion;
-                                logger.Debug($"{client.ConnectionInfo.Hostname}:{clien.ConnectionInfot.Port}: {nameof(client.ConnectionInfo.ServerVersion)} is {client.ConnectionInfo.ServerVersion}");
-                                client.ConnectTaskSource.TrySetResult(true);
-                                return;
-                            }
-                        }
-
-                        buffer = new byte[ushort.MaxValue];
-                        bufferPosition = 0;
-                    }
-                    bufferPosition += readAmount;
+                    throw new ArgumentOutOfRangeException();
                 }
 
-                
-                throw new Exception("Invalid version from server");
+                var readAmount = await client.TcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken);
+                if (readAmount <= 0)
+                {
+                    throw new EndOfStreamException();
+                }
+
+                if (buffer[bufferPosition] == '\0')
+                {
+                    throw new InvalidDataException();
+                }
+
+                if (bufferPosition > 1 && buffer[bufferPosition] == '\n')
+                {
+                    var serverVersion = buffer[bufferPosition - 1] == '\r'
+                                            ? Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 2)
+                                            : Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 1);
+                    var serverVersionMatch = serverVersionFilter.Match(serverVersion);
+                    if (serverVersionMatch.Success)
+                    {
+                        if (serverVersionMatch.Groups["ProtoVersion"].Value == "2.0" || serverVersionMatch.Groups["ProtoVersion"].Value == "1.99")
+                        {
+                            return serverVersion;
+                        }
+                    }
+
+                    buffer = new byte[ushort.MaxValue];
+                    bufferPosition = 0;
+                }
+                bufferPosition += readAmount;
             }
-            catch (Exception ex)
-            {
-                logger.Error($"Exception at nameof(ExchangeVersionAsync): {ex}");
-                client.ConnectTaskSource.TrySetException(ex);
-                throw;
-            }
+            throw new Exception("Invalid version from server");
         }
 
         private static async Task ReadMessageAsync(SshClient client, CancellationToken cancellationToken)
@@ -178,7 +176,8 @@ namespace Surfus.Shell
                 client.ConnectionInfo.InboundPacketSequence = client.ConnectionInfo.InboundPacketSequence != uint.MaxValue
                                                             ? client.ConnectionInfo.InboundPacketSequence + 1
                                                             : 0;
-               // await OnMessageReceived(new MessageEvent(sshPacket.Payload));
+                // await OnMessageReceived(new MessageEvent(sshPacket.Payload));
+                await AddClientTaskAsync(new ClientTask() { Client = client, TaskFunction = () => ReadMessageAsync(client, cancellationToken) });
             }
             catch (Exception ex) when (ex is IOException || ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
             {
@@ -189,7 +188,6 @@ namespace Surfus.Shell
                // _readSemaphore.Release();
             }
         }
-
 
         public class ClientTask
         {
