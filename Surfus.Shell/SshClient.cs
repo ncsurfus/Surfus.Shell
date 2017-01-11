@@ -1,43 +1,42 @@
-﻿using System;
+﻿using NLog;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Surfus.Shell
 {
     public class SshClient
     {
-        public TaskCompletionSource<bool> ThreadTask = new TaskCompletionSource<bool>();
+        private static Logger logger = LogManager.GetCurrentClassLogger();
 
-        public Random _randomTest = new Random(DateTime.Today.Millisecond);
-        public string Hostname { get; }
-        public uint Port { get; }
+        // Task Completion Sources
+        internal TaskCompletionSource<bool> ConnectTaskSource = new TaskCompletionSource<bool>();
+
+        // Network Connection
+        internal TcpClient TcpConnection { get; } = new TcpClient();
+        internal NetworkStream TcpStream => TcpConnection.GetStream();
+
+        // Connection Info
+        public SshConnectionInfo ConnectionInfo = new SshConnectionInfo();
 
         public SshClient(string hostname) : this(hostname, 22)
         {
         }
 
-        public SshClient(string hostname, uint port)
+        public SshClient(string hostname, ushort port)
         {
-            Hostname = hostname;
-            Port = port;
+            ConnectionInfo.Hostname = hostname;
+            ConnectionInfo.Port = port;
         }
 
-        public async Task StartRandomAsync()
+        public async Task ConnectAsync(CancellationToken cancellationToken)
         {
-            await SshClientStaticThread.AddClientAsync(this);
-            await ThreadTask.Task;
-        }
-
-        internal async Task WaitRandomAsync()
-        {
-            var random = _randomTest.Next(1, 4);
-            Console.WriteLine($"{Hostname}: {random}");
-            if(random == 2)
-            {
-                throw new Exception("Crashed!");
-            }
+            await SshClientStaticThread.ConnectAsync(this, cancellationToken);
+            await ConnectTaskSource.Task;
         }
     }
 }

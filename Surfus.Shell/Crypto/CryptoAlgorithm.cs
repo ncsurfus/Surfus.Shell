@@ -1,0 +1,112 @@
+// --------------------------------------------------------------------------------------------------------------------
+// <copyright file="CryptoAlgorithm.cs" company="Nathan Surfus">
+//   THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+//   THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+//   CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+//   IN THE SOFTWARE.
+// </copyright>
+// <summary>
+//  Provides the fundamentals all crypto algorithms must implement.
+// </summary>
+// --------------------------------------------------------------------------------------------------------------------
+
+using System;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
+using Surfus.Shell.Exceptions;
+
+namespace Surfus.Shell.Crypto
+{
+    /// <summary>
+    /// The base class for all crypto algorithms.
+    /// </summary>
+    internal abstract class CryptoAlgorithm : IDisposable
+    {
+        /// <summary>
+        /// Supported crypto algorithms.
+        /// </summary>
+        public static string[] Supported => new[] { "aes256-ctr", "aes192-ctr", "aes128-ctr", "aes256-cbc", "aes192-cbc", "aes128-cbc", "3des-cbc" };
+
+        /// <summary>
+        /// Gets the size of the cipher block.
+        /// </summary>
+        public abstract int CipherBlockSize { get; }
+
+        /// <summary>
+        /// Gets the size of the Initialization Vector.
+        /// </summary>
+        public abstract int InitializationVectorSize { get; }
+
+        /// <summary>
+        /// Gets the key size.
+        /// </summary>
+        public abstract int KeySize { get; }
+
+        /// <summary>
+        /// Creates the specified crypto algorithm.
+        /// </summary>
+        /// <param name="name">
+        /// The name of the crypto algorithm.
+        /// </param>
+        public static CryptoAlgorithm Create(string name)
+        {
+            switch (name)
+            {
+                case "3des-cbc":
+                    return new TripleDesCryptoAlgorithm();
+                case "aes128-cbc":
+                    return new AesCryptoAlgorithm(128, CipherMode.CBC);
+                case "aes192-cbc":
+                    return new AesCryptoAlgorithm(192, CipherMode.CBC);
+                case "aes256-cbc":
+                    return new AesCryptoAlgorithm(256, CipherMode.CBC);
+				case "aes128-ctr":
+					return new AesCtrCryptoAlgorithm(128);
+				case "aes192-ctr":
+					return new AesCtrCryptoAlgorithm(192);
+				case "aes256-ctr":
+					return new AesCtrCryptoAlgorithm(256);
+                default:
+                    throw new SshException("Crypto algorithm not supported");
+            }
+        }
+
+        /// <summary>
+        /// Disposes the crypto algorithm.
+        /// </summary>
+        public abstract void Dispose();
+
+        /// <summary>
+        /// Encrypts the data
+        /// </summary>
+        /// <param name="plainText">
+        /// The data to be encrypted
+        /// </param>
+        /// <returns>The encrypted data</returns>
+        public abstract byte[] Encrypt(byte[] plainText);
+
+        /// <summary>
+        /// Initializes the cipher. You must initialize the cipher before caling Encrypt or ReadPacket.
+        /// </summary>
+        /// <param name="initializationVector">The initialization vector for the cipher.</param>
+        /// <param name="key">The key for the cipher.</param>
+        public abstract void Initialize(byte[] initializationVector, byte[] key);
+
+        /// <summary>
+        /// Decrypts the next packet in the network stream.
+        /// </summary>
+        /// <param name="networkStream">
+        /// The network stream to decrypt the packet from.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// The cancellation token associated with the async method.
+        /// </param>
+        /// <returns>
+        /// The SSH Packet.
+        /// </returns>
+        public abstract Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, CancellationToken cancellationToken);
+    }
+}
