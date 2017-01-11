@@ -1,5 +1,0 @@
-C:\Users\nathan.surfus\Projects\Surfus.Shell\Surfus.Shell\bin\Debug\Surfus.Shell.dll
-C:\Users\nathan.surfus\Projects\Surfus.Shell\Surfus.Shell\bin\Debug\Surfus.Shell.pdb
-C:\Users\nathan.surfus\Projects\Surfus.Shell\Surfus.Shell\obj\Debug\Surfus.Shell.csprojResolveAssemblyReference.cache
-C:\Users\nathan.surfus\Projects\Surfus.Shell\Surfus.Shell\obj\Debug\Surfus.Shell.dll
-C:\Users\nathan.surfus\Projects\Surfus.Shell\Surfus.Shell\obj\Debug\Surfus.Shell.pdb
