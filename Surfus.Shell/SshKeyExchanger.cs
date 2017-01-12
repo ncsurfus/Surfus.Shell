@@ -45,6 +45,8 @@ namespace Surfus.Shell
             {
                 while (!_client.IsFinished)
                 {
+                    logger.Debug($"{_client.ConnectionInfo.Hostname}: Key Exchange Starting...");
+
                     // Wait for the server to send KexInit.
                     var serverKexInit = await KexInitMessage.Task;
                     logger.Debug($"{_client.ConnectionInfo.Hostname}: Received Server KexInit");
@@ -62,7 +64,7 @@ namespace Surfus.Shell
                     KeyExchangeAlgorithm = KeyExchangeAlgorithm.Create(_client, KeyExchangeResult);
 
                     // Exchange
-                    await KeyExchangeAlgorithm.ExchangeAsync();
+                    await KeyExchangeAlgorithm.ExchangeAsync(cancellationToken);
 
                     // Send our NewKeys
                     logger.Debug($"{_client.ConnectionInfo.Hostname}: Waiting for Server NewKeys");
@@ -72,10 +74,14 @@ namespace Surfus.Shell
                     var serverNewKeys = await NewKeysMessage.Task;
 
                     ApplyKeyExchange();
+                    logger.Debug($"{_client.ConnectionInfo.Hostname}: Applied Key Exchange");
+
+                    KexInitMessage = new TaskCompletionSource<KexInit>();
+                    NewKeysMessage = new TaskCompletionSource<NewKeys>();
 
                     _client.ConnectTaskSource.TrySetResult(true);
 
-                    // await SshClient.Log("Key Exchange: Restarting Loop");
+                    logger.Debug($"{_client.ConnectionInfo.Hostname}: Key Exchange Restarting");
                 }
             }
             catch(Exception ex)
@@ -87,14 +93,36 @@ namespace Surfus.Shell
             logger.Trace($"{_client.ConnectionInfo.Hostname}: Ending {nameof(ExchangeKeysAsync)}");
         }
 
-        public void PumpKeyExchangeMessage(KexInit message)
+        public void SendMessage(KexInit message)
         {
             KexInitMessage.SetResult(message);
         }
 
-        public void PumpKeyExchangeMessage(NewKeys message)
+        public void SendMessage(NewKeys message)
         {
             NewKeysMessage.SetResult(message);
+        }
+
+        public void SendKeyExchangeMessage(MessageEvent message)
+        {
+            switch(message.Type)
+            {
+                case MessageType.SSH_MSG_KEX_Exchange_30:
+                    KeyExchangeAlgorithm.SendKeyExchangeMessage30(message);
+                    break;
+                case MessageType.SSH_MSG_KEX_Exchange_31:
+                    KeyExchangeAlgorithm.SendKeyExchangeMessage31(message);
+                    break;
+                case MessageType.SSH_MSG_KEX_Exchange_32:
+                    KeyExchangeAlgorithm.SendKeyExchangeMessage32(message);
+                    break;
+                case MessageType.SSH_MSG_KEX_Exchange_33:
+                    KeyExchangeAlgorithm.SendKeyExchangeMessage33(message);
+                    break;
+                case MessageType.SSH_MSG_KEX_Exchange_34:
+                    KeyExchangeAlgorithm.SendKeyExchangeMessage34(message);
+                    break;
+            }
         }
 
         private void ApplyKeyExchange()

@@ -22,6 +22,10 @@ using System.Text;
 using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Extensions;
+using Surfus.Shell.Messages;
+using System.Threading;
+using Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange;
+using Surfus.Shell.KeyExchange.DiffieHellman;
 //using Surfus.Shell.KeyExchange.DiffieHellman;
 //using Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange;
 
@@ -41,7 +45,7 @@ namespace Surfus.Shell.KeyExchange
             =>
                 new[]
                     {
-                        "diffie-hellman-group14-sha1", "diffie-hellman-group1-sha1", "diffie-hellman-group-exchange-sha256", "diffie-hellman-group-exchange-sha1", 
+                         "diffie-hellman-group-exchange-sha256", "diffie-hellman-group-exchange-sha1", "diffie-hellman-group14-sha1", "diffie-hellman-group1-sha1"
                     };
 
         /// <summary>
@@ -67,23 +71,23 @@ namespace Surfus.Shell.KeyExchange
         {
             switch (exchangeResult.KeyExchangeAlgorithm)
             {
-              /*  case "diffie-hellman-group-exchange-sha256":
+                case "diffie-hellman-group-exchange-sha256":
                     return new DiffieHellmanGroupKeyExchange(client, exchangeResult, "SHA256");
                 case "diffie-hellman-group-exchange-sha1":
                     return new DiffieHellmanGroupKeyExchange(client, exchangeResult, "SHA1");
-                case "diffie-hellman-group14-sha1":
+                 case "diffie-hellman-group14-sha1":
                     return new DiffieHellmanGroup14Sha1(client, exchangeResult);
                 case "diffie-hellman-group1-sha1":
-                    return new DiffieHellmanGroup1Sha1(client, exchangeResult);*/
+                    return new DiffieHellmanGroup1Sha1(client, exchangeResult);
                 default:
-                    throw new SshException("Key Exchange Type Not Supported");
+                    throw new SshException($"Key Exchange type {exchangeResult.KeyExchangeAlgorithm} is not supported");
             }
         }
 
         /// <summary>
         /// Conducts the key exchange.
         /// </summary>
-        public abstract Task ExchangeAsync();
+        public abstract Task ExchangeAsync(CancellationToken cancellationToken);
 
         /// <summary>
         /// Generates the appropriate key used by each cipher.
@@ -148,5 +152,11 @@ namespace Surfus.Shell.KeyExchange
         /// Supported key exchanges.
         /// </summary>
         protected abstract HashAlgorithm CreateHashAlgorithm();
+
+        public abstract void SendKeyExchangeMessage30(MessageEvent message);
+        public abstract void SendKeyExchangeMessage31(MessageEvent message);
+        public abstract void SendKeyExchangeMessage32(MessageEvent message);
+        public abstract void SendKeyExchangeMessage33(MessageEvent message);
+        public abstract void SendKeyExchangeMessage34(MessageEvent message);
     }
 }

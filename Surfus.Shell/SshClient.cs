@@ -15,6 +15,8 @@ namespace Surfus.Shell
 
         // Task Completion Sources
         internal TaskCompletionSource<bool> ConnectTaskSource = new TaskCompletionSource<bool>();
+        internal TaskCompletionSource<bool> LoginTaskSource = new TaskCompletionSource<bool>();
+        internal TaskCompletionSource<string> LoginBannerTaskSource = new TaskCompletionSource<string>();
 
         // Network Connection
         internal TcpClient TcpConnection { get; } = new TcpClient();
@@ -49,7 +51,77 @@ namespace Surfus.Shell
             await SshClientStaticThread.ConnectAsync(this, InternalCancellation.Token);
 
             // Await the TaskCompeletionSource 
-            await ConnectTaskSource.Task;
+            await ConnectTaskSource.Task.ConfigureAwait(false);
+        }
+
+        public async Task LoginAsync(string username, string password, CancellationToken cancellationToken)
+        {
+            LoginTaskSource = new TaskCompletionSource<bool>();
+
+            // If this cancels, we must cancel the TaskCompeletionSource and Background Thread...
+            cancellationToken.Register(() => SetException(new TaskCanceledException(LoginTaskSource.Task)));
+            if (ConnectionInfo.Authentication == null)
+            {
+                ConnectionInfo.Authentication = new SshAuthentication(this);
+            }
+
+            await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
+            {
+                Client = this,
+                TaskFunction = async () =>
+                {
+                    try
+                    {
+                        await ConnectionInfo.Authentication.LoginAsync(username, password, InternalCancellation.Token);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Login exceptions aren't critical
+                        LoginTaskSource.TrySetException(ex);
+                    }
+                }
+            });
+
+            await LoginTaskSource.Task;
+        }
+
+
+        public async Task LoginAsync(string username, Func<string, Task<string>> InteractiveDelegate, CancellationToken cancellationToken)
+        {
+            LoginTaskSource = new TaskCompletionSource<bool>();
+
+            // If this cancels, we must cancel the TaskCompeletionSource and Background Thread...
+            cancellationToken.Register(() => SetException(new TaskCanceledException(LoginTaskSource.Task)));
+            if (ConnectionInfo.Authentication == null)
+            {
+                ConnectionInfo.Authentication = new SshAuthentication(this);
+            }
+
+            await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
+            {
+                Client = this,
+                TaskFunction = async () =>
+                {
+                    try
+                    {
+                        await ConnectionInfo.Authentication.LoginInteractiveAsync(username, InteractiveDelegate, InternalCancellation.Token);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Don't throw, exceptions get squashed on this thread. Relay to client
+                        LoginTaskSource.TrySetException(ex);
+                    }
+                }
+            });
+
+            await LoginTaskSource.Task;
+        }
+        public async Task<string> GetBannerAsync(CancellationToken cancellationToken)
+        {
+            // If this cancels, we must cancel the TaskCompeletionSource and Background Thread...
+            cancellationToken.Register(() => SetException(new TaskCanceledException(LoginBannerTaskSource.Task)));
+
+            return await LoginBannerTaskSource.Task;
         }
 
         internal void SetException(Exception ex)
@@ -60,7 +132,7 @@ namespace Surfus.Shell
             }
             else
             {
-                logger.Debug($"{ConnectionInfo.Hostname} (After Fatal): {ex.Message}");
+                logger.Debug($"{ConnectionInfo.Hostname} (After Fatal/Success): {ex.Message}");
             }
             SetTaskExceptions(ex);
             Close();
