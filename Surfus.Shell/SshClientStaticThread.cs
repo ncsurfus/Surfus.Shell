@@ -1,5 +1,6 @@
 ﻿using NLog;
 using Surfus.Shell.Extensions;
+using Surfus.Shell.Messages;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -44,8 +45,9 @@ namespace Surfus.Shell
                 try
                 {
                     client.ConnectionInfo.ServerVersion = await ExchangeVersionAsync(client, cancellationToken);
+                    logger.Info($"{client.ConnectionInfo.Hostname}:{client.ConnectionInfo.Port}: {nameof(client.ConnectionInfo.ServerVersion)} is {client.ConnectionInfo.ServerVersion}");
+
                     await ReadMessageAsync(client, cancellationToken);
-                    logger.Debug($"{client.ConnectionInfo.Hostname}:{client.ConnectionInfo.Port}: {nameof(client.ConnectionInfo.ServerVersion)} is {client.ConnectionInfo.ServerVersion}");
                     client.ConnectTaskSource.TrySetResult(true);
                 }
                 catch (Exception ex)
@@ -59,6 +61,7 @@ namespace Surfus.Shell
 
         static async Task RunTasksAsync()
         {
+            logger.Trace($"{nameof(RunTasksAsync)} is starting");
             int taskCount;
 
             // Get initial Count and initialize clients
@@ -75,11 +78,6 @@ namespace Surfus.Shell
                 if (completedTask == _updateThread.Task)
                 {
                     InitiailizeNewTasks();
-                }
-                else if (completedTask.Exception != null)
-                {
-                    logger.Error(completedTask.Exception.ToString());
-                    _clients.RemoveAll(x => x.Task == completedTask);
                 }
                 else
                 {
@@ -99,6 +97,8 @@ namespace Surfus.Shell
                     }
                 }
             }
+
+            logger.Trace($"{nameof(RunTasksAsync)} is ending");
         }
 
         private static async Task<string> ExchangeVersionAsync(SshClient client, CancellationToken cancellationToken)
@@ -108,10 +108,7 @@ namespace Surfus.Shell
 
             // Send our version first.
             var clientVersionBytes = Encoding.UTF8.GetBytes(client.ConnectionInfo.ClientVersion + "\n");
-            await client.TcpStream.WriteAsync(
-                    clientVersionBytes,
-                    0,
-                    clientVersionBytes.Length, cancellationToken);
+            await client.TcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken);
             await client.TcpStream.FlushAsync(cancellationToken);
 
             // Buffer to receive their version.
@@ -176,12 +173,16 @@ namespace Surfus.Shell
                 client.ConnectionInfo.InboundPacketSequence = client.ConnectionInfo.InboundPacketSequence != uint.MaxValue
                                                             ? client.ConnectionInfo.InboundPacketSequence + 1
                                                             : 0;
+                var messageEvent = new MessageEvent(sshPacket.Payload);
+                logger.Debug($"{client.ConnectionInfo.Hostname}:{client.ConnectionInfo.Port} @  {nameof(ReadMessageAsync)}: Received {messageEvent.Type}");
+                
                 // await OnMessageReceived(new MessageEvent(sshPacket.Payload));
                 await AddClientTaskAsync(new ClientTask() { Client = client, TaskFunction = () => ReadMessageAsync(client, cancellationToken) });
             }
-            catch (Exception ex) when (ex is IOException || ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
+            catch (Exception ex)
             {
-                throw new IOException("SSH connection was terminated.", ex);
+                // Don't throw, exceptions get squashed on this thread. Relay to client
+                client.SetException(ex);
             }
             finally
             {
