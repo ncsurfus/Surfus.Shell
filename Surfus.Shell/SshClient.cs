@@ -60,15 +60,17 @@ namespace Surfus.Shell
             }
             if(IsFinished)
             {
-                logger.Debug($"{ConnectionInfo.Hostname}:{ConnectionInfo.Port} (IsFinished:{IsFinished}): + {ex}");
+                logger.Debug($"{ConnectionInfo.Hostname} - {nameof(SetException)} (IsFinished:{IsFinished}): {ex}");
             }
-            logger.Fatal($"{ConnectionInfo.Hostname}:{ConnectionInfo.Port} (IsFinished:{IsFinished}): + {ex}");
+            logger.Fatal($"{ConnectionInfo.Hostname} - {nameof(SetException)} (IsFinished:{IsFinished}): {ex}");
             SetTaskExceptions(ex);
         }
 
         private void SetTaskExceptions(Exception ex)
         {
             ConnectTaskSource.TrySetException(ex);
+            ConnectionInfo.KeyExchanger.KexInitMessage.TrySetException(ex);
+            ConnectionInfo.KeyExchanger.NewKeysMessage.TrySetException(ex);
         }
 
         public void Close()
@@ -76,6 +78,7 @@ namespace Surfus.Shell
             _isDisposed = true;
             if(!_isDisposed)
             {
+                InternalCancellation.Cancel();
                 TcpConnection.Close();
             }
         }

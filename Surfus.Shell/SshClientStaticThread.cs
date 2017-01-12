@@ -1,6 +1,7 @@
 ﻿using NLog;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages;
+using Surfus.Shell.Messages.KeyExchange;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -45,33 +46,41 @@ namespace Surfus.Shell
                 try
                 {
                     client.ConnectionInfo.ServerVersion = await ExchangeVersionAsync(client, cancellationToken);
-                    logger.Info($"{client.ConnectionInfo.Hostname}:{client.ConnectionInfo.Port}: {nameof(client.ConnectionInfo.ServerVersion)} is {client.ConnectionInfo.ServerVersion}");
+                    logger.Info($"{client.ConnectionInfo.Hostname} - {nameof(ConnectAsync)}: Version is {client.ConnectionInfo.ServerVersion}");
+
+                    // Start KeyExchangeListener before getting first packet
+                    client.ConnectionInfo.KeyExchanger = new SshKeyExchanger(client);
+                    await AddClientTaskAsync(new ClientTask() { Client = client, TaskFunction = () => client.ConnectionInfo.KeyExchanger.ExchangeKeysAsync(cancellationToken) });
+
 
                     await ReadMessageAsync(client, cancellationToken);
-                    client.ConnectTaskSource.TrySetResult(true);
                 }
                 catch (Exception ex)
                 {
-                    logger.Error($"Exception at nameof(ConnectAsync): {ex}");
-                    client.ConnectTaskSource.TrySetException(ex);
-                    throw;
+                    // Don't throw, exceptions get squashed on this thread. Relay to client
+                    client.SetException(ex);
                 }
             } });
         }
 
         static async Task RunTasksAsync()
         {
-            logger.Trace($"{nameof(RunTasksAsync)} is starting");
-            int taskCount;
+            logger.Trace($"Global :{nameof(RunTasksAsync)} is starting");
+            Task[] clientTasks;
 
             // Get initial Count and initialize clients
             await _internalSync.WaitAsync();
             InitiailizeNewTasks();
             _internalSync.Release();
 
-            while (taskCount > 0)
+            while (clientTasks.Length > 0)
             {
-                var completedTask = await Task.WhenAny(_clients.Select(x => x.Task).Union(new[] { _updateThread.Task }));
+                var tasks = clientTasks.Union(new[] { _updateThread.Task });
+                if(tasks.Any(x => x == null))
+                {
+                    Console.WriteLine("The Fuck");
+                }
+                var completedTask = await Task.WhenAny(tasks);
 
                 // Set new count and initialize clients
                 await _internalSync.WaitAsync();
@@ -82,13 +91,14 @@ namespace Surfus.Shell
                 else
                 {
                     _clients.RemoveAll(x => x.Task == completedTask);
+                    clientTasks = _clients.Where(x => x.Task != null).Select(x => x.Task).ToArray();
                 }
                 _internalSync.Release();
             }
 
             void InitiailizeNewTasks()
             {
-                taskCount = _clients.Count;
+                clientTasks = _clients.Select(x => x.Task).ToArray();
                 foreach (var clientTask in _clients)
                 {
                     if (clientTask.Task == null)
@@ -98,7 +108,7 @@ namespace Surfus.Shell
                 }
             }
 
-            logger.Trace($"{nameof(RunTasksAsync)} is ending");
+            logger.Trace($"Global: {nameof(RunTasksAsync)} is ending");
         }
 
         private static async Task<string> ExchangeVersionAsync(SshClient client, CancellationToken cancellationToken)
@@ -170,13 +180,21 @@ namespace Surfus.Shell
                     }
                 }
 
-                client.ConnectionInfo.InboundPacketSequence = client.ConnectionInfo.InboundPacketSequence != uint.MaxValue
-                                                            ? client.ConnectionInfo.InboundPacketSequence + 1
-                                                            : 0;
+                client.ConnectionInfo.InboundPacketSequence = client.ConnectionInfo.InboundPacketSequence != uint.MaxValue ? client.ConnectionInfo.InboundPacketSequence + 1 : 0;
                 var messageEvent = new MessageEvent(sshPacket.Payload);
-                logger.Debug($"{client.ConnectionInfo.Hostname}:{client.ConnectionInfo.Port} @  {nameof(ReadMessageAsync)}: Received {messageEvent.Type}");
+                logger.Debug($"{client.ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Received {messageEvent.Type}");
                 
-                // await OnMessageReceived(new MessageEvent(sshPacket.Payload));
+                // Key Exchange Messages
+                switch(messageEvent.Type)
+                {
+                    case MessageType.SSH_MSG_KEXINIT:
+                        client.ConnectionInfo.KeyExchanger.PumpKeyExchangeMessage(messageEvent.Message as KexInit);
+                        break;
+                    default:
+                        logger.Info($"{client.ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Unexpected Message {messageEvent.Type}");
+                        break;
+                }
+
                 await AddClientTaskAsync(new ClientTask() { Client = client, TaskFunction = () => ReadMessageAsync(client, cancellationToken) });
             }
             catch (Exception ex)
@@ -188,6 +206,34 @@ namespace Surfus.Shell
             {
                // _readSemaphore.Release();
             }
+        }
+
+        internal static async Task WriteMessageAsync(SshClient client, IMessage message, CancellationToken cancellationToken)
+        {
+               // await _writeSemaphore.WaitAsync(_taskSourceCancellation.Token);
+               // await Log($"Sending {message.Type}");
+
+                var compressedPayload = client.ConnectionInfo.WriteCompressionAlgorithm.Compress(message.GetBytes());
+                var sshPacket = new SshPacket(compressedPayload,
+                        client.ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize > 8
+                        ? client.ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize : 8);
+
+                await client.TcpStream.WriteAsync(client.ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Raw), cancellationToken);
+
+                if (client.ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
+                {
+                    await client.TcpStream.WriteAsync(client.ConnectionInfo.WriteMacAlgorithm.ComputeHash(client.ConnectionInfo.OutboundPacketSequence,
+                                sshPacket), cancellationToken);
+                }
+
+                await client.TcpStream.FlushAsync(cancellationToken);
+                client.ConnectionInfo.OutboundPacketSequence = client.ConnectionInfo.OutboundPacketSequence != uint.MaxValue
+                                                             ? client.ConnectionInfo.OutboundPacketSequence + 1
+                                                             : 0;
+
+            logger.Debug($"{client.ConnectionInfo.Hostname} - {nameof(WriteMessageAsync)}: Sent {message.Type}");
+
+            // _writeSemaphore.Release();
         }
 
         public class ClientTask
