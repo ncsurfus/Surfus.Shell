@@ -14,6 +14,9 @@ namespace Surfus.Shell
 
         internal uint InboundPacketSequence { get; set; }
         internal uint OutboundPacketSequence { get; set; }
+
+        internal SshKeyExchanger KeyExchanger { get; set; }
+
         internal CompressionAlgorithm ReadCompressionAlgorithm { get; set; } = new NoCompression();
         internal CompressionAlgorithm WriteCompressionAlgorithm { get; set; } = new NoCompression();
         internal CryptoAlgorithm ReadCryptoAlgorithm { get; set; } = new NoCrypto();
