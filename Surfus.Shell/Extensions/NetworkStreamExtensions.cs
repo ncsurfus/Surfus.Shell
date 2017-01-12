@@ -41,7 +41,11 @@ namespace Surfus.Shell.Extensions
             while (index < buffer.Length)
             {
                 var result = await stream.ReadAsync(buffer, index, buffer.Length - index, cancellationToken);
-                if (result == 0) { throw new IOException("The underlying Socket is closed."); }
+                cancellationToken.ThrowIfCancellationRequested();
+                if (result == 0)
+                {
+                    throw new IOException("The underlying Socket is closed.");
+                }
                 index += result;
             }
 

@@ -54,33 +54,39 @@ namespace Surfus.Shell
 
         internal void SetException(Exception ex)
         {
-            if(!InternalCancellation.IsCancellationRequested)
+            if (!IsFinished)
             {
-                InternalCancellation.Cancel();
+                logger.Fatal($"{ConnectionInfo.Hostname}: {ex}");
             }
-            if(IsFinished)
+            else
             {
-                logger.Debug($"{ConnectionInfo.Hostname} - {nameof(SetException)} (IsFinished:{IsFinished}): {ex}");
+                logger.Debug($"{ConnectionInfo.Hostname} (After Fatal): {ex.Message}");
             }
-            logger.Fatal($"{ConnectionInfo.Hostname} - {nameof(SetException)} (IsFinished:{IsFinished}): {ex}");
             SetTaskExceptions(ex);
+            Close();
         }
 
         private void SetTaskExceptions(Exception ex)
         {
-            ConnectTaskSource.TrySetException(ex);
-            ConnectionInfo.KeyExchanger.KexInitMessage.TrySetException(ex);
-            ConnectionInfo.KeyExchanger.NewKeysMessage.TrySetException(ex);
+            // Throw exception on tasks on foreground thread
+            ConnectTaskSource?.TrySetException(ex);
+
+            // Cancel tasks on background thread
+            ConnectionInfo.KeyExchanger?.KexInitMessage?.TrySetCanceled();
+            ConnectionInfo.KeyExchanger?.NewKeysMessage?.TrySetCanceled();
         }
 
         public void Close()
         {
-            _isDisposed = true;
             if(!_isDisposed)
             {
-                InternalCancellation.Cancel();
-                TcpConnection.Close();
+                logger.Debug($"{ConnectionInfo.Hostname}: Canceling Tasks.");
+                InternalCancellation.Cancel(true);
+
+                logger.Debug($"{ConnectionInfo.Hostname}: Disposing Stream. Expect ObjectDisposedExceptions.");
+                TcpConnection.Dispose();
             }
+            _isDisposed = true;
         }
 
         public void Dispose()

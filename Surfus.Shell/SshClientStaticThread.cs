@@ -52,7 +52,6 @@ namespace Surfus.Shell
                     client.ConnectionInfo.KeyExchanger = new SshKeyExchanger(client);
                     await AddClientTaskAsync(new ClientTask() { Client = client, TaskFunction = () => client.ConnectionInfo.KeyExchanger.ExchangeKeysAsync(cancellationToken) });
 
-
                     await ReadMessageAsync(client, cancellationToken);
                 }
                 catch (Exception ex)
@@ -98,7 +97,6 @@ namespace Surfus.Shell
 
             void InitiailizeNewTasks()
             {
-                clientTasks = _clients.Select(x => x.Task).ToArray();
                 foreach (var clientTask in _clients)
                 {
                     if (clientTask.Task == null)
@@ -106,6 +104,7 @@ namespace Surfus.Shell
                         clientTask.Task = clientTask.TaskFunction();
                     }
                 }
+                clientTasks = _clients.Select(x => x.Task).ToArray();
             }
 
             logger.Trace($"Global: {nameof(RunTasksAsync)} is ending");
@@ -135,7 +134,13 @@ namespace Surfus.Shell
                 var readAmount = await client.TcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken);
                 if (readAmount <= 0)
                 {
-                    throw new EndOfStreamException();
+                    logger.Fatal($"{client.ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
+                    if(bufferPosition == 0)
+                    {
+                        logger.Fatal($"{client.ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Buffer Position is 0, no data sent. Possibly too many connections");
+                        throw new EndOfStreamException($"Buffer Position is 0, no data sent. Possibly too many connections");
+                    }
+                    throw new EndOfStreamException($"Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
                 }
 
                 if (buffer[bufferPosition] == '\0')
