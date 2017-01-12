@@ -2,6 +2,7 @@
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.KeyExchange;
+using Surfus.Shell.Messages.UserAuth;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -193,7 +194,32 @@ namespace Surfus.Shell
                 switch(messageEvent.Type)
                 {
                     case MessageType.SSH_MSG_KEXINIT:
-                        client.ConnectionInfo.KeyExchanger.PumpKeyExchangeMessage(messageEvent.Message as KexInit);
+                        client.ConnectionInfo.KeyExchanger.SendMessage(messageEvent.Message as KexInit);
+                        break;
+                    case MessageType.SSH_MSG_NEWKEYS:
+                        client.ConnectionInfo.KeyExchanger.SendMessage(messageEvent.Message as NewKeys);
+                        break;
+                    case MessageType.SSH_MSG_KEX_Exchange_30:
+                    case MessageType.SSH_MSG_KEX_Exchange_31:
+                    case MessageType.SSH_MSG_KEX_Exchange_32:
+                    case MessageType.SSH_MSG_KEX_Exchange_33:
+                    case MessageType.SSH_MSG_KEX_Exchange_34:
+                        client.ConnectionInfo.KeyExchanger.SendKeyExchangeMessage(messageEvent);
+                        break;
+                    case MessageType.SSH_MSG_SERVICE_ACCEPT:
+                        client.ConnectionInfo.Authentication.SendMessage(messageEvent.Message as ServiceAccept);
+                        break;
+                    case MessageType.SSH_MSG_REQUEST_FAILURE:
+                        client.ConnectionInfo.Authentication.SendRequestFailureMessage();
+                        break;
+                    case MessageType.SSH_MSG_USERAUTH_SUCCESS:
+                        client.ConnectionInfo.Authentication.SendMessage(messageEvent.Message as UaSuccess);
+                        break;
+                    case MessageType.SSH_MSG_USERAUTH_FAILURE:
+                        client.ConnectionInfo.Authentication.SendMessage(messageEvent.Message as UaFailure);
+                        break;
+                    case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
+                        client.ConnectionInfo.Authentication.SendMessage(messageEvent.Message as UaInfoRequest);
                         break;
                     default:
                         logger.Info($"{client.ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Unexpected Message {messageEvent.Type}");
