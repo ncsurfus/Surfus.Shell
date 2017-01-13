@@ -12,7 +12,6 @@ namespace Surfus.Shell
     {
         // Message Sources
         internal TaskCompletionSource<ServiceAccept> ServiceAcceptMessage = new TaskCompletionSource<ServiceAccept>();
-
         internal TaskCompletionSource<UaSuccess> UserAuthSuccessMessage = new TaskCompletionSource<UaSuccess>();
         internal TaskCompletionSource<UaInfoRequest> UserAuthInfoRequest = new TaskCompletionSource<UaInfoRequest>();
 
@@ -44,7 +43,7 @@ namespace Surfus.Shell
             SshClient.LoginTaskSource.TrySetResult(true);
         }
 
-        public async Task LoginInteractiveAsync(string username, Func<string, Task<string>> ResponseTask, CancellationToken cancellationToken)
+        public async Task LoginInteractiveAsync(string username, Func<string, CancellationToken, Task<string>> ResponseTask, CancellationToken cancellationToken)
         {
             UserAuthSuccessMessage = new TaskCompletionSource<UaSuccess>();
             UserAuthInfoRequest = new TaskCompletionSource<UaInfoRequest>();
@@ -70,7 +69,7 @@ namespace Surfus.Shell
                     var responses = new string[uaInfoRequest.PromptNumber];
                     for (var i = 0; i != responses.Length; i++)
                     {
-                        responses[i] = await ResponseTask(uaInfoRequest.Prompt[i]);
+                        responses[i] = await ResponseTask(uaInfoRequest.Prompt[i], cancellationToken);
                     }
 
                     await SshClientStaticThread.WriteMessageAsync(SshClient, new UaInfoResponse((uint)responses.Length, responses), cancellationToken);
@@ -79,7 +78,6 @@ namespace Surfus.Shell
         }
 
         // Message Pumps
-
         public void SendMessage(ServiceAccept message)
         {
             ServiceAcceptMessage.SetResult(message);
