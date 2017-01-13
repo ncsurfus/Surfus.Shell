@@ -1,4 +1,6 @@
 ﻿using NLog;
+using Surfus.Shell.Messages;
+using Surfus.Shell.Messages.Channel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +15,9 @@ namespace Surfus.Shell
     {
         private static Logger logger = LogManager.GetCurrentClassLogger();
 
+        // Client Semaphore
+        internal SemaphoreSlim SshClientSemaphore = new SemaphoreSlim(1,1);
+
         // Task Completion Sources
         internal TaskCompletionSource<bool> ConnectTaskSource = new TaskCompletionSource<bool>();
         internal TaskCompletionSource<bool> LoginTaskSource = new TaskCompletionSource<bool>();
@@ -21,6 +26,10 @@ namespace Surfus.Shell
         // Network Connection
         internal TcpClient TcpConnection { get; } = new TcpClient();
         internal NetworkStream TcpStream => TcpConnection.GetStream();
+
+        // Channels
+        uint _channelCounter = 0;
+        internal List<SshChannel> Channels = new List<SshChannel>();
 
         // Internal CancellationToken
         internal CancellationTokenSource InternalCancellation = new CancellationTokenSource();
@@ -40,6 +49,63 @@ namespace Surfus.Shell
         {
             ConnectionInfo.Hostname = hostname;
             ConnectionInfo.Port = port;
+        }
+
+        public async Task<SshCommand> CreateCommandAsync(CancellationToken cancellationToken)
+        {
+            // Channels will be touched by background thread. Must coordinate.
+            await SshClientSemaphore.WaitAsync(cancellationToken);
+
+            var channel = new SshChannel(this, _channelCounter);
+            var command = new SshCommand(this, channel);
+
+            Channels.Add(channel);
+            _channelCounter++;
+
+            SshClientSemaphore.Release();
+
+            return command;
+        }
+
+        internal async Task SendChannelMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
+        {
+            // Runs on background thread
+            logger.Debug($"Checking Channel Message Type");
+            if (messageEvent.Message is IChannelRecipient channelMessage)
+            {
+                // Channels will be touched by foreground thread. Must coordinate.
+                await SshClientSemaphore.WaitAsync(cancellationToken);
+                var channel = Channels.Single(x => x.ServerId == channelMessage.RecipientChannel);
+                SshClientSemaphore.Release();
+
+                switch (messageEvent.Message)
+                {
+                    case ChannelSuccess success:
+                        channel.SendMessage(success);
+                        break;
+                    case ChannelFailure failure:
+                        channel.SendMessage(failure);
+                        break;
+                    case ChannelOpenConfirmation openConfirmation:
+                        channel.SendMessage(openConfirmation);
+                        break;
+                    case ChannelOpenFailure openFailure:
+                        channel.SendMessage(openFailure);
+                        break;
+                    case ChannelWindowAdjust windowAdjust:
+                        channel.SendMessage(windowAdjust);
+                        break;
+                    case ChannelData channelData:
+                        await channel.SendMessageAsync(channelData, cancellationToken);
+                        break;
+                    case ChannelEof channelEof:
+                        await channel.SendMessageAsync(channelEof, cancellationToken);
+                        break;
+                    case ChannelClose channelClose:
+                        await channel.SendMessageAsync(channelClose, cancellationToken);
+                        break;
+                }
+            }
         }
 
         public async Task ConnectAsync(CancellationToken cancellationToken)
@@ -85,8 +151,7 @@ namespace Surfus.Shell
             await LoginTaskSource.Task;
         }
 
-
-        public async Task LoginAsync(string username, Func<string, Task<string>> InteractiveDelegate, CancellationToken cancellationToken)
+        public async Task LoginAsync(string username, Func<string, CancellationToken, Task<string>> InteractiveDelegate, CancellationToken cancellationToken)
         {
             LoginTaskSource = new TaskCompletionSource<bool>();
 
@@ -116,6 +181,7 @@ namespace Surfus.Shell
 
             await LoginTaskSource.Task;
         }
+
         public async Task<string> GetBannerAsync(CancellationToken cancellationToken)
         {
             // If this cancels, we must cancel the TaskCompeletionSource and Background Thread...
@@ -142,6 +208,7 @@ namespace Surfus.Shell
         {
             // Throw exception on tasks on foreground thread
             ConnectTaskSource?.TrySetException(ex);
+            LoginTaskSource?.TrySetException(ex);
 
             // Cancel tasks on background thread
             ConnectionInfo.KeyExchanger?.KexInitMessage?.TrySetCanceled();

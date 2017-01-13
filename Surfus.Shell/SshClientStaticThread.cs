@@ -221,6 +221,17 @@ namespace Surfus.Shell
                     case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
                         client.ConnectionInfo.Authentication.SendMessage(messageEvent.Message as UaInfoRequest);
                         break;
+                    case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
+                    case MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE:
+                    case MessageType.SSH_MSG_CHANNEL_SUCCESS:
+                    case MessageType.SSH_MSG_CHANNEL_FAILURE:
+                    case MessageType.SSH_MSG_CHANNEL_WINDOW_ADJUST:
+                    case MessageType.SSH_MSG_CHANNEL_DATA:
+                    case MessageType.SSH_MSG_CHANNEL_CLOSE:
+                    case MessageType.SSH_MSG_CHANNEL_EOF:
+                        logger.Debug($"Sending Channel Message to client");
+                        await client.SendChannelMessageAsync(messageEvent, cancellationToken);
+                        break;
                     default:
                         logger.Info($"{client.ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Unexpected Message {messageEvent.Type}");
                         break;
