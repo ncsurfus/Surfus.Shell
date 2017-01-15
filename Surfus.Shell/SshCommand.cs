@@ -7,12 +7,22 @@ using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel.Open;
 using Surfus.Shell.Messages.Channel.Requests;
+using NLog;
 
 namespace Surfus.Shell
 {
     public class SshCommand
     {
+        private static Logger logger = LogManager.GetCurrentClassLogger();
+
         private readonly MemoryStream _memoryStream = new MemoryStream();
+        internal TaskCompletionSource<bool> ExecuteTaskSource;
+        internal TaskCompletionSource<bool> ExecuteEofTaskSource;
+        internal TaskCompletionSource<bool> ExecuteCloseTaskSource;
+
+
+        internal TaskCompletionSource<bool> ChannelOpenTaskSource;
+        internal TaskCompletionSource<bool> ChannelCloseTaskSource;
 
         internal SshCommand(SshClient sshClient, SshChannel channel)
         {
@@ -31,9 +41,13 @@ namespace Surfus.Shell
 
         public async Task OpenAsync(CancellationToken cancellationToken)
         {
-            TaskCompletionSource<bool> OpenTaskSource = new TaskCompletionSource<bool>();
-            cancellationToken.Register(() => SshClient.SetException(new TaskCanceledException(OpenTaskSource.Task)));
+            if(ChannelOpenTaskSource != null)
+            {
+                throw new SshException($"OpenAsync has already been called on SshChannel");
+            }
+            ChannelOpenTaskSource = new TaskCompletionSource<bool>();
 
+            cancellationToken.Register(() => SshClient.SetException(new TaskCanceledException(ChannelOpenTaskSource.Task)));
             await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
             {
                 Client = SshClient,
@@ -42,23 +56,26 @@ namespace Surfus.Shell
                     try
                     {
                         await ChannelManager.OpenAsync(new ChannelOpenSession(ChannelManager.ClientId, 50000), SshClient.InternalCancellation.Token);
-                        OpenTaskSource.TrySetResult(true);
+                        ChannelOpenTaskSource.TrySetResult(true);
                     }
                     catch (Exception ex)
                     {
-                        OpenTaskSource.TrySetException(ex);
+                        ChannelOpenTaskSource.TrySetException(ex);
                     }
                 }
             });
 
-            await OpenTaskSource.Task;
+            await ChannelOpenTaskSource.Task;
         }
 
         public async Task CloseAsync(CancellationToken cancellationToken)
         {
-            TaskCompletionSource<bool> CloseTaskSource = new TaskCompletionSource<bool>();
-
-            cancellationToken.Register(() => SshClient.SetException(new TaskCanceledException(CloseTaskSource.Task)));
+            if (ChannelCloseTaskSource != null)
+            {
+                throw new SshException($"CloseAsync has already been called on SshChannel");
+            }
+            ChannelCloseTaskSource = new TaskCompletionSource<bool>();
+            cancellationToken.Register(() => SshClient.SetException(new TaskCanceledException(ChannelCloseTaskSource.Task)));
 
             await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
             {
@@ -68,33 +85,40 @@ namespace Surfus.Shell
                     try
                     {
                         await ChannelManager.CloseAsync(SshClient.InternalCancellation.Token);
-                        CloseTaskSource.TrySetResult(true);
+                        ChannelCloseTaskSource.TrySetResult(true);
                     }
                     catch (Exception ex)
                     {
-                        CloseTaskSource.TrySetException(ex);
+                        ChannelCloseTaskSource.TrySetException(ex);
                     }
                 }
             });
 
-            await CloseTaskSource.Task;
+            await ChannelCloseTaskSource.Task;
         }
 
         public async Task<string> ExecuteAsync(string command, CancellationToken cancellationToken)
         {
-            if (!ChannelManager.IsOpen)
+            if (ChannelOpenTaskSource?.Task.IsCompleted != true)
             {
                 throw new SshException("Channel not opened.");
             }
 
-            TaskCompletionSource<bool> ExecuteTaskSource = new TaskCompletionSource<bool>();
-            TaskCompletionSource<bool> EofTaskSource = new TaskCompletionSource<bool>();
-            TaskCompletionSource<bool> CloseTaskSource = new TaskCompletionSource<bool>();
+            if (ChannelCloseTaskSource?.Task.IsCompleted == true)
+            {
+                throw new SshException("Channel closed.");
+            }
 
-            cancellationToken.Register(() => SshClient.SetException(new TaskCanceledException(ExecuteTaskSource.Task)));
+            if (ExecuteTaskSource != null || ExecuteEofTaskSource != null || ExecuteCloseTaskSource != null)
+            {
+                throw new SshException("Command ExecuteAsync already in progress.");
+            }
 
-            ChannelManager.OnChannelEofReceived = (message, token) => { EofTaskSource.SetResult(true); return Task.FromResult(true); };
-            ChannelManager.OnChannelCloseReceived = (message, token) => { CloseTaskSource.SetResult(true); return Task.FromResult(true); };
+            ExecuteTaskSource = new TaskCompletionSource<bool>();
+            ExecuteCloseTaskSource = new TaskCompletionSource<bool>();
+            ExecuteEofTaskSource = new TaskCompletionSource<bool>();
+            ChannelManager.OnChannelEofReceived = (message, token) => { ExecuteEofTaskSource.SetResult(true); return Task.FromResult(true); };
+            ChannelManager.OnChannelCloseReceived = (message, token) => { ExecuteCloseTaskSource.SetResult(true); return Task.FromResult(true); };
 
             await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
             {
@@ -104,29 +128,27 @@ namespace Surfus.Shell
                     try
                     {
                         await ChannelManager.RequestAsync(new ChannelRequestExec(ChannelManager.ServerId, true, command), SshClient.InternalCancellation.Token);
-                        await EofTaskSource.Task;
-                        await CloseTaskSource.Task;
+                        await ExecuteEofTaskSource.Task;
+                        await ExecuteCloseTaskSource.Task;
                         ExecuteTaskSource.TrySetResult(true);
                     }
                     catch (Exception ex)
                     {
-                        CloseTaskSource.TrySetException(ex);
-                        EofTaskSource.TrySetException(ex);
+                        ExecuteCloseTaskSource.TrySetException(ex);
+                        ExecuteEofTaskSource.TrySetException(ex);
                         ExecuteTaskSource.TrySetException(ex);
                     }
                 }
             });
 
             await ExecuteTaskSource.Task;
-            if (_memoryStream?.Length > 0)
+            using (_memoryStream)
             {
-                using (_memoryStream)
-                {
-                    return Encoding.UTF8.GetString(_memoryStream.ToArray());
-                }
+                ExecuteCloseTaskSource = null;
+                ExecuteEofTaskSource = null;
+                ExecuteTaskSource = null;
+                return Encoding.UTF8.GetString(_memoryStream.ToArray());
             }
-            _memoryStream?.Dispose();
-            throw new SshException("An error happened?");
         }
     }
 }

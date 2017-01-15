@@ -175,7 +175,6 @@ namespace Surfus.Shell
         {
             try
             {
-                //await _readSemaphore.WaitAsync(_taskSourceCancellation.Token);
                 var sshPacket = await client.ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(client.TcpStream, cancellationToken);
                 if (client.ConnectionInfo.ReadMacAlgorithm.OutputSize != 0)
                 {
@@ -197,7 +196,9 @@ namespace Surfus.Shell
                         client.ConnectionInfo.KeyExchanger.SendMessage(messageEvent.Message as KexInit);
                         break;
                     case MessageType.SSH_MSG_NEWKEYS:
+                        client.ConnectionInfo.SshNewKeysCompletion = new TaskCompletionSource<bool>();
                         client.ConnectionInfo.KeyExchanger.SendMessage(messageEvent.Message as NewKeys);
+                        await client.ConnectionInfo.SshNewKeysCompletion.Task;
                         break;
                     case MessageType.SSH_MSG_KEX_Exchange_30:
                     case MessageType.SSH_MSG_KEX_Exchange_31:
@@ -236,7 +237,6 @@ namespace Surfus.Shell
                         logger.Info($"{client.ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Unexpected Message {messageEvent.Type}");
                         break;
                 }
-
                 await AddClientTaskAsync(new ClientTask() { Client = client, TaskFunction = () => ReadMessageAsync(client, cancellationToken) });
             }
             catch (Exception ex)
