@@ -72,10 +72,9 @@ namespace Surfus.Shell
         {
             if (ChannelCloseTaskSource != null)
             {
-                throw new SshException($"CloseAsync has already been called on SshChannel");
+                throw new SshException($"SshCommand is already closed or closing.");
             }
             ChannelCloseTaskSource = new TaskCompletionSource<bool>();
-            cancellationToken.Register(() => SshClient.SetException(new TaskCanceledException(ChannelCloseTaskSource.Task)));
 
             await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
             {
