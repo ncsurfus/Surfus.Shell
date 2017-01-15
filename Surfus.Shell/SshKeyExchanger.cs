@@ -68,12 +68,14 @@ namespace Surfus.Shell
 
                     // Send our NewKeys
                     logger.Debug($"{_client.ConnectionInfo.Hostname}: Waiting for Server NewKeys");
-                    await SshClientStaticThread.WriteMessageAsync(_client, new NewKeys(), cancellationToken);
 
                     // Wait for New Keys before completing crypto.
                     var serverNewKeys = await NewKeysMessage.Task;
+                    await SshClientStaticThread.WriteMessageAsync(_client, new NewKeys(), cancellationToken);
 
                     ApplyKeyExchange();
+
+                    _client.ConnectionInfo.SshNewKeysCompletion.TrySetResult(true);
                     logger.Debug($"{_client.ConnectionInfo.Hostname}: Applied Key Exchange");
 
                     KexInitMessage = new TaskCompletionSource<KexInit>();
@@ -87,6 +89,7 @@ namespace Surfus.Shell
             catch(Exception ex)
             {
                 // Don't throw, exceptions get squashed on this thread. Relay to client
+                _client.ConnectionInfo.SshNewKeysCompletion.TrySetException(ex);
                 _client.SetException(ex);
             }
 

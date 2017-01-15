@@ -51,7 +51,7 @@ namespace Surfus.Shell
 
             await SshClientStaticThread.WriteMessageAsync(SshClient, new UaRequest(username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken);
 
-            while (true)
+            while (!cancellationToken.IsCancellationRequested && !SshClient.InternalCancellation.IsCancellationRequested)
             {
                 var responseMessage = await Task.WhenAny(UserAuthSuccessMessage.Task, UserAuthInfoRequest.Task);
 
@@ -75,6 +75,8 @@ namespace Surfus.Shell
                     await SshClientStaticThread.WriteMessageAsync(SshClient, new UaInfoResponse((uint)responses.Length, responses), cancellationToken);
                 }
             }
+            cancellationToken.ThrowIfCancellationRequested();
+            SshClient.InternalCancellation.Token.ThrowIfCancellationRequested();
         }
 
         // Message Pumps

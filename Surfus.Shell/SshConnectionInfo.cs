@@ -2,6 +2,8 @@
 using Surfus.Shell.Compression;
 using Surfus.Shell.Crypto;
 using Surfus.Shell.MessageAuthentication;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Surfus.Shell
 {
@@ -11,6 +13,9 @@ namespace Surfus.Shell
         public ushort Port { get; internal set; }
         public string ClientVersion { get; internal set; } = "SSH-2.0-Surfus-1.00";
         public string ServerVersion { get; internal set; }
+
+        // Gets initialized once a new keys message is read.
+        internal TaskCompletionSource<bool> SshNewKeysCompletion;
 
         internal uint InboundPacketSequence { get; set; }
         internal uint OutboundPacketSequence { get; set; }

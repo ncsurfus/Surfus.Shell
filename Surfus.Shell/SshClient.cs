@@ -30,6 +30,7 @@ namespace Surfus.Shell
         // Channels
         uint _channelCounter = 0;
         internal List<SshChannel> Channels = new List<SshChannel>();
+        internal List<SshCommand> Commands = new List<SshCommand>();
 
         // Internal CancellationToken
         internal CancellationTokenSource InternalCancellation = new CancellationTokenSource();
@@ -58,6 +59,7 @@ namespace Surfus.Shell
 
             var channel = new SshChannel(this, _channelCounter);
             var command = new SshCommand(this, channel);
+            Commands.Add(command);
 
             Channels.Add(channel);
             _channelCounter++;
@@ -117,7 +119,7 @@ namespace Surfus.Shell
             await SshClientStaticThread.ConnectAsync(this, InternalCancellation.Token);
 
             // Await the TaskCompeletionSource 
-            await ConnectTaskSource.Task.ConfigureAwait(false);
+            await ConnectTaskSource.Task;
         }
 
         public async Task LoginAsync(string username, string password, CancellationToken cancellationToken)
@@ -173,7 +175,7 @@ namespace Surfus.Shell
                     }
                     catch (Exception ex)
                     {
-                        // Don't throw, exceptions get squashed on this thread. Relay to client
+                        // Login exceptions aren't critical
                         LoginTaskSource.TrySetException(ex);
                     }
                 }
@@ -210,14 +212,34 @@ namespace Surfus.Shell
             ConnectTaskSource?.TrySetException(ex);
             LoginTaskSource?.TrySetException(ex);
 
+            // Throw exception on tasks in channel thread
+
             // Cancel tasks on background thread
             ConnectionInfo.KeyExchanger?.KexInitMessage?.TrySetCanceled();
             ConnectionInfo.KeyExchanger?.NewKeysMessage?.TrySetCanceled();
+
+            // Set Channels
+            foreach (var channel in Channels)
+            {
+                channel.ChannelOpenConfirmationMessage?.TrySetException(ex);
+                channel.ChannelSuccessMessage?.TrySetException(ex);
+            }
+
+            // Set Commands
+            foreach (var command in Commands)
+            {
+                command.ChannelOpenTaskSource?.TrySetException(ex);
+                command.ChannelCloseTaskSource?.TrySetException(ex);
+                command.ExecuteEofTaskSource?.TrySetException(ex);
+                command.ExecuteCloseTaskSource?.TrySetException(ex);
+                command.ExecuteTaskSource?.TrySetException(ex);
+            }
         }
 
         public void Close()
         {
-            if(!_isDisposed)
+            logger.Trace($"{ConnectionInfo.Hostname}: Entering {nameof(Close)}");
+            if (!_isDisposed)
             {
                 logger.Debug($"{ConnectionInfo.Hostname}: Canceling Tasks.");
                 InternalCancellation.Cancel(true);
