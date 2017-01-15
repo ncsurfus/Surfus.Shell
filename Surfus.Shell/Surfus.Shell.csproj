@@ -131,6 +131,7 @@
     <Compile Include="SshConnectionInfo.cs" />
     <Compile Include="SshKeyExchanger.cs" />
     <Compile Include="SshPacket.cs" />
+    <Compile Include="SshTerminal.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="NLog.config">
