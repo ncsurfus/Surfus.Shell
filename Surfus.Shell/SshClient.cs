@@ -31,6 +31,7 @@ namespace Surfus.Shell
         uint _channelCounter = 0;
         internal List<SshChannel> Channels = new List<SshChannel>();
         internal List<SshCommand> Commands = new List<SshCommand>();
+        internal List<SshTerminal> Terminals = new List<SshTerminal>();
 
         // Internal CancellationToken
         internal CancellationTokenSource InternalCancellation = new CancellationTokenSource();
@@ -69,6 +70,23 @@ namespace Surfus.Shell
             return command;
         }
 
+        public async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken)
+        {
+            // Channels will be touched by background thread. Must coordinate.
+            await SshClientSemaphore.WaitAsync(cancellationToken);
+
+            var channel = new SshChannel(this, _channelCounter);
+            var terminal = new SshTerminal(this, channel);
+            Terminals.Add(terminal);
+
+            Channels.Add(channel);
+            _channelCounter++;
+
+            SshClientSemaphore.Release();
+
+            return terminal;
+        }
+
         internal async Task SendChannelMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
             // Runs on background thread
@@ -77,7 +95,7 @@ namespace Surfus.Shell
             {
                 // Channels will be touched by foreground thread. Must coordinate.
                 await SshClientSemaphore.WaitAsync(cancellationToken);
-                var channel = Channels.Single(x => x.ServerId == channelMessage.RecipientChannel);
+                var channel = Channels.Single(x => x.ClientId == channelMessage.RecipientChannel);
                 SshClientSemaphore.Release();
 
                 switch (messageEvent.Message)
@@ -194,6 +212,7 @@ namespace Surfus.Shell
 
         internal void SetException(Exception ex)
         {
+            logger.Trace($"{ConnectionInfo.Hostname} - Entering {nameof(SetException)}");
             if (!IsFinished)
             {
                 logger.Fatal($"{ConnectionInfo.Hostname}: {ex}");
@@ -203,7 +222,7 @@ namespace Surfus.Shell
                 logger.Debug($"{ConnectionInfo.Hostname} (After Fatal/Success): {ex.Message}");
             }
             SetTaskExceptions(ex);
-            Close();
+            Close(nameof(SetException));
         }
 
         private void SetTaskExceptions(Exception ex)
@@ -234,11 +253,27 @@ namespace Surfus.Shell
                 command.ExecuteCloseTaskSource?.TrySetException(ex);
                 command.ExecuteTaskSource?.TrySetException(ex);
             }
+
+            // Set Terminals
+            foreach (var terminal in Terminals)
+            {
+                terminal.ChannelCloseTaskSource?.TrySetException(ex);
+                terminal.ChannelOpenTaskSource?.TrySetException(ex);
+                terminal.TerminalReadTaskSource?.TrySetException(ex);
+                terminal.TerminalWriteTaskSource?.TrySetException(ex);
+                terminal.ShellTaskSource?.TrySetException(ex);
+                terminal.PseudoTerminalTaskSource?.TrySetException(ex);
+            }
         }
 
         public void Close()
         {
-            logger.Trace($"{ConnectionInfo.Hostname}: Entering {nameof(Close)}");
+            Close(nameof(Close));
+        }
+
+        internal void Close(string reason)
+        {
+            logger.Trace($"{ConnectionInfo.Hostname}: Entering {nameof(Close)} - {reason}");
             if (!_isDisposed)
             {
                 logger.Debug($"{ConnectionInfo.Hostname}: Canceling Tasks.");
@@ -252,7 +287,7 @@ namespace Surfus.Shell
 
         public void Dispose()
         {
-            Close();
+            Close(nameof(Dispose));
         }
     }
 }
