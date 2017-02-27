@@ -97,22 +97,22 @@ namespace Surfus.Shell
         public void SendMessage(ChannelOpenConfirmation message)
         {
             logger.Trace("Setting OpenConfirmation");
-            ChannelOpenConfirmationMessage.SetResult(message);
+            ChannelOpenConfirmationMessage.TrySetResult(message);
         }
 
         public void SendMessage(ChannelOpenFailure message)
         {
-            ChannelOpenConfirmationMessage.SetException(new SshException("Server failed to open channel"));
+            ChannelOpenConfirmationMessage.TrySetException(new SshException("Server failed to open channel"));
         }
 
         public void SendMessage(ChannelSuccess message)
         {
-            ChannelSuccessMessage.SetResult(message);
+            ChannelSuccessMessage.TrySetResult(message);
         }
 
         public void SendMessage(ChannelFailure message)
         {
-            ChannelSuccessMessage.SetException(new SshException("Server had channel request failure."));
+            ChannelSuccessMessage.TrySetException(new SshException("Server had channel request failure."));
         }
 
         public void SendMessage(ChannelWindowAdjust message)

@@ -6,11 +6,14 @@ using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel.Open;
 using Surfus.Shell.Messages.Channel.Requests;
+using NLog;
 
 namespace Surfus.Shell
 {
     public class SshTerminal
     {
+        private static Logger logger = LogManager.GetCurrentClassLogger();
+
         internal TaskCompletionSource<bool> ChannelOpenTaskSource;
         internal TaskCompletionSource<bool> ChannelCloseTaskSource;
 
@@ -20,7 +23,7 @@ namespace Surfus.Shell
         internal TaskCompletionSource<bool> TerminalReadTaskSource;
 
         private readonly StringBuilder _readBuffer = new StringBuilder();
-        private TaskCompletionSource<bool> _readCompletionSource;
+        private TaskCompletionSource<bool> _readCompletionSource = new TaskCompletionSource<bool>();
         private bool _shouldCloseClient = false;
 
         internal SshTerminal(SshClient sshClient, SshChannel channel)
@@ -160,6 +163,7 @@ namespace Surfus.Shell
 
         public async Task<string> ReadAsync(CancellationToken cancellationToken)
         {
+            logger.Trace($"Entering {nameof(SshTerminal)} - {nameof(ReadAsync)}");
             if (TerminalReadTaskSource != null)
             {
                 throw new SshException($"Terminal is already reading.");
@@ -176,16 +180,22 @@ namespace Surfus.Shell
             }
 
             string text;
-
             if (_readBuffer.Length > 0)
             {
                 text = _readBuffer.ToString();
             }
             else
             {
-                cancellationToken.Register(() => TerminalReadTaskSource.TrySetCanceled());
+                TerminalReadTaskSource = new TaskCompletionSource<bool>();
+
+                cancellationToken.Register(() => TerminalReadTaskSource?.TrySetCanceled());
+
                 await _readCompletionSource.Task;
                 _readCompletionSource = new TaskCompletionSource<bool>();
+
+                _readCompletionSource = null;
+                TerminalReadTaskSource = null;
+
                 text = _readBuffer.ToString();
             }
 

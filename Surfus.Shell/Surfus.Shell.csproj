@@ -143,4 +143,16 @@
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>set dateVersion=$([System.DateTime]::UtcNow.ToString("yyyy.MM.dd"))
+set timeVersion=$([System.DateTime]::UtcNow.TimeOfDay.TotalSeconds.ToString("#"))
+set version=%25dateVersion%25.%25timeVersion%25
+echo %25version%25
+
+if $(ConfigurationName) == Debug (
+  nuget.exe pack "$(ProjectPath)" -Version %25version%25 -Suffix Debug -OutputDirectory "$(ProjectDir)\bin\nuget"
+) ELSE (
+  nuget.exe pack "$(ProjectPath)" -Version %25version%25 -OutputDirectory "$(ProjectDir)\bin\nuget"
+)</PostBuildEvent>
+  </PropertyGroup>
 </Project>
