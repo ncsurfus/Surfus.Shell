@@ -14,6 +14,9 @@ namespace Surfus.Shell
     {
         private static Logger logger = LogManager.GetCurrentClassLogger();
 
+        // Terminal Semaphore
+        internal SemaphoreSlim TerminalSemaphore = new SemaphoreSlim(1, 1);
+
         internal TaskCompletionSource<bool> ChannelOpenTaskSource;
         internal TaskCompletionSource<bool> ChannelCloseTaskSource;
 
@@ -23,18 +26,18 @@ namespace Surfus.Shell
         internal TaskCompletionSource<bool> TerminalReadTaskSource;
 
         private readonly StringBuilder _readBuffer = new StringBuilder();
-        private TaskCompletionSource<bool> _readCompletionSource = new TaskCompletionSource<bool>();
         private bool _shouldCloseClient = false;
 
         internal SshTerminal(SshClient sshClient, SshChannel channel)
         {
             SshClient = sshClient;
             Channel = channel;
-            Channel.OnDataReceived = (buffer, cancellationToken) =>
+            Channel.OnDataReceived = async (buffer, cancellationToken) =>
             {
+                await TerminalSemaphore.WaitAsync();
                 _readBuffer.Append(Encoding.UTF8.GetString(buffer));
-                _readCompletionSource?.TrySetResult(true);
-                return Task.FromResult(true);
+                TerminalReadTaskSource?.TrySetResult(true);
+                TerminalSemaphore.Release();
             };
             Channel.OnChannelCloseReceived = async (close, cancellationToken) =>
             {
@@ -163,6 +166,7 @@ namespace Surfus.Shell
 
         public async Task<string> ReadAsync(CancellationToken cancellationToken)
         {
+            await TerminalSemaphore.WaitAsync();
             logger.Trace($"Entering {nameof(SshTerminal)} - {nameof(ReadAsync)}");
             if (TerminalReadTaskSource != null)
             {
@@ -178,6 +182,7 @@ namespace Surfus.Shell
             {
                 throw new SshException($"Terminal is not opened");
             }
+            TerminalSemaphore.Release();
 
             string text;
             if (_readBuffer.Length > 0)
@@ -190,11 +195,13 @@ namespace Surfus.Shell
 
                 cancellationToken.Register(() => TerminalReadTaskSource?.TrySetCanceled());
 
-                await _readCompletionSource.Task;
-                _readCompletionSource = new TaskCompletionSource<bool>();
+                await TerminalReadTaskSource.Task;
 
-                _readCompletionSource = null;
+                await TerminalSemaphore.WaitAsync();
+                TerminalReadTaskSource = new TaskCompletionSource<bool>();
+
                 TerminalReadTaskSource = null;
+                TerminalSemaphore.Release();
 
                 text = _readBuffer.ToString();
             }
