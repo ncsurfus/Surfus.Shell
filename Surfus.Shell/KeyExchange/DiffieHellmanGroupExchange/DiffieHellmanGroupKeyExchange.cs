@@ -33,6 +33,16 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
     internal class DiffieHellmanGroupKeyExchange : KeyExchangeAlgorithm
     {
         /// <summary>
+        /// A semaphore that keeps the key exchange algorithm in check.
+        /// </summary>
+        private readonly SemaphoreSlim _keyExchangeAlgorithmSemaphore = new SemaphoreSlim(1, 1);
+
+        /// <summary>
+        /// The state of the Key Exchange Algorithm
+        /// </summary>
+        private State _keyExchangeAlgorithmState = State.Initial;
+
+        /// <summary>
         /// The maximum group size.
         /// </summary>
         private const uint MaximumGroupSize = 8192;
@@ -60,18 +70,29 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// <summary>
         /// The SshClient representing the SSH connection.
         /// </summary>
-        private readonly SshClient _sshClient;
+        private readonly SshClient _client;
 
         /// <summary>
         /// The signing algorithm.
         /// </summary>
         private Signer _signingAlgorithm;
 
-        // Message Sources
-        internal TaskCompletionSource<DhgGroup> DhgGroupMessage = new TaskCompletionSource<DhgGroup>();
-        internal TaskCompletionSource<DhgReply> DhgReplyMessage = new TaskCompletionSource<DhgReply>();
+        /// <summary>
+        /// The signing algorithm.
+        /// </summary>
+        private BigInteger _e;
 
-        private static Logger logger = LogManager.GetCurrentClassLogger();
+        /// <summary>
+        /// The signing algorithm.
+        /// </summary>
+        private BigInteger _x;
+
+        /// <summary>
+        /// The DhgGroup Message
+        /// </summary>
+        private DhgGroup _dhgGroupMessage;
+
+        private static Logger _logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DiffieHellmanGroupKeyExchange"/> class.
@@ -87,7 +108,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// </param>
         public DiffieHellmanGroupKeyExchange(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult, string shaVersion)
         {
-            _sshClient = sshClient;
+            _client = sshClient;
             _kexInitExchangeResult = kexInitExchangeResult;
             _shaVersion = shaVersion;
         }
@@ -101,73 +122,23 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// <exception cref="SshException">
         /// Throws an SshException if the key exchange fails.
         /// </exception>
-        public override async Task ExchangeAsync(CancellationToken cancellationToken)
+        public override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
         {
-            logger.Trace($"{_sshClient.ConnectionInfo.Hostname} - {nameof(ExchangeAsync)}: Beginning key exchange algorithm {nameof(DiffieHellmanGroupKeyExchange)}");
+            await _keyExchangeAlgorithmSemaphore.WaitAsync();
+
+            if (_keyExchangeAlgorithmState != State.Initial)
+            {
+                var fatalException = new SshException("Unexpected key exchange algorithm state");
+                await _client.SetFatalError(fatalException);
+                throw fatalException;
+            }
 
             // Send the request message to begin the Diffie-Hellman Group Key Exchange.
-            logger.Debug($"{_sshClient.ConnectionInfo.Hostname} - {nameof(ExchangeAsync)}: Sending DHG Request");
-            await SshClientStaticThread.WriteMessageAsync(_sshClient, new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken);
+            await _client.WriteMessageAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken);
 
-            // Get Group Message
-            logger.Debug($"{_sshClient.ConnectionInfo.Hostname} - {nameof(ExchangeAsync)}: Waiting for DHG Group Response");
-            var groupMessage = await DhgGroupMessage.Task;
+            _keyExchangeAlgorithmState = State.WaitingonDhgGroup;
 
-            // Generate random number 'x'.
-            var x = GenerateRandomBigInteger(1, (groupMessage.P - 1) / 2);
-            logger.Trace($"{_sshClient.ConnectionInfo.Hostname} - {nameof(ExchangeAsync)}: Generated X {x}");
-
-            // Generate 'e'.
-            var e = BigInteger.ModPow(groupMessage.G, x, groupMessage.P);
-            logger.Trace($"{_sshClient.ConnectionInfo.Hostname} - {nameof(ExchangeAsync)}: Generated E {e}");
-
-            // Send 'e' to the server with the 'Init' message.
-            logger.Debug($"{_sshClient.ConnectionInfo.Hostname} - {nameof(ExchangeAsync)}: Sending E");
-            await SshClientStaticThread.WriteMessageAsync(_sshClient, new DhgInit(e), cancellationToken);
-
-            // Get ReplyMessage.
-            logger.Debug($"{_sshClient.ConnectionInfo.Hostname} - {nameof(ExchangeAsync)}: Waiting for DHG Reply");
-            var replyMessage = await DhgReplyMessage.Task;
-
-            // Verify 'F' is in the range of [1, p-1]
-            if (replyMessage.F < 1 || replyMessage.F > groupMessage.P - 1)
-            {
-               // await _sshClient.Log("Invalid 'F' from server!");
-                throw new SshException("Invalid 'F' from server!");
-            }
-
-            // Generate the shared secret 'K'
-            K = BigInteger.ModPow(replyMessage.F, x, groupMessage.P);
-
-            // Prepare the signing algorithm from the servers public key.
-            _signingAlgorithm = Signer.CreateSigner(_kexInitExchangeResult.ServerHostKeyAlgorithm, replyMessage.ServerPublicHostKeyAndCertificates);
-
-            // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.
-            using (var memoryStream = new MemoryStream(65535))
-            {
-                memoryStream.WriteString(_sshClient.ConnectionInfo.ClientVersion);
-                memoryStream.WriteString(_sshClient.ConnectionInfo.ServerVersion);
-                memoryStream.WriteBinaryString(_kexInitExchangeResult.Client.GetBytes());
-                memoryStream.WriteBinaryString(_kexInitExchangeResult.Server.GetBytes());
-                memoryStream.WriteBinaryString(replyMessage.ServerPublicHostKeyAndCertificates);
-                memoryStream.WriteUInt(1024);
-                memoryStream.WriteUInt(2048);
-                memoryStream.WriteUInt(8192);
-                memoryStream.WriteBigInteger(groupMessage.P);
-                memoryStream.WriteBigInteger(groupMessage.G);
-                memoryStream.WriteBigInteger(e);
-                memoryStream.WriteBigInteger(replyMessage.F);
-                memoryStream.WriteBigInteger(K);
-
-                H = Hash(memoryStream.ToArray());
-
-                // Use the signing algorithm to verify the data sent by the server is correct.
-                if (!_signingAlgorithm.VerifySignature(H, replyMessage.HSignature))
-                {
-                    //await _sshClient.Log("Invalid Host Signature");
-                    throw new SshException("Invalid Host Signature.");
-                }
-            }
+            _keyExchangeAlgorithmSemaphore.Release();
         }
 
         /// <summary>
@@ -209,29 +180,134 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             }
         }
 
-        public override void SendKeyExchangeMessage30(MessageEvent message)
+        public override Task<bool> SendKeyExchangeMessage30Async(MessageEvent message, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        public override void SendKeyExchangeMessage31(MessageEvent message)
+        public override async Task<bool> SendKeyExchangeMessage31Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            DhgGroupMessage.SetResult(new DhgGroup(message.Buffer));
+            await _keyExchangeAlgorithmSemaphore.WaitAsync();
+
+            if (_keyExchangeAlgorithmState != State.WaitingonDhgGroup)
+            {
+                var fatalException = new SshException("Unexpected key exchange algorithm message");
+                await _client.SetFatalError(fatalException);
+                throw fatalException;
+            }
+
+            _dhgGroupMessage = new DhgGroup(message.Buffer);
+            if (_dhgGroupMessage == null)
+            {
+                var fatalException = new SshException("Invalid key exchange algorithm message");
+                await _client.SetFatalError(fatalException);
+                throw fatalException;
+            }
+
+            // Generate random number 'x'.
+            _x = GenerateRandomBigInteger(1, (_dhgGroupMessage.P - 1) / 2);
+            _logger.Trace($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Generated X {_x}");
+
+            // Generate 'e'.
+            _e = BigInteger.ModPow(_dhgGroupMessage.G, _x, _dhgGroupMessage.P);
+            _logger.Trace($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Generated E {_e}");
+
+            // Send 'e' to the server with the 'Init' message.
+            _logger.Debug($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Sending E");
+            await _client.WriteMessageAsync(new DhgInit(_e), cancellationToken);
+
+
+            _keyExchangeAlgorithmState = State.WaitingOnDhgReply;
+
+            _keyExchangeAlgorithmSemaphore.Release();
+
+            return false;
         }
 
-        public override void SendKeyExchangeMessage32(MessageEvent message)
+        public override Task<bool> SendKeyExchangeMessage32Async(MessageEvent message, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        public override void SendKeyExchangeMessage33(MessageEvent message)
+        public override async Task<bool> SendKeyExchangeMessage33Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            DhgReplyMessage.SetResult(new DhgReply(message.Buffer));
+            await _keyExchangeAlgorithmSemaphore.WaitAsync();
+
+            if (_keyExchangeAlgorithmState != State.WaitingOnDhgReply)
+            {
+                var fatalException = new SshException("Unexpected key exchange algorithm message");
+                await _client.SetFatalError(fatalException);
+                throw fatalException;
+            }
+
+            var replyMessage = new DhgReply(message.Buffer);
+            if (replyMessage == null)
+            {
+                var fatalException = new SshException("Invalid key exchange algorithm message");
+                await _client.SetFatalError(fatalException);
+                throw fatalException;
+            }
+
+            // Verify 'F' is in the range of [1, p-1]
+            if (replyMessage.F < 1 || replyMessage.F > _dhgGroupMessage.P - 1)
+            {
+                // await _sshClient.Log("Invalid 'F' from server!");
+                throw new SshException("Invalid 'F' from server!");
+            }
+
+            // Generate the shared secret 'K'
+            K = BigInteger.ModPow(replyMessage.F, _x, _dhgGroupMessage.P);
+
+            // Prepare the signing algorithm from the servers public key.
+            _signingAlgorithm = Signer.CreateSigner(_kexInitExchangeResult.ServerHostKeyAlgorithm, replyMessage.ServerPublicHostKeyAndCertificates);
+
+            // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.
+            using (var memoryStream = new MemoryStream(65535))
+            {
+                memoryStream.WriteString(_client.ConnectionInfo.ClientVersion);
+                memoryStream.WriteString(_client.ConnectionInfo.ServerVersion);
+                memoryStream.WriteBinaryString(_kexInitExchangeResult.Client.GetBytes());
+                memoryStream.WriteBinaryString(_kexInitExchangeResult.Server.GetBytes());
+                memoryStream.WriteBinaryString(replyMessage.ServerPublicHostKeyAndCertificates);
+                memoryStream.WriteUInt(1024);
+                memoryStream.WriteUInt(2048);
+                memoryStream.WriteUInt(8192);
+                memoryStream.WriteBigInteger(_dhgGroupMessage.P);
+                memoryStream.WriteBigInteger(_dhgGroupMessage.G);
+                memoryStream.WriteBigInteger(_e);
+                memoryStream.WriteBigInteger(replyMessage.F);
+                memoryStream.WriteBigInteger(K);
+
+                H = Hash(memoryStream.ToArray());
+
+                // Use the signing algorithm to verify the data sent by the server is correct.
+                if (!_signingAlgorithm.VerifySignature(H, replyMessage.HSignature))
+                {
+                    //await _sshClient.Log("Invalid Host Signature");
+                    throw new SshException("Invalid Host Signature.");
+                }
+            }
+
+
+            _keyExchangeAlgorithmState = State.Complete;
+
+            _keyExchangeAlgorithmSemaphore.Release();
+
+            return true;
         }
 
-        public override void SendKeyExchangeMessage34(MessageEvent message)
+        public override Task<bool> SendKeyExchangeMessage34Async(MessageEvent message, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
+        }
+
+        // State represents the current state of the key exchange algorithm
+        internal enum State
+        {
+            Initial,
+            WaitingonDhgGroup,
+            WaitingOnDhgReply,
+            Complete
         }
     }
 }

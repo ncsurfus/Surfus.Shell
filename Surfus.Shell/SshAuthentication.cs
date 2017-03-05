@@ -5,104 +5,215 @@ using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.UserAuth;
+using NLog;
 
 namespace Surfus.Shell
 {
-    internal class SshAuthentication
+    internal class SshAuthentication : IDisposable
     {
+
+        // Fields
+        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private SshClient _client { get; }
+        private readonly SemaphoreSlim _loginSemaphore = new SemaphoreSlim(1, 1);
+        private State _loginState = State.Initial;
+        private LoginType _loginType = LoginType.None;
+        private string _username;
+        private string _password;
+        private Func<string, CancellationToken, Task<string>> _interactiveResponse;
+        private bool _disposed;
+
+
         // Message Sources
         internal TaskCompletionSource<ServiceAccept> ServiceAcceptMessage = new TaskCompletionSource<ServiceAccept>();
         internal TaskCompletionSource<UaSuccess> UserAuthSuccessMessage = new TaskCompletionSource<UaSuccess>();
         internal TaskCompletionSource<UaInfoRequest> UserAuthInfoRequest = new TaskCompletionSource<UaInfoRequest>();
 
-        public SshClient SshClient { get; }
-
-        public SshAuthentication(SshClient sshclient)
+        public SshAuthentication(SshClient sshClient)
         {
-            SshClient = sshclient;
-        }
-
-        private async Task CommonLoginAsync(CancellationToken cancellationToken)
-        {
-            if (!ServiceAcceptMessage.Task.IsCompleted)
-            {
-                await SshClientStaticThread.WriteMessageAsync(SshClient, new ServiceRequest("ssh-userauth"), cancellationToken);
-            }
-
-            await ServiceAcceptMessage.Task;
+            _client = sshClient;
         }
 
         public async Task LoginAsync(string username, string password, CancellationToken cancellationToken)
         {
-            UserAuthSuccessMessage = new TaskCompletionSource<UaSuccess>();
-            await CommonLoginAsync(cancellationToken);
+            await _loginSemaphore.WaitAsync(cancellationToken);
 
-            await SshClientStaticThread.WriteMessageAsync(SshClient, new UaRequest(username, "ssh-connection", "password", password), cancellationToken);
-            await UserAuthSuccessMessage.Task;
+            if(_loginState != State.Initial)
+            {
+                throw new Exception("Cannot Login Twice...");
+            }
 
-            SshClient.LoginTaskSource.TrySetResult(true);
+            _username = username;
+            _password = password;
+            _loginType = LoginType.Password;
+
+            await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken);
+            _loginState = State.WaitingOnServiceAccept;
+
+            _loginSemaphore.Release();
         }
 
-        public async Task LoginInteractiveAsync(string username, Func<string, CancellationToken, Task<string>> ResponseTask, CancellationToken cancellationToken)
+        public async Task LoginAsync(string username, Func<string, CancellationToken, Task<string>> ResponseTask, CancellationToken cancellationToken)
         {
-            UserAuthSuccessMessage = new TaskCompletionSource<UaSuccess>();
-            UserAuthInfoRequest = new TaskCompletionSource<UaInfoRequest>();
-            await CommonLoginAsync(cancellationToken);
+            await _loginSemaphore.WaitAsync(cancellationToken);
 
-            await SshClientStaticThread.WriteMessageAsync(SshClient, new UaRequest(username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken);
-
-            while (!cancellationToken.IsCancellationRequested && !SshClient.InternalCancellation.IsCancellationRequested)
+            if (_loginState != State.Initial)
             {
-                var responseMessage = await Task.WhenAny(UserAuthSuccessMessage.Task, UserAuthInfoRequest.Task);
-
-                if (responseMessage == UserAuthSuccessMessage.Task)
-                {
-                    await UserAuthSuccessMessage.Task;
-                    SshClient.LoginTaskSource.TrySetResult(true);
-                    return;
-                }
-                if (responseMessage == UserAuthInfoRequest.Task)
-                {
-                    var uaInfoRequest = await UserAuthInfoRequest.Task;
-                    UserAuthInfoRequest = new TaskCompletionSource<UaInfoRequest>();
-
-                    var responses = new string[uaInfoRequest.PromptNumber];
-                    for (var i = 0; i != responses.Length; i++)
-                    {
-                        responses[i] = await ResponseTask(uaInfoRequest.Prompt[i], cancellationToken);
-                    }
-
-                    await SshClientStaticThread.WriteMessageAsync(SshClient, new UaInfoResponse((uint)responses.Length, responses), cancellationToken);
-                }
+                throw new Exception("Cannot Login Twice...");
             }
-            cancellationToken.ThrowIfCancellationRequested();
-            SshClient.InternalCancellation.Token.ThrowIfCancellationRequested();
+
+            _username = username;
+            _interactiveResponse = ResponseTask;
+            _loginType = LoginType.Interactive;
+            await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken);
+            _loginState = State.WaitingOnServiceAccept;
+
+            _loginSemaphore.Release();
         }
 
         // Message Pumps
-        public void SendMessage(ServiceAccept message)
+        public async Task SendMessage(ServiceAccept message, CancellationToken cancellationToken)
         {
-            ServiceAcceptMessage.SetResult(message);
+            await _loginSemaphore.WaitAsync(cancellationToken);
+
+            if(_loginState != State.WaitingOnServiceAccept)
+            {
+                var fatalException = new SshException("Received unexpected login message.");
+                await _client.SetFatalError(fatalException);
+                _loginState = State.Failed;
+                _loginSemaphore.Release();
+                throw fatalException;
+            }
+
+            if(_loginType == LoginType.Password)
+            {
+                await _client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "password", _password), cancellationToken);
+                _password = null;
+                _loginState = State.WaitingOnCredentialSuccess;
+            }
+
+            if (_loginType == LoginType.Interactive)
+            {
+                await _client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken);
+                _loginState = State.WaitingOnCredentialSuccessOrInteractive;
+            }
+
+            _loginSemaphore.Release();
         }
 
-        public void SendRequestFailureMessage()
+        public async Task SendRequestFailureMessage(CancellationToken cancellationToken)
         {
-            ServiceAcceptMessage.TrySetException(new SshException("Server does not accept authentication"));
+            await _loginSemaphore.WaitAsync(cancellationToken);
+
+            if (_loginState != State.WaitingOnServiceAccept)
+            {
+                _loginState = State.Failed;
+                var fatalException = new SshException("Received unexpected login message.");
+                await _client.SetFatalError(fatalException);
+                _loginState = State.Failed;
+                _loginSemaphore.Release();
+                throw fatalException;
+            }
+
+            var noAuthenticationException = new SshException("Server does not accept authentication.");
+            await _client.SetFatalError(noAuthenticationException);
+            _loginState = State.Failed;
+            _loginSemaphore.Release();
+            throw noAuthenticationException;
         }
 
-        public void SendMessage(UaSuccess message)
+        public async Task SendMessage(UaSuccess message, CancellationToken cancellationToken)
         {
-            UserAuthSuccessMessage.TrySetResult(message);
+            await _loginSemaphore.WaitAsync(cancellationToken);
+
+            if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
+            {
+                _loginState = State.Failed;
+                var fatalException = new SshException("Received unexpected login message.");
+                await _client.SetFatalError(fatalException);
+                _loginSemaphore.Release();
+                throw fatalException;
+            }
+
+            _loginState = State.Completed;
+
+            _loginSemaphore.Release();
         }
 
-        public void SendMessage(UaFailure message)
+        public async Task<bool> SendMessage(UaFailure message, CancellationToken cancellationToken)
         {
-            UserAuthSuccessMessage.TrySetException(new SshException("Server rejected credentials"));
+            await _loginSemaphore.WaitAsync(cancellationToken);
+
+            if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
+            {
+                _loginState = State.Failed;
+                var fatalException = new SshException("Received unexpected login message.");
+                await _client.SetFatalError(fatalException);
+                _loginSemaphore.Release();
+                throw fatalException;
+            }
+
+            var noAuthenticationException = new SshException("Credentials Denied..");
+            await _client.SetFatalError(noAuthenticationException);
+            _loginSemaphore.Release();
+            throw noAuthenticationException;
         }
 
-        public void SendMessage(UaInfoRequest message)
+        public async Task SendMessage(UaInfoRequest message, CancellationToken cancellationToken)
         {
-            UserAuthInfoRequest.SetResult(message);
+            await _loginSemaphore.WaitAsync(cancellationToken);
+
+            if (_loginState != State.WaitingOnCredentialSuccessOrInteractive)
+            {
+                _loginState = State.Failed;
+                var fatalException = new SshException("Received unexpected login message.");
+                await _client.SetFatalError(fatalException);
+                _loginSemaphore.Release();
+                throw fatalException;
+            }
+
+            var responses = new string[message.PromptNumber];
+            for (var i = 0; i != responses.Length; i++)
+            {
+                responses[i] = await _interactiveResponse(message.Prompt[i], cancellationToken);
+            }
+
+            await _client.WriteMessageAsync(new UaInfoResponse((uint)responses.Length, responses), cancellationToken);
+
+            _loginSemaphore.Release();
+
+        }
+
+        public void Close()
+        {
+            if(!_disposed)
+            {
+                _disposed = true;
+                _password = null;
+                _loginSemaphore.Dispose();
+            }
+        }
+
+        public void Dispose()
+        {
+            Close();
+        }
+
+        internal enum State
+        {
+            Initial,
+            WaitingOnServiceAccept,
+            WaitingOnCredentialSuccessOrInteractive,
+            WaitingOnCredentialSuccess,
+            Completed,
+            Failed
+        }
+
+        internal enum LoginType
+        {
+            None,
+            Password,
+            Interactive
         }
     }
 }

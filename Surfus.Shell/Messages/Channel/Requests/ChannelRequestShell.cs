@@ -9,7 +9,7 @@
 
         public ChannelRequestShell(uint recipientChannel, bool wantReply) : base(recipientChannel, "shell", wantReply)
         {
-            ""
+            
         }
     }
 }

@@ -1,6 +1,4 @@
-﻿using System;
-using System.Linq;
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
 using Surfus.Shell.Compression;
 using Surfus.Shell.Crypto;
@@ -15,119 +13,140 @@ namespace Surfus.Shell
 {
     internal class SshKeyExchanger
     {
-        private static Logger logger = LogManager.GetCurrentClassLogger();
-
-        private readonly SemaphoreSlim _clientKexInitSemaphore = new SemaphoreSlim(1);
-
+        // Fields
+        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly SemaphoreSlim _sshKeyExchangeSemaphore = new SemaphoreSlim(1, 1);
+        private State _keyExchangeState = State.Initial;
         private KexInit _clientKexInit;
+        private SshClient _client;
 
-        // Message Sources
-        internal TaskCompletionSource<KexInit> KexInitMessage = new TaskCompletionSource<KexInit>();
-        internal TaskCompletionSource<NewKeys> NewKeysMessage = new TaskCompletionSource<NewKeys>();
+        // Properties
+        internal KeyExchangeAlgorithm KeyExchangeAlgorithm { get; private set; }
+        internal KexInitExchangeResult KeyExchangeResult { get; private set; }
+        internal byte[] SessionIdentifier { get; private set; }
 
-        public SshKeyExchanger(SshClient client)
+        internal SshKeyExchanger(SshClient client)
         {
             _client = client;
         }
 
-        private SshClient _client { get; }
-
-        // Key Exchange Informations
-        public KeyExchangeAlgorithm KeyExchangeAlgorithm { get; private set; }
-        public KexInitExchangeResult KeyExchangeResult { get; private set; }
-        public byte[] SessionIdentifier { get; private set; }
-
-        public async Task ExchangeKeysAsync(CancellationToken cancellationToken)
+        // Attempts to send a client kex init packet if we're in the expected state.
+        internal async Task<bool> TrySendClientKexInitAsync(CancellationToken cancellationToken)
         {
-            logger.Trace($"{_client.ConnectionInfo.Hostname}: Starting {nameof(ExchangeKeysAsync)}");
+            await _sshKeyExchangeSemaphore.WaitAsync(cancellationToken);
 
-            try
+            if(_keyExchangeState == State.Initial)
             {
-                while (!_client.IsFinished)
-                {
-                    logger.Debug($"{_client.ConnectionInfo.Hostname}: Key Exchange Starting...");
+                _clientKexInit = new KexInit();
+                await _client.WriteMessageAsync(_clientKexInit, cancellationToken);
+                _keyExchangeState = State.SentKexNeedKex;
+                return true;
+            }
 
-                    // Wait for the server to send KexInit.
-                    var serverKexInit = await KexInitMessage.Task;
-                    logger.Debug($"{_client.ConnectionInfo.Hostname}: Received Server KexInit");
+            _sshKeyExchangeSemaphore.Release();
+            return false;
+        }
 
-                    // Send our KexInit.
-                    _clientKexInit = new KexInit();
-                    await SshClientStaticThread.WriteMessageAsync(_client, _clientKexInit, cancellationToken);
-                    logger.Debug($"{_client.ConnectionInfo.Hostname}: Sent Client KexInit");
+        // ApplyKeyExchangeMessageAsync is called from the SshClient's ReadMessage method to move the state forward.
+        internal async Task ApplyKeyExchangeMessageAsync(MessageEvent message, CancellationToken cancellationToken)
+        {
+            await _sshKeyExchangeSemaphore.WaitAsync();
+            switch (message.Type)
+            {
 
-                    // Compute KexInit Information.
-                    KeyExchangeResult = new KexInitExchangeResult(_clientKexInit, serverKexInit);
-
-                    // Conduct KeyExchange and wait for NewKeys
-                    logger.Debug($"{_client.ConnectionInfo.Hostname}: Creating KeyExchangeAlgorithm");
+                case MessageType.SSH_MSG_KEXINIT:
+                    if (_keyExchangeState == State.Initial)
+                    {
+                        _clientKexInit = new KexInit();
+                        await _client.WriteMessageAsync(_clientKexInit, cancellationToken);
+                        _keyExchangeState = State.WaitingOnKeyExchangeProtocol;
+                    }
+                    else if (_keyExchangeState == State.SentKexNeedKex)
+                    {
+                        await _client.WriteMessageAsync(_clientKexInit, cancellationToken);
+                        _keyExchangeState = State.WaitingOnKeyExchangeProtocol;
+                    }
+                    else
+                    {
+                        var fatalException = new SshException("Received unexpected key exchange message.");
+                        await _client.SetFatalError(fatalException);
+                        throw fatalException;
+                    }
+                    KeyExchangeResult = new KexInitExchangeResult(_clientKexInit, message.Message as KexInit);
                     KeyExchangeAlgorithm = KeyExchangeAlgorithm.Create(_client, KeyExchangeResult);
+                    await KeyExchangeAlgorithm.InitiateKeyExchangeAlgorithmAsync(cancellationToken);
+                    break;
 
-                    // Exchange
-                    await KeyExchangeAlgorithm.ExchangeAsync(cancellationToken);
+                case MessageType.SSH_MSG_KEX_Exchange_30:
+                case MessageType.SSH_MSG_KEX_Exchange_31:
+                case MessageType.SSH_MSG_KEX_Exchange_32:
+                case MessageType.SSH_MSG_KEX_Exchange_33:
+                case MessageType.SSH_MSG_KEX_Exchange_34:
+                    if (_keyExchangeState != State.WaitingOnKeyExchangeProtocol)
+                    {
+                        var fatalException = new SshException("Received unexpected key exchange message.");
+                        await _client.SetFatalError(fatalException);
+                        throw fatalException;
 
-                    // Send our NewKeys
-                    logger.Debug($"{_client.ConnectionInfo.Hostname}: Waiting for Server NewKeys");
+                    }
+                    await ApplyKeyExchangeAlgorithmMessageAsync(message, cancellationToken);
+                    break;
 
-                    // Wait for New Keys before completing crypto.
-                    var serverNewKeys = await NewKeysMessage.Task;
-                    await SshClientStaticThread.WriteMessageAsync(_client, new NewKeys(), cancellationToken);
+                case MessageType.SSH_MSG_NEWKEYS:
+                    if (_keyExchangeState != State.WaitingOnNewKeys)
+                    {
+                        var fatalException = new SshException("Received unexpected key exchange message.");
+                        await _client.SetFatalError(fatalException);
+                        throw fatalException;
 
+                    }
+                    await _client.WriteMessageAsync(new NewKeys(), cancellationToken);
                     ApplyKeyExchange();
-
-                    _client.ConnectionInfo.SshNewKeysCompletion.TrySetResult(true);
-                    logger.Debug($"{_client.ConnectionInfo.Hostname}: Applied Key Exchange");
-
-                    KexInitMessage = new TaskCompletionSource<KexInit>();
-                    NewKeysMessage = new TaskCompletionSource<NewKeys>();
-
-                    _client.ConnectTaskSource.TrySetResult(true);
-
-                    logger.Debug($"{_client.ConnectionInfo.Hostname}: Key Exchange Restarting");
-                }
+                    _keyExchangeState = State.Initial;
+                    break;
             }
-            catch(Exception ex)
-            {
-                // Don't throw, exceptions get squashed on this thread. Relay to client
-                _client.ConnectionInfo.SshNewKeysCompletion.TrySetException(ex);
-                _client.SetException(ex);
-            }
-
-            logger.Trace($"{_client.ConnectionInfo.Hostname}: Ending {nameof(ExchangeKeysAsync)}");
+            _sshKeyExchangeSemaphore.Release();
         }
 
-        public void SendMessage(KexInit message)
+        // ApplyKeyExchangeAlgorithmAsync will forward a message to the Key Exchange Message algorithm
+        private async Task ApplyKeyExchangeAlgorithmMessageAsync(MessageEvent message, CancellationToken cancellationToken)
         {
-            KexInitMessage.SetResult(message);
-        }
-
-        public void SendMessage(NewKeys message)
-        {
-            NewKeysMessage.SetResult(message);
-        }
-
-        public void SendKeyExchangeMessage(MessageEvent message)
-        {
-            switch(message.Type)
+            switch (message.Type)
             {
                 case MessageType.SSH_MSG_KEX_Exchange_30:
-                    KeyExchangeAlgorithm.SendKeyExchangeMessage30(message);
+                    if(await KeyExchangeAlgorithm.SendKeyExchangeMessage30Async(message, cancellationToken))
+                    {
+                        _keyExchangeState = State.WaitingOnNewKeys;
+                    }
                     break;
                 case MessageType.SSH_MSG_KEX_Exchange_31:
-                    KeyExchangeAlgorithm.SendKeyExchangeMessage31(message);
+                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage31Async(message, cancellationToken))
+                    {
+                        _keyExchangeState = State.WaitingOnNewKeys;
+                    }
                     break;
                 case MessageType.SSH_MSG_KEX_Exchange_32:
-                    KeyExchangeAlgorithm.SendKeyExchangeMessage32(message);
+                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage32Async(message, cancellationToken))
+                    {
+                        _keyExchangeState = State.WaitingOnNewKeys;
+                    }
                     break;
                 case MessageType.SSH_MSG_KEX_Exchange_33:
-                    KeyExchangeAlgorithm.SendKeyExchangeMessage33(message);
+                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage33Async(message, cancellationToken))
+                    {
+                        _keyExchangeState = State.WaitingOnNewKeys;
+                    }
                     break;
                 case MessageType.SSH_MSG_KEX_Exchange_34:
-                    KeyExchangeAlgorithm.SendKeyExchangeMessage34(message);
+                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage34Async(message, cancellationToken))
+                    {
+                        _keyExchangeState = State.WaitingOnNewKeys;
+                    }
                     break;
             }
         }
 
+        // ApplyKeyExchange is called from ApplyKeyExchangeMessageAsync to compute the Key Exchange and Crypto information.
         private void ApplyKeyExchange()
         {
             if (SessionIdentifier == null)
@@ -158,6 +177,15 @@ namespace Surfus.Shell
             connectionInfo.WriteCryptoAlgorithm.Initialize(writeIv, writeEncryptionKey);
             connectionInfo.ReadMacAlgorithm.Initialize(readIntegrityKey);
             connectionInfo.WriteMacAlgorithm.Initialize(writeIntegrityKey);
+        }
+
+        // State represents the current state of the key exchange
+        internal enum State
+        {
+            Initial,
+            SentKexNeedKex,
+            WaitingOnKeyExchangeProtocol,
+            WaitingOnNewKeys
         }
     }
 }

@@ -87,7 +87,7 @@ namespace Surfus.Shell.KeyExchange
         /// <summary>
         /// Conducts the key exchange.
         /// </summary>
-        public abstract Task ExchangeAsync(CancellationToken cancellationToken);
+        public abstract Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken);
 
         /// <summary>
         /// Generates the appropriate key used by each cipher.
@@ -153,10 +153,11 @@ namespace Surfus.Shell.KeyExchange
         /// </summary>
         protected abstract HashAlgorithm CreateHashAlgorithm();
 
-        public abstract void SendKeyExchangeMessage30(MessageEvent message);
-        public abstract void SendKeyExchangeMessage31(MessageEvent message);
-        public abstract void SendKeyExchangeMessage32(MessageEvent message);
-        public abstract void SendKeyExchangeMessage33(MessageEvent message);
-        public abstract void SendKeyExchangeMessage34(MessageEvent message);
+        // If these return true, they signal the end of the Key Exchange Algorithm
+        public abstract Task<bool> SendKeyExchangeMessage30Async(MessageEvent message, CancellationToken cancellationToken);
+        public abstract Task<bool> SendKeyExchangeMessage31Async(MessageEvent message, CancellationToken cancellationToken);
+        public abstract Task<bool> SendKeyExchangeMessage32Async(MessageEvent message, CancellationToken cancellationToken);
+        public abstract Task<bool> SendKeyExchangeMessage33Async(MessageEvent message, CancellationToken cancellationToken);
+        public abstract Task<bool> SendKeyExchangeMessage34Async(MessageEvent message, CancellationToken cancellationToken);
     }
 }
