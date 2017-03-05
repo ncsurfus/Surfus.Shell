@@ -14,9 +14,6 @@ namespace Surfus.Shell
         public string ClientVersion { get; internal set; } = "SSH-2.0-Surfus-1.00";
         public string ServerVersion { get; internal set; }
 
-        // Gets initialized once a new keys message is read.
-        internal TaskCompletionSource<bool> SshNewKeysCompletion;
-
         internal uint InboundPacketSequence { get; set; }
         internal uint OutboundPacketSequence { get; set; }
 
