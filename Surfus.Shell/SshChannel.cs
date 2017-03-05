@@ -15,16 +15,11 @@ namespace Surfus.Shell
         private readonly SemaphoreSlim _channelSemaphore = new SemaphoreSlim(1, 1);
         private State _channelState = new State();
         private bool _isDisposed;
+        private SshClient _client;
 
         // Properities
         private TaskCompletionSource<bool> _channelOpenCompleted;
         private TaskCompletionSource<bool> _channelRequestCompleted;
-
-
-        private bool _channelClosed;
-        private bool _channelOpened;
-
-        private SshClient _client;
 
         public int WindowRefill { get; internal set; } = 50000;
         public int SendWindow { get; internal set; }
@@ -46,29 +41,29 @@ namespace Surfus.Shell
         public async Task WriteDataAsync(byte[] buffer, CancellationToken cancellationToken)
         {
             await _channelSemaphore.WaitAsync(cancellationToken);
-
-            var totalBytesLeft = buffer.Length;
-            while (totalBytesLeft > 0)
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _client.InternalCancellation.Token))
             {
-                if (totalBytesLeft <= SendWindow)
+                var totalBytesLeft = buffer.Length;
+                while (totalBytesLeft > 0)
                 {
-                    await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), cancellationToken);
-                    SendWindow -= totalBytesLeft;
-                    totalBytesLeft = 0;
-                }
-                else
-                {
-                    var smallBuffer = new byte[SendWindow];
-                    Array.Copy(buffer, smallBuffer, smallBuffer.Length);
-                    await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), cancellationToken);
-                    totalBytesLeft -= SendWindow;
-                    SendWindow = 0;
+                    if (totalBytesLeft <= SendWindow)
+                    {
+                        await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), linkedCancellation.Token);
+                        SendWindow -= totalBytesLeft;
+                        totalBytesLeft = 0;
+                    }
+                    else
+                    {
+                        var smallBuffer = new byte[SendWindow];
+                        Array.Copy(buffer, smallBuffer, smallBuffer.Length);
+                        await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), linkedCancellation.Token);
+                        totalBytesLeft -= SendWindow;
+                        SendWindow = 0;
+                    }
                 }
             }
-
             _channelSemaphore.Release();
         }
-
 
         // This will be called by the user, NOT the Read Loop....
         public async Task RequestAsync(ChannelRequest requestMessage, CancellationToken cancellationToken)
@@ -83,7 +78,7 @@ namespace Surfus.Shell
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _client.InternalCancellation.Token))
             {
                 _channelRequestCompleted = new TaskCompletionSource<bool>();
-                await _client.WriteMessageAsync(requestMessage, cancellationToken);
+                await _client.WriteMessageAsync(requestMessage, linkedCancellation.Token);
                 _channelState = State.WaitingOnRequestResponse;
                 _channelSemaphore.Release();
                 await _channelRequestCompleted.Task;
@@ -104,7 +99,7 @@ namespace Surfus.Shell
             {
                 _channelOpenCompleted = new TaskCompletionSource<bool>();
                 ReceiveWindow = (int)openMessage.InitialWindowSize;
-                await _client.WriteMessageAsync(openMessage, cancellationToken);
+                await _client.WriteMessageAsync(openMessage, linkedCancellation.Token);
                 _channelState = State.WaitingOnOpenConfirmation;
                 _channelSemaphore.Release();
                 await _channelOpenCompleted.Task;
@@ -114,16 +109,18 @@ namespace Surfus.Shell
         // This will be called by the user NOT the Read Loops....
         public async Task CloseAsync(CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync();
-
-            if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _client.InternalCancellation.Token))
             {
-               await _client.WriteMessageAsync(new ChannelClose(ServerId), cancellationToken);
-                _channelState = State.Closed;
-                Close();
-            }
+                await _channelSemaphore.WaitAsync(linkedCancellation.Token);
 
-            _channelSemaphore.Release();
+                if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
+                {
+                    await _client.WriteMessageAsync(new ChannelClose(ServerId), linkedCancellation.Token);
+                    _channelState = State.Closed;
+                    Close();
+                }
+                _channelSemaphore.Release();
+            }
         }
 
         public async Task SendMessageAsync(ChannelOpenConfirmation message, CancellationToken cancellationToken)

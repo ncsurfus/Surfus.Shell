@@ -2,6 +2,7 @@
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages;
+using Surfus.Shell.Messages.Channel;
 //using Surfus.Shell.Messages.Channel;
 //using Surfus.Shell.Messages.KeyExchange;
 using Surfus.Shell.Messages.UserAuth;
@@ -24,7 +25,7 @@ namespace Surfus.Shell
         // Fields
         private bool _connectAsyncCalled = false;
         private Task _readLoopTask;
-        private SemaphoreSlim _connectSemaphore = new SemaphoreSlim(1,1);
+        private SemaphoreSlim _clientSemaphore = new SemaphoreSlim(1,1);
         internal TaskCompletionSource<bool> InitialKeyExchangeCompleted { get; set; }
         internal TaskCompletionSource<bool> LoginCompleted { get; set; }
 
@@ -33,8 +34,8 @@ namespace Surfus.Shell
         internal NetworkStream TcpStream => TcpConnection.GetStream();
 
         // Channels
-       // uint _channelCounter = 0;
-        //internal List<SshChannel> Channels = new List<SshChannel>();
+        uint _channelCounter = 0;
+        private List<SshChannel> _channels = new List<SshChannel>();
       //  internal List<SshCommand> Commands = new List<SshCommand>();
     //    internal List<SshTerminal> Terminals = new List<SshTerminal>();
 
@@ -61,6 +62,7 @@ namespace Surfus.Shell
             ConnectionInfo.Hostname = hostname;
             ConnectionInfo.Port = port;
         }
+
         /*
         public async Task<SshCommand> CreateCommandAsync(CancellationToken cancellationToken)
         {
@@ -77,21 +79,20 @@ namespace Surfus.Shell
             SshClientSemaphore.Release();
 
             return command;
-        }
+        }*/
 
         public async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken)
         {
             // Channels will be touched by background thread. Must coordinate.
-            await SshClientSemaphore.WaitAsync(cancellationToken);
+            await _clientSemaphore.WaitAsync(cancellationToken);
 
             var channel = new SshChannel(this, _channelCounter);
             var terminal = new SshTerminal(this, channel);
-            Terminals.Add(terminal);
 
-            Channels.Add(channel);
+            _channels.Add(channel);
             _channelCounter++;
 
-            SshClientSemaphore.Release();
+            _clientSemaphore.Release();
 
             return terminal;
         }
@@ -99,30 +100,29 @@ namespace Surfus.Shell
         internal async Task SendChannelMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
             // Runs on background thread
-            logger.Debug($"Checking Channel Message Type");
+            _logger.Debug($"Checking Channel Message Type");
             if (messageEvent.Message is IChannelRecipient channelMessage)
             {
-                // Channels will be touched by foreground thread. Must coordinate.
-                await SshClientSemaphore.WaitAsync(cancellationToken);
-                var channel = Channels.Single(x => x.ClientId == channelMessage.RecipientChannel);
-                SshClientSemaphore.Release();
+                await _clientSemaphore.WaitAsync(cancellationToken);
+                var channel = _channels.Single(x => x.ClientId == channelMessage.RecipientChannel);
+                _clientSemaphore.Release();
 
                 switch (messageEvent.Message)
                 {
                     case ChannelSuccess success:
-                        channel.SendMessage(success);
+                        await channel.SendMessageAsync(success, cancellationToken);
                         break;
                     case ChannelFailure failure:
-                        channel.SendMessage(failure);
+                        await channel.SendMessageAsync(failure, cancellationToken);
                         break;
                     case ChannelOpenConfirmation openConfirmation:
-                        channel.SendMessage(openConfirmation);
+                        await channel.SendMessageAsync(openConfirmation, cancellationToken);
                         break;
                     case ChannelOpenFailure openFailure:
-                        channel.SendMessage(openFailure);
+                        await channel.SendMessageAsync(openFailure, cancellationToken);
                         break;
                     case ChannelWindowAdjust windowAdjust:
-                        channel.SendMessage(windowAdjust);
+                        await channel.SendMessageAsync(windowAdjust, cancellationToken);
                         break;
                     case ChannelData channelData:
                         await channel.SendMessageAsync(channelData, cancellationToken);
@@ -136,22 +136,22 @@ namespace Surfus.Shell
                 }
             }
         }
-        */
 
         public async Task ConnectAsync(string username, string password, CancellationToken cancellationToken)
         {
-            await _connectSemaphore.WaitAsync();
-            
-            if (_connectAsyncCalled)
-            {
-                throw new SshException($"ConnectAsync was already attempted. A new SshClient should be created.");
-            }
-
-            _connectAsyncCalled = true;
-            _connectSemaphore.Release();
-
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, InternalCancellation.Token))
             {
+                await _clientSemaphore.WaitAsync();
+
+                if (_connectAsyncCalled)
+                {
+                    throw new SshException($"ConnectAsync was already attempted. A new SshClient should be created.");
+                }
+
+                _connectAsyncCalled = true;
+                _clientSemaphore.Release();
+
+
                 linkedCancellation.Token.Register(() => InitialKeyExchangeCompleted?.TrySetCanceled());
 
                 ConnectionInfo.KeyExchanger = new SshKeyExchanger(this);
@@ -171,7 +171,7 @@ namespace Surfus.Shell
 
         public async Task ConnectAsync(string username, Func<string, CancellationToken, Task<string>> interactiveResponse, CancellationToken cancellationToken)
         {
-            await _connectSemaphore.WaitAsync();
+            await _clientSemaphore.WaitAsync();
 
             if (_connectAsyncCalled)
             {
@@ -179,7 +179,7 @@ namespace Surfus.Shell
             }
 
             _connectAsyncCalled = true;
-            _connectSemaphore.Release();
+            _clientSemaphore.Release();
 
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, InternalCancellation.Token))
             {
@@ -423,7 +423,7 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_USERAUTH_BANNER:
                     Banner = (messageEvent.Message as UaBanner)?.Message;
                     break;
-               /* case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
+                case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
                 case MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE:
                 case MessageType.SSH_MSG_CHANNEL_SUCCESS:
                 case MessageType.SSH_MSG_CHANNEL_FAILURE:
@@ -431,9 +431,9 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_CHANNEL_DATA:
                 case MessageType.SSH_MSG_CHANNEL_CLOSE:
                 case MessageType.SSH_MSG_CHANNEL_EOF:
-                    logger.Debug($"Sending Channel Message to client");
+                    _logger.Debug($"Sending Channel Message to client");
                     await SendChannelMessageAsync(messageEvent, cancellationToken);
-                    break;*/
+                    break;
                 default:
                     _logger.Info($"{ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Unexpected Message {messageEvent.Type}");
                     break;

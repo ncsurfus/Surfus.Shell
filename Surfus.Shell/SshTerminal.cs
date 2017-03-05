@@ -10,153 +10,106 @@ using NLog;
 
 namespace Surfus.Shell
 {
-    public class SshTerminal
+    public class SshTerminal : IDisposable
     {
-        private static Logger logger = LogManager.GetCurrentClassLogger();
-
-        // Terminal Semaphore
-        internal SemaphoreSlim TerminalSemaphore = new SemaphoreSlim(1, 1);
-
-        internal TaskCompletionSource<bool> ChannelOpenTaskSource;
-        internal TaskCompletionSource<bool> ChannelCloseTaskSource;
-
-        internal TaskCompletionSource<bool> PseudoTerminalTaskSource;
-        internal TaskCompletionSource<bool> ShellTaskSource;
-        internal TaskCompletionSource<bool> TerminalWriteTaskSource;
-        internal TaskCompletionSource<bool> TerminalReadTaskSource;
+        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private SemaphoreSlim _terminalSemaphore = new SemaphoreSlim(1, 1);
+        private CancellationTokenSource _terminalCancellation = new CancellationTokenSource();
+        private State _channelState = State.Initial;
+        private SshChannel _channel;
+        private SshClient _client;
+        private bool _isDisposed;
+        private TaskCompletionSource<string> _terminalReadComplete;
 
         private readonly StringBuilder _readBuffer = new StringBuilder();
-        private bool _shouldCloseClient = false;
 
         internal SshTerminal(SshClient sshClient, SshChannel channel)
         {
-            SshClient = sshClient;
-            Channel = channel;
-            Channel.OnDataReceived = async (buffer, cancellationToken) =>
+            _client = sshClient;
+            _channel = channel;
+            _channel.OnDataReceived = async (buffer, cancellationToken) =>
             {
-                await TerminalSemaphore.WaitAsync();
-                _readBuffer.Append(Encoding.UTF8.GetString(buffer));
-                TerminalReadTaskSource?.TrySetResult(true);
-                TerminalSemaphore.Release();
+                await _terminalSemaphore.WaitAsync(cancellationToken);
+
+                if(_terminalReadComplete?.TrySetResult(Encoding.UTF8.GetString(buffer)) != true)
+                {
+                    _readBuffer.Append(Encoding.UTF8.GetString(buffer));
+                }
+
+                _terminalSemaphore.Release();
             };
-            Channel.OnChannelCloseReceived = async (close, cancellationToken) =>
+
+            _channel.OnChannelCloseReceived = async (close, cancellationToken) =>
             {
+                await _terminalSemaphore.WaitAsync(cancellationToken);
+
                 await CloseAsync(cancellationToken);
                 ServerDisconnected?.Invoke();
+
+                _terminalSemaphore.Release();
             };
         }
 
-        internal SshChannel Channel { get; }
-        public SshClient SshClient { get; }
-        public bool IsOpen => Channel.IsOpen;
+        public bool IsOpen => _channel.IsOpen;
         public bool DataAvailable => _readBuffer.Length > 0;
 
         public event Action ServerDisconnected;
 
         public async Task OpenAsync(CancellationToken cancellationToken)
         {
-            if (ChannelOpenTaskSource != null || PseudoTerminalTaskSource != null || ShellTaskSource != null)
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
-                throw new SshException($"Terminal is already opening or opened.");
-            }
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
 
-            ChannelOpenTaskSource = new TaskCompletionSource<bool>();
-            PseudoTerminalTaskSource = new TaskCompletionSource<bool>();
-            ShellTaskSource = new TaskCompletionSource<bool>();
-
-            CancellationTokenSource.CreateLinkedTokenSource(SshClient.InternalCancellation.Token, cancellationToken);
-
-            cancellationToken.Register(() =>
-            {
-                ChannelOpenTaskSource.TrySetException(new TaskCanceledException(ChannelCloseTaskSource.Task));
-                PseudoTerminalTaskSource.TrySetException(new TaskCanceledException(ChannelCloseTaskSource.Task));
-                ShellTaskSource.TrySetException(new TaskCanceledException(ChannelCloseTaskSource.Task));
-            });
-
-            await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
-            {
-                Client = SshClient,
-                TaskFunction = async () =>
+                if (_channelState != State.Initial)
                 {
-                    try
-                    {
-                        await Channel.OpenAsync(new ChannelOpenSession(Channel.ClientId, 50000), SshClient.InternalCancellation.Token);
-                        await Channel.RequestAsync(new ChannelRequestPseudoTerminal(Channel.ServerId, true, "Surfus", 80, 24), SshClient.InternalCancellation.Token);
-                        await Channel.RequestAsync(new ChannelRequestShell(Channel.ServerId, true), SshClient.InternalCancellation.Token);
-                        ChannelOpenTaskSource.TrySetResult(true);
-                        PseudoTerminalTaskSource.TrySetResult(true);
-                        ShellTaskSource.TrySetResult(true);
-                    }
-                    catch (Exception ex)
-                    {
-                        ChannelOpenTaskSource.TrySetException(ex);
-                        PseudoTerminalTaskSource.TrySetException(ex);
-                        ShellTaskSource.TrySetException(ex);
-                    }
+                    throw new Exception("Terminal request was already attempted.");
                 }
-            });
 
-            await ChannelOpenTaskSource.Task;
-            await PseudoTerminalTaskSource.Task;
-            await ShellTaskSource.Task;
+                // Errored until success.
+                _channelState = State.Errored;
+
+                await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), linkedCancellation.Token);
+                await _channel.RequestAsync(new ChannelRequestPseudoTerminal(_channel.ServerId, true, "Surfus", 80, 24), linkedCancellation.Token);
+                await _channel.RequestAsync(new ChannelRequestShell(_channel.ServerId, true), linkedCancellation.Token);
+
+                _channelState = State.Opened;
+
+                _terminalSemaphore.Release();
+            }
         }
 
         public async Task CloseAsync(CancellationToken cancellationToken)
         {
-            if (ChannelCloseTaskSource != null)
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
-                throw new SshException($"SshCommand is already closed or closing.");
-            }
-            ChannelCloseTaskSource = new TaskCompletionSource<bool>();
+                await _terminalSemaphore.WaitAsync(cancellationToken);
 
-            await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
-            {
-                Client = SshClient,
-                TaskFunction = async () =>
+                if (_channelState == State.Opened)
                 {
-                    try
-                    {
-                        await Channel.CloseAsync(SshClient.InternalCancellation.Token);
-                        ChannelCloseTaskSource.TrySetResult(true);
-                    }
-                    catch (Exception ex)
-                    {
-                        ChannelCloseTaskSource.TrySetException(ex);
-                    }
+                    await _channel.CloseAsync(linkedCancellation.Token);
                 }
-            });
-
-            await ChannelCloseTaskSource.Task;
+                _channelState = State.Closed;
+                _terminalSemaphore.Release();
+                Close();
+            };
         }
 
         public async Task WriteAsync(string text, CancellationToken cancellationToken)
         {
-            if(TerminalWriteTaskSource != null)
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
-                throw new SshException("Terminal is already writing data.");
-            }
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
 
-            TerminalWriteTaskSource = new TaskCompletionSource<bool>();
-            cancellationToken.Register(() => TerminalWriteTaskSource.TrySetException(new TaskCanceledException(TerminalWriteTaskSource.Task)));
-            await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
-            {
-                Client = SshClient,
-                TaskFunction = async () =>
+                if (_channelState != State.Opened)
                 {
-                    try
-                    {
-                        await Channel.WriteDataAsync(Encoding.UTF8.GetBytes(text), SshClient.InternalCancellation.Token);
-                        TerminalWriteTaskSource.TrySetResult(true);
-                    }
-                    catch (Exception ex)
-                    {
-                        TerminalWriteTaskSource.TrySetException(ex);
-                    }
+                    throw new Exception("Terminal not opened.");
                 }
-            });
 
-            await TerminalWriteTaskSource.Task;
-            TerminalWriteTaskSource = null; 
+                await _channel.WriteDataAsync(Encoding.UTF8.GetBytes(text), linkedCancellation.Token);
+
+                _terminalSemaphore.Release();
+            }
         }
 
         public async Task<string> ReadAsync()
@@ -166,48 +119,49 @@ namespace Surfus.Shell
 
         public async Task<string> ReadAsync(CancellationToken cancellationToken)
         {
-            await TerminalSemaphore.WaitAsync();
-            logger.Trace($"Entering {nameof(SshTerminal)} - {nameof(ReadAsync)}");
-            if (TerminalReadTaskSource != null)
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
-                throw new SshException($"Terminal is already reading.");
-            }
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
 
-            if (ChannelCloseTaskSource != null)
+                if (_channelState != State.Opened)
+                {
+                    throw new Exception("Terminal not opened.");
+                }
+
+                if (_readBuffer.Length > 0)
+                {
+                    var text = _readBuffer.ToString();
+                    _readBuffer.Clear();
+                    _terminalSemaphore.Release();
+                    return text;
+                }
+                _terminalSemaphore.Release();
+                _terminalReadComplete = new TaskCompletionSource<string>();
+                return await _terminalReadComplete.Task;
+            }
+        }
+
+        public void Close()
+        {
+            if(!_isDisposed)
             {
-                throw new SshException($"Terminal is closed.");
+                _isDisposed = true;
+                _terminalSemaphore.Dispose();
+                _terminalCancellation.Dispose();
             }
+        }
 
-            if (ChannelOpenTaskSource == null || PseudoTerminalTaskSource == null || ShellTaskSource == null)
-            {
-                throw new SshException($"Terminal is not opened");
-            }
-            TerminalSemaphore.Release();
+        public void Dispose()
+        {
+            Close();
+        }
 
-            string text;
-            if (_readBuffer.Length > 0)
-            {
-                text = _readBuffer.ToString();
-            }
-            else
-            {
-                TerminalReadTaskSource = new TaskCompletionSource<bool>();
-
-                cancellationToken.Register(() => TerminalReadTaskSource?.TrySetCanceled());
-
-                await TerminalReadTaskSource.Task;
-
-                await TerminalSemaphore.WaitAsync();
-                TerminalReadTaskSource = new TaskCompletionSource<bool>();
-
-                TerminalReadTaskSource = null;
-                TerminalSemaphore.Release();
-
-                text = _readBuffer.ToString();
-            }
-
-            _readBuffer.Clear();
-            return text;
+        internal enum State
+        {
+            Initial,
+            Opened,
+            Closed,
+            Errored
         }
     }
 }
