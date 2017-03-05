@@ -106,9 +106,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
 
             if(_keyExchangeAlgorithmState != State.Initial)
             {
-                var fatalException = new SshException("Unexpected key exchange algorithm state");
-                await _client.SetFatalError(fatalException);
-                throw fatalException;
+                throw new SshException("Unexpected key exchange algorithm state"); ;
             }
 
             await _client.WriteMessageAsync(new DhInit(E), cancellationToken);
@@ -159,18 +157,14 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
 
             if(_keyExchangeAlgorithmState != State.WaitingOnDhReply)
             {
-                var fatalException = new SshException("Unexpected key exchange algorithm message");
-                await _client.SetFatalError(fatalException);
-                throw fatalException;
+                throw new SshException("Unexpected key exchange algorithm message");
             }
 
             var reply = new DhReply(message.Buffer);
 
             if(reply == null)
             {
-                var fatalException = new SshException("Invalid key exchange algorithm message");
-                await _client.SetFatalError(fatalException);
-                throw fatalException;
+                throw new SshException("Invalid key exchange algorithm message"); ;
             }
 
             // Verify 'F' is in the range of [1, p-1]

@@ -128,9 +128,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
             if (_keyExchangeAlgorithmState != State.Initial)
             {
-                var fatalException = new SshException("Unexpected key exchange algorithm state");
-                await _client.SetFatalError(fatalException);
-                throw fatalException;
+                throw new SshException("Unexpected key exchange algorithm state"); ;
             }
 
             // Send the request message to begin the Diffie-Hellman Group Key Exchange.
@@ -191,17 +189,13 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
             if (_keyExchangeAlgorithmState != State.WaitingonDhgGroup)
             {
-                var fatalException = new SshException("Unexpected key exchange algorithm message");
-                await _client.SetFatalError(fatalException);
-                throw fatalException;
+                throw new SshException("Unexpected key exchange algorithm message"); ;
             }
 
             _dhgGroupMessage = new DhgGroup(message.Buffer);
             if (_dhgGroupMessage == null)
             {
-                var fatalException = new SshException("Invalid key exchange algorithm message");
-                await _client.SetFatalError(fatalException);
-                throw fatalException;
+                throw new SshException("Invalid key exchange algorithm message"); ;
             }
 
             // Generate random number 'x'.
@@ -235,17 +229,13 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
             if (_keyExchangeAlgorithmState != State.WaitingOnDhgReply)
             {
-                var fatalException = new SshException("Unexpected key exchange algorithm message");
-                await _client.SetFatalError(fatalException);
-                throw fatalException;
+                throw new SshException("Unexpected key exchange algorithm message");
             }
 
             var replyMessage = new DhgReply(message.Buffer);
             if (replyMessage == null)
             {
-                var fatalException = new SshException("Invalid key exchange algorithm message");
-                await _client.SetFatalError(fatalException);
-                throw fatalException;
+                throw new SshException("Invalid key exchange algorithm message");
             }
 
             // Verify 'F' is in the range of [1, p-1]

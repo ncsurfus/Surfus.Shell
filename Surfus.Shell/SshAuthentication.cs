@@ -78,11 +78,9 @@ namespace Surfus.Shell
 
             if(_loginState != State.WaitingOnServiceAccept)
             {
-                var fatalException = new SshException("Received unexpected login message.");
-                await _client.SetFatalError(fatalException);
                 _loginState = State.Failed;
                 _loginSemaphore.Release();
-                throw fatalException;
+                throw new SshException("Received unexpected login message.");
             }
 
             if(_loginType == LoginType.Password)
@@ -108,18 +106,14 @@ namespace Surfus.Shell
             if (_loginState != State.WaitingOnServiceAccept)
             {
                 _loginState = State.Failed;
-                var fatalException = new SshException("Received unexpected login message.");
-                await _client.SetFatalError(fatalException);
                 _loginState = State.Failed;
                 _loginSemaphore.Release();
-                throw fatalException;
+                throw new SshException("Received unexpected login message."); ;
             }
 
-            var noAuthenticationException = new SshException("Server does not accept authentication.");
-            await _client.SetFatalError(noAuthenticationException);
             _loginState = State.Failed;
             _loginSemaphore.Release();
-            throw noAuthenticationException;
+            throw new SshException("Server does not accept authentication.");
         }
 
         public async Task SendMessage(UaSuccess message, CancellationToken cancellationToken)
@@ -129,13 +123,13 @@ namespace Surfus.Shell
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
-                var fatalException = new SshException("Received unexpected login message.");
-                await _client.SetFatalError(fatalException);
                 _loginSemaphore.Release();
-                throw fatalException;
+                throw new SshException("Received unexpected login message.");
             }
 
             _loginState = State.Completed;
+
+            // SshClient will properly set the task completion source once this returns...
 
             _loginSemaphore.Release();
         }
@@ -147,16 +141,12 @@ namespace Surfus.Shell
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
-                var fatalException = new SshException("Received unexpected login message.");
-                await _client.SetFatalError(fatalException);
                 _loginSemaphore.Release();
-                throw fatalException;
+                throw new SshException("Received unexpected login message.");
             }
 
-            var noAuthenticationException = new SshException("Credentials Denied..");
-            await _client.SetFatalError(noAuthenticationException);
             _loginSemaphore.Release();
-            throw noAuthenticationException;
+            throw new SshException("Credentials Denied..");
         }
 
         public async Task SendMessage(UaInfoRequest message, CancellationToken cancellationToken)
@@ -166,10 +156,8 @@ namespace Surfus.Shell
             if (_loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
-                var fatalException = new SshException("Received unexpected login message.");
-                await _client.SetFatalError(fatalException);
                 _loginSemaphore.Release();
-                throw fatalException;
+                throw new SshException("Received unexpected login message."); ;
             }
 
             var responses = new string[message.PromptNumber];

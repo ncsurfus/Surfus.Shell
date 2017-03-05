@@ -123,6 +123,7 @@
     <Compile Include="Signing\Signer.cs" />
     <Compile Include="Signing\SshRsa.cs" />
     <Compile Include="SshAuthentication.cs" />
+    <Compile Include="SshChannel.cs" />
     <Compile Include="SshClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SshConnectionInfo.cs" />

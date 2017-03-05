@@ -68,9 +68,7 @@ namespace Surfus.Shell
                     }
                     else
                     {
-                        var fatalException = new SshException("Received unexpected key exchange message.");
-                        await _client.SetFatalError(fatalException);
-                        throw fatalException;
+                        throw new SshException("Received unexpected key exchange message."); ;
                     }
                     KeyExchangeResult = new KexInitExchangeResult(_clientKexInit, message.Message as KexInit);
                     KeyExchangeAlgorithm = KeyExchangeAlgorithm.Create(_client, KeyExchangeResult);
@@ -84,9 +82,7 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_KEX_Exchange_34:
                     if (_keyExchangeState != State.WaitingOnKeyExchangeProtocol)
                     {
-                        var fatalException = new SshException("Received unexpected key exchange message.");
-                        await _client.SetFatalError(fatalException);
-                        throw fatalException;
+                        throw new SshException("Received unexpected key exchange message."); ;
 
                     }
                     await ApplyKeyExchangeAlgorithmMessageAsync(message, cancellationToken);
@@ -95,9 +91,7 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_NEWKEYS:
                     if (_keyExchangeState != State.WaitingOnNewKeys)
                     {
-                        var fatalException = new SshException("Received unexpected key exchange message.");
-                        await _client.SetFatalError(fatalException);
-                        throw fatalException;
+                        throw new SshException("Received unexpected key exchange message.");
 
                     }
                     await _client.WriteMessageAsync(new NewKeys(), cancellationToken);
