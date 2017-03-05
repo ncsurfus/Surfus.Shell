@@ -83,7 +83,7 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
-                await _terminalSemaphore.WaitAsync(cancellationToken);
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
 
                 if (_channelState == State.Opened)
                 {

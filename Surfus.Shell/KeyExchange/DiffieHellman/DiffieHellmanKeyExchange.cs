@@ -102,7 +102,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// </exception>
         public override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync();
+            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken);
 
             if(_keyExchangeAlgorithmState != State.Initial)
             {
@@ -153,7 +153,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
 
         public override async Task<bool> SendKeyExchangeMessage31Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync();
+            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken);
 
             if(_keyExchangeAlgorithmState != State.WaitingOnDhReply)
             {
