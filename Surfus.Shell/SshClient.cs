@@ -209,13 +209,16 @@ namespace Surfus.Shell
                 {
                     await ReadMessageAsync(InternalCancellation.Token);
                 }
-                _logger.Info("Ending Message Read Loop...");
             }
             catch (Exception ex)
             {
                 InitialKeyExchangeCompleted?.TrySetException(ex);
                 LoginCompleted?.TrySetException(ex);
                 _logger.Fatal("Caught Exception in Read Loop: " + ex.ToString());
+            }
+            finally
+            {
+                _logger.Info("Ending Message Read Loop...");
             }
         }
         /*
@@ -291,10 +294,6 @@ namespace Surfus.Shell
             }
         }
          */
-        internal async Task SetFatalError(Exception ex)
-        {
-
-        }
 
         public void Close()
         {
