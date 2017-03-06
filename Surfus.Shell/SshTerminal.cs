@@ -113,11 +113,6 @@ namespace Surfus.Shell
             }
         }
 
-        public async Task<string> ReadAsync()
-        {
-            return await ReadAsync(CancellationToken.None);
-        }
-
         public async Task<string> ReadAsync(CancellationToken cancellationToken)
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
@@ -142,12 +137,48 @@ namespace Surfus.Shell
             }
         }
 
+        public async Task<char> ReadCharAsync(CancellationToken cancellationToken)
+        {
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
+            {
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+
+                if (_terminalState != State.Opened)
+                {
+                    throw new Exception("Terminal not opened.");
+                }
+
+                if (_readBuffer.Length > 0)
+                {
+                    var text = _readBuffer[0];
+                    _readBuffer.Remove(0, 1);
+                    _terminalSemaphore.Release();
+                    return text;
+                }
+                _terminalSemaphore.Release();
+                _terminalReadComplete = new TaskCompletionSource<string>();
+                var data = await _terminalReadComplete.Task;
+
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                if(data.Length > 0)
+                {
+                    _readBuffer.Append(data, 1, data.Length - 1);
+                    var text = data[0];
+                    _terminalSemaphore.Release();
+                    return text;
+                }
+
+                _terminalSemaphore.Release();
+                throw new SshException("No Character to Read....");
+            }
+        }
+
         public async Task<string> ExpectAsync(string plainText, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
             while (!buffer.ToString().Contains(plainText))
             {
-                buffer.Append(await ReadAsync(cancellationToken));
+                buffer.Append(await ReadCharAsync(cancellationToken));
             }
             return buffer.ToString();
         }
@@ -157,7 +188,7 @@ namespace Surfus.Shell
             var buffer = new StringBuilder();
             while (!Regex.Match(buffer.ToString(), regexText).Success)
             {
-                buffer.Append(await ReadAsync(cancellationToken));
+                buffer.Append(await ReadCharAsync(cancellationToken));
             }
             return buffer.ToString();
         }
