@@ -1,9 +1,9 @@
-﻿using System;
+﻿using NLog;
+using Surfus.Shell.Extensions;
+using System;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using Surfus.Shell.Extensions;
-using NLog;
 
 namespace Surfus.Shell.Crypto
 {

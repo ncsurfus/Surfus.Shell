@@ -1,4 +1,4 @@
-﻿//Credit to hanswolff https://gist.github.com/hanswolff/8809275
+﻿// Credit to hanswolff https://gist.github.com/hanswolff/8809275
 using System;
 using System.Security.Cryptography;
 
