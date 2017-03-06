@@ -113,6 +113,11 @@ namespace Surfus.Shell
             }
         }
 
+        public Task WriteLineAsync(string text, CancellationToken cancellationToken)
+        {
+            return WriteAsync(text + "\n", cancellationToken);
+        }
+
         public async Task<string> ReadAsync(CancellationToken cancellationToken)
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
