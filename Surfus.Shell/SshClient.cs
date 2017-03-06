@@ -92,6 +92,11 @@ namespace Surfus.Shell
         public bool IsConnected => _tcpConnection?.Connected == true && !_isDisposed && _sshClientState == State.Connected;
 
         /// <summary>
+        /// IsConnecting determines if the SshClient is connecting to the remote SSH server.
+        /// </summary>
+        private bool _isConnecting => _tcpConnection?.Connected == true && !_isDisposed && _sshClientState == State.Connecting;
+
+        /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
         /// </summary>
         public SshConnectionInfo ConnectionInfo = new SshConnectionInfo();
@@ -396,7 +401,7 @@ namespace Surfus.Shell
             try
             {
                 _logger.Info("Starting Message Read Loop...");
-                while (IsConnected && !InternalCancellation.IsCancellationRequested)
+                while ((IsConnected || _isConnecting) && !InternalCancellation.IsCancellationRequested)
                 {
                     await ReadMessageAsync(InternalCancellation.Token);
                 }
