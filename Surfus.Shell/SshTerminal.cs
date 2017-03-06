@@ -7,6 +7,7 @@ using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel.Open;
 using Surfus.Shell.Messages.Channel.Requests;
 using NLog;
+using System.Text.RegularExpressions;
 
 namespace Surfus.Shell
 {
@@ -139,6 +140,26 @@ namespace Surfus.Shell
                 _terminalReadComplete = new TaskCompletionSource<string>();
                 return await _terminalReadComplete.Task;
             }
+        }
+
+        public async Task<string> ExpectAsync(string plainText, CancellationToken cancellationToken)
+        {
+            var buffer = new StringBuilder();
+            while (!buffer.ToString().Contains(plainText))
+            {
+                buffer.Append(await ReadAsync(cancellationToken));
+            }
+            return buffer.ToString();
+        }
+
+        public async Task<string> ExpectRegexAsync(string regexText, CancellationToken cancellationToken)
+        {
+            var buffer = new StringBuilder();
+            while (!Regex.Match(buffer.ToString(), regexText).Success)
+            {
+                buffer.Append(await ReadAsync(cancellationToken));
+            }
+            return buffer.ToString();
         }
 
         public void Close()

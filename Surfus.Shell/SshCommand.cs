@@ -22,8 +22,6 @@ namespace Surfus.Shell
         private State _commandState = State.Initial;
         private readonly MemoryStream _memoryStream = new MemoryStream();
 
-        public bool IsOpen => _channel?.IsOpen ?? false;
-
         internal SshCommand(SshClient sshClient, SshChannel channel)
         {
             _client = sshClient;
@@ -112,19 +110,39 @@ namespace Surfus.Shell
                 linkedCancellation.Token.Register(() => executeCloseTaskSource?.TrySetCanceled());
                 linkedCancellation.Token.Register(() => executeEofTaskSource?.TrySetCanceled());
 
-                _channel.OnChannelEofReceived = (message, token) => { executeEofTaskSource.SetResult(true); return Task.FromResult(true); };
-                _channel.OnChannelCloseReceived = (message, token) => { executeCloseTaskSource.SetResult(true); return Task.FromResult(true); };
+                _channel.OnChannelEofReceived = async (message, token) =>
+                {
+                    await _commandSemaphore.WaitAsync(linkedCancellation.Token);
+
+                    executeEofTaskSource.SetResult(true);
+
+                    _commandSemaphore.Release();
+                };
+
+                _channel.OnChannelCloseReceived = async (message, token) =>
+                {
+                    await _commandSemaphore.WaitAsync(linkedCancellation.Token);
+
+                    executeCloseTaskSource.SetResult(true);
+
+                    _commandSemaphore.Release();
+                };
 
                 await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), _client.InternalCancellation.Token);
+                _commandSemaphore.Release();
+
+
                 await executeEofTaskSource.Task;
                 await executeCloseTaskSource.Task;
 
                 _channel.OnChannelEofReceived = null;
                 _channel.OnChannelCloseReceived = null;
 
+                await _commandSemaphore.WaitAsync(linkedCancellation.Token);
+                _commandState = State.Completed;
+
                 using (_memoryStream)
                 {
-                    _commandState = State.Completed;
                     _commandSemaphore.Release();
                     return Encoding.UTF8.GetString(_memoryStream.ToArray());
                 }
