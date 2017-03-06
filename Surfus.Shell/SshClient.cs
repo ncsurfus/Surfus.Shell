@@ -400,8 +400,10 @@ namespace Surfus.Shell
             {
                 if (!_isDisposed)
                 {
-                    InitialKeyExchangeCompleted?.TrySetException(ex);
-                    LoginCompleted?.TrySetException(ex);
+                    if(!InternalCancellation.IsCancellationRequested)
+                    {
+                        InternalCancellation.Cancel(true);
+                    }
                     _logger.Fatal("Caught Exception in Read Loop: " + ex.ToString());
                 }
             }
