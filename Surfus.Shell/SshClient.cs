@@ -386,6 +386,10 @@ namespace Surfus.Shell
             throw new SshException("Invalid version from server");
         }
 
+        /// <summary>
+        /// ReadLoop continually checks for messages from the server. Long running Synchronous operations may block this method and cause a timeout.
+        /// </summary>
+        /// <returns></returns>
         private async Task ReadLoop()
         {
             try
@@ -413,6 +417,11 @@ namespace Surfus.Shell
             }
         }
 
+        /// <summary>
+        /// Reads a message from the server and sends it to the correct object to be processed.
+        /// </summary>
+        /// <param name="cancellationToken">The cancellation token is used to cancel the ReadMessage request</param>
+        /// <returns></returns>
         private async Task ReadMessageAsync(CancellationToken cancellationToken)
         {
             var sshPacket = await ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(TcpStream, cancellationToken);
@@ -433,37 +442,21 @@ namespace Surfus.Shell
             switch (messageEvent.Type)
             {
                 case MessageType.SSH_MSG_KEXINIT:
-                    await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
-                    break;
                 case MessageType.SSH_MSG_NEWKEYS:
-                    await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
-                    InitialKeyExchangeCompleted?.TrySetResult(true);
-                    break;
                 case MessageType.SSH_MSG_KEX_Exchange_30:
                 case MessageType.SSH_MSG_KEX_Exchange_31:
                 case MessageType.SSH_MSG_KEX_Exchange_32:
                 case MessageType.SSH_MSG_KEX_Exchange_33:
                 case MessageType.SSH_MSG_KEX_Exchange_34:
-                    await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
+                    await ProcessKeyExchangeMessageAsync(messageEvent, cancellationToken);
                     break;
                 case MessageType.SSH_MSG_SERVICE_ACCEPT:
-                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken);
-                    break;
                 case MessageType.SSH_MSG_REQUEST_FAILURE:
-                    await ConnectionInfo.Authentication.ProcessRequestFailureMessage(cancellationToken);
-                    break;
                 case MessageType.SSH_MSG_USERAUTH_SUCCESS:
-                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess, cancellationToken);
-                    LoginCompleted?.TrySetResult(true);
-                    break;
                 case MessageType.SSH_MSG_USERAUTH_FAILURE:
-                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure, cancellationToken);
-                    break;
                 case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken);
-                    break;
                 case MessageType.SSH_MSG_USERAUTH_BANNER:
-                    Banner = (messageEvent.Message as UaBanner)?.Message;
+                    await ProcessAuthenticationMessageAsync(messageEvent, cancellationToken);
                     break;
                 case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
                 case MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE:
@@ -474,7 +467,7 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_CHANNEL_CLOSE:
                 case MessageType.SSH_MSG_CHANNEL_EOF:
                     _logger.Debug($"Sending Channel Message to client");
-                    await SendChannelMessageAsync(messageEvent, cancellationToken);
+                    await ProcessChannelMessageAsync(messageEvent, cancellationToken);
                     break;
                 default:
                     _logger.Info($"{ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Unexpected Message {messageEvent.Type}");
@@ -482,7 +475,73 @@ namespace Surfus.Shell
             }
         }
 
-        internal async Task SendChannelMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
+        private async Task ProcessKeyExchangeMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
+        {
+            try
+            {
+                switch (messageEvent.Type)
+                {
+                    case MessageType.SSH_MSG_KEXINIT:
+                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
+                        break;
+                    case MessageType.SSH_MSG_NEWKEYS:
+                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
+
+                        // If we make it to this point without an exception we've successfully completed our key exchange
+                        InitialKeyExchangeCompleted?.TrySetResult(true);
+                        break;
+                    case MessageType.SSH_MSG_KEX_Exchange_30:
+                    case MessageType.SSH_MSG_KEX_Exchange_31:
+                    case MessageType.SSH_MSG_KEX_Exchange_32:
+                    case MessageType.SSH_MSG_KEX_Exchange_33:
+                    case MessageType.SSH_MSG_KEX_Exchange_34:
+                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                InitialKeyExchangeCompleted?.TrySetException(ex);
+                throw;
+            }
+        }
+
+        private async Task ProcessAuthenticationMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
+        {
+            try
+            {
+                switch (messageEvent.Type)
+                {
+                    case MessageType.SSH_MSG_SERVICE_ACCEPT:
+                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken);
+                        break;
+                    case MessageType.SSH_MSG_REQUEST_FAILURE:
+                        await ConnectionInfo.Authentication.ProcessRequestFailureMessage(cancellationToken);
+                        break;
+                    case MessageType.SSH_MSG_USERAUTH_SUCCESS:
+                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess, cancellationToken);
+                        // If we make it to this point with no exceptions we've achieved a success login.
+                        LoginCompleted?.TrySetResult(true);
+                        break;
+                    case MessageType.SSH_MSG_USERAUTH_FAILURE:
+                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure, cancellationToken);
+                        break;
+                    case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
+                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken);
+                        break;
+                    case MessageType.SSH_MSG_USERAUTH_BANNER:
+                        Banner = (messageEvent.Message as UaBanner)?.Message;
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                LoginCompleted?.TrySetException(ex);
+                throw;
+            }
+        }
+
+        private async Task ProcessChannelMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
             // Runs on background thread
             _logger.Debug($"Checking Channel Message Type");

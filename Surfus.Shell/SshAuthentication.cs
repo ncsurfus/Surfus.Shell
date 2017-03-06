@@ -141,16 +141,12 @@ namespace Surfus.Shell
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
-                var exception = new SshException("Received unexpected login message.");
-                _client.LoginCompleted?.TrySetException(exception);
                 _loginSemaphore.Release();
-                throw exception;
+                throw new SshException("Received unexpected login message.");
             }
            
-            var credentialException = new SshInvalidCredentials(_username);
-            _client.LoginCompleted?.TrySetException(credentialException);
             _loginSemaphore.Release();
-            throw credentialException;
+            throw new SshInvalidCredentials(_username);
         }
 
         public async Task ProcessMessageAsync(UaInfoRequest message, CancellationToken cancellationToken)
