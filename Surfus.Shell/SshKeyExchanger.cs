@@ -48,7 +48,7 @@ namespace Surfus.Shell
         }
 
         // ApplyKeyExchangeMessageAsync is called from the SshClient's ReadMessage method to move the state forward.
-        internal async Task ApplyKeyExchangeMessageAsync(MessageEvent message, CancellationToken cancellationToken)
+        internal async Task ProcessMessageAsync(MessageEvent message, CancellationToken cancellationToken)
         {
             await _sshKeyExchangeSemaphore.WaitAsync(cancellationToken);
             switch (message.Type)

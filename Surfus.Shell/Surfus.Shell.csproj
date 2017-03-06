@@ -53,6 +53,7 @@
     <Compile Include="Exceptions\ChannelException.cs" />
     <Compile Include="Exceptions\ChannelRequestFailedException.cs" />
     <Compile Include="Exceptions\SshCorruptMac.cs" />
+    <Compile Include="Exceptions\SshInvalidCredentials.cs" />
     <Compile Include="Exceptions\SshDisconnectException.cs" />
     <Compile Include="Exceptions\SshException.cs" />
     <Compile Include="Exceptions\SshInvalidMessageException.cs" />

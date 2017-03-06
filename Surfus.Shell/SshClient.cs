@@ -433,10 +433,10 @@ namespace Surfus.Shell
             switch (messageEvent.Type)
             {
                 case MessageType.SSH_MSG_KEXINIT:
-                    await ConnectionInfo.KeyExchanger.ApplyKeyExchangeMessageAsync(messageEvent, cancellationToken);
+                    await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
                     break;
                 case MessageType.SSH_MSG_NEWKEYS:
-                    await ConnectionInfo.KeyExchanger.ApplyKeyExchangeMessageAsync(messageEvent, cancellationToken);
+                    await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
                     InitialKeyExchangeCompleted?.TrySetResult(true);
                     break;
                 case MessageType.SSH_MSG_KEX_Exchange_30:
@@ -444,23 +444,23 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_KEX_Exchange_32:
                 case MessageType.SSH_MSG_KEX_Exchange_33:
                 case MessageType.SSH_MSG_KEX_Exchange_34:
-                    await ConnectionInfo.KeyExchanger.ApplyKeyExchangeMessageAsync(messageEvent, cancellationToken);
+                    await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
                     break;
                 case MessageType.SSH_MSG_SERVICE_ACCEPT:
-                    await ConnectionInfo.Authentication.SendMessage(messageEvent.Message as ServiceAccept, cancellationToken);
+                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken);
                     break;
                 case MessageType.SSH_MSG_REQUEST_FAILURE:
-                    await ConnectionInfo.Authentication.SendRequestFailureMessage(cancellationToken);
+                    await ConnectionInfo.Authentication.ProcessRequestFailureMessage(cancellationToken);
                     break;
                 case MessageType.SSH_MSG_USERAUTH_SUCCESS:
-                    await ConnectionInfo.Authentication.SendMessage(messageEvent.Message as UaSuccess, cancellationToken);
+                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess, cancellationToken);
                     LoginCompleted?.TrySetResult(true);
                     break;
                 case MessageType.SSH_MSG_USERAUTH_FAILURE:
-                    await ConnectionInfo.Authentication.SendMessage(messageEvent.Message as UaFailure, cancellationToken);
+                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure, cancellationToken);
                     break;
                 case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                    await ConnectionInfo.Authentication.SendMessage(messageEvent.Message as UaInfoRequest, cancellationToken);
+                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken);
                     break;
                 case MessageType.SSH_MSG_USERAUTH_BANNER:
                     Banner = (messageEvent.Message as UaBanner)?.Message;

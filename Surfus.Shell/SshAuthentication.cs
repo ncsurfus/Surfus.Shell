@@ -72,7 +72,7 @@ namespace Surfus.Shell
         }
 
         // Message Pumps
-        public async Task SendMessage(ServiceAccept message, CancellationToken cancellationToken)
+        public async Task ProcessMessageAsync(ServiceAccept message, CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken);
 
@@ -99,7 +99,7 @@ namespace Surfus.Shell
             _loginSemaphore.Release();
         }
 
-        public async Task SendRequestFailureMessage(CancellationToken cancellationToken)
+        public async Task ProcessRequestFailureMessage(CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken);
 
@@ -116,7 +116,7 @@ namespace Surfus.Shell
             throw new SshException("Server does not accept authentication.");
         }
 
-        public async Task SendMessage(UaSuccess message, CancellationToken cancellationToken)
+        public async Task ProcessMessageAsync(UaSuccess message, CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken);
 
@@ -134,22 +134,26 @@ namespace Surfus.Shell
             _loginSemaphore.Release();
         }
 
-        public async Task<bool> SendMessage(UaFailure message, CancellationToken cancellationToken)
+        public async Task<bool> ProcessMessageAsync(UaFailure message, CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken);
 
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
+                var exception = new SshException("Received unexpected login message.");
+                _client.LoginCompleted?.TrySetException(exception);
                 _loginSemaphore.Release();
-                throw new SshException("Received unexpected login message.");
+                throw exception;
             }
-
+           
+            var credentialException = new SshInvalidCredentials(_username);
+            _client.LoginCompleted?.TrySetException(credentialException);
             _loginSemaphore.Release();
-            throw new SshException("Credentials Denied..");
+            throw credentialException;
         }
 
-        public async Task SendMessage(UaInfoRequest message, CancellationToken cancellationToken)
+        public async Task ProcessMessageAsync(UaInfoRequest message, CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken);
 
