@@ -44,12 +44,12 @@ namespace Surfus.Shell
         /// <summary>
         /// InitialKeyExchangeCompleted synchronizes other actions to start once the initial key exchange has been completed.
         /// </summary>
-        internal TaskCompletionSource<bool> InitialKeyExchangeCompleted { get; set; }
+        private TaskCompletionSource<bool> _initialKeyExchangeCompleted { get; set; }
 
         /// <summary>
         /// LoginCompleted represents the current state of authentication.
         /// </summary>
-        internal TaskCompletionSource<bool> LoginCompleted { get; set; }
+        private TaskCompletionSource<bool> _loginCompleted { get; set; }
 
         /// <summary>
         /// _channelCounter holds the current channel index used to derive new channel IDs.
@@ -158,18 +158,18 @@ namespace Surfus.Shell
                 ConnectionInfo.Authentication = new SshAuthentication(this);
 
                 // Perform version exchange and key exchange
-                linkedCancellation.Token.Register(() => InitialKeyExchangeCompleted?.TrySetCanceled());
-                InitialKeyExchangeCompleted = new TaskCompletionSource<bool>();
+                linkedCancellation.Token.Register(() => _initialKeyExchangeCompleted?.TrySetCanceled());
+                _initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
                 ConnectionInfo.ServerVersion = await ExchangeVersionAsync((linkedCancellation.Token));
                 _logger.Info("Server Version: " + ConnectionInfo.ServerVersion);
                 _readLoopTask = ReadLoop();
-                await InitialKeyExchangeCompleted.Task;
+                await _initialKeyExchangeCompleted.Task;
 
                 // Perform login
-                LoginCompleted = new TaskCompletionSource<bool>();
-                linkedCancellation.Token.Register(() => LoginCompleted?.TrySetCanceled());
+                _loginCompleted = new TaskCompletionSource<bool>();
+                linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled());
                 await ConnectionInfo.Authentication.LoginAsync(username, password, linkedCancellation.Token);
-                await LoginCompleted.Task;
+                await _loginCompleted.Task;
 
                 // Set new state
                 _sshClientState = State.Connected;
@@ -216,18 +216,18 @@ namespace Surfus.Shell
                 ConnectionInfo.Authentication = new SshAuthentication(this);
 
                 // Perform version exchange and key exchange
-                linkedCancellation.Token.Register(() => InitialKeyExchangeCompleted?.TrySetCanceled());
-                InitialKeyExchangeCompleted = new TaskCompletionSource<bool>();
+                linkedCancellation.Token.Register(() => _initialKeyExchangeCompleted?.TrySetCanceled());
+                _initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
                 ConnectionInfo.ServerVersion = await ExchangeVersionAsync((linkedCancellation.Token));
                 _logger.Info("Server Version: " + ConnectionInfo.ServerVersion);
                 _readLoopTask = ReadLoop();
-                await InitialKeyExchangeCompleted.Task;
+                await _initialKeyExchangeCompleted.Task;
 
                 // Perform login
-                LoginCompleted = new TaskCompletionSource<bool>();
-                linkedCancellation.Token.Register(() => LoginCompleted?.TrySetCanceled());
+                _loginCompleted = new TaskCompletionSource<bool>();
+                linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled());
                 await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, linkedCancellation.Token);
-                await LoginCompleted.Task;
+                await _loginCompleted.Task;
 
                 // Set new state
                 _sshClientState = State.Connected;
@@ -418,7 +418,7 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Reads a message from the server and sends it to the correct object to be processed.
+        /// Reads a message from the server
         /// </summary>
         /// <param name="cancellationToken">The cancellation token is used to cancel the ReadMessage request</param>
         /// <returns></returns>
@@ -475,6 +475,12 @@ namespace Surfus.Shell
             }
         }
 
+        /// <summary>
+        /// Forwards a message from the server to the the SshKeyExchange
+        /// </summary>
+        /// <param name="messageEvent">The message to be processed</param>
+        /// <param name="cancellationToken">The cancellation token is used to cancel the process request</param>
+        /// <returns></returns>
         private async Task ProcessKeyExchangeMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
             try
@@ -488,7 +494,7 @@ namespace Surfus.Shell
                         await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
 
                         // If we make it to this point without an exception we've successfully completed our key exchange
-                        InitialKeyExchangeCompleted?.TrySetResult(true);
+                        _initialKeyExchangeCompleted?.TrySetResult(true);
                         break;
                     case MessageType.SSH_MSG_KEX_Exchange_30:
                     case MessageType.SSH_MSG_KEX_Exchange_31:
@@ -501,11 +507,17 @@ namespace Surfus.Shell
             }
             catch (Exception ex)
             {
-                InitialKeyExchangeCompleted?.TrySetException(ex);
+                _initialKeyExchangeCompleted?.TrySetException(ex);
                 throw;
             }
         }
 
+        /// <summary>
+        /// Forwards a message from the server to the the SshAuthentication
+        /// </summary>
+        /// <param name="messageEvent">The message to be processed</param>
+        /// <param name="cancellationToken">The cancellation token is used to cancel the process request</param>
+        /// <returns></returns>
         private async Task ProcessAuthenticationMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
             try
@@ -521,7 +533,7 @@ namespace Surfus.Shell
                     case MessageType.SSH_MSG_USERAUTH_SUCCESS:
                         await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess, cancellationToken);
                         // If we make it to this point with no exceptions we've achieved a success login.
-                        LoginCompleted?.TrySetResult(true);
+                        _loginCompleted?.TrySetResult(true);
                         break;
                     case MessageType.SSH_MSG_USERAUTH_FAILURE:
                         await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure, cancellationToken);
@@ -536,11 +548,17 @@ namespace Surfus.Shell
             }
             catch (Exception ex)
             {
-                LoginCompleted?.TrySetException(ex);
+                _loginCompleted?.TrySetException(ex);
                 throw;
             }
         }
 
+        /// <summary>
+        /// Forwards a message from the server to the the SshChannel
+        /// </summary>
+        /// <param name="messageEvent">The message to be processed</param>
+        /// <param name="cancellationToken">The cancellation token is used to cancel the process request</param>
+        /// <returns></returns>
         private async Task ProcessChannelMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
             // Runs on background thread
@@ -581,6 +599,12 @@ namespace Surfus.Shell
             }
         }
 
+        /// <summary>
+        /// Writes a message to the server
+        /// </summary>
+        /// <param name="message">The message to be sent</param>
+        /// <param name="cancellationToken">The cancellation token is used to cancel the write message</param>
+        /// <returns></returns>
         internal async Task WriteMessageAsync(IMessage message, CancellationToken cancellationToken)
         {
             var compressedPayload = ConnectionInfo.WriteCompressionAlgorithm.Compress(message.GetBytes());
@@ -604,6 +628,9 @@ namespace Surfus.Shell
             _logger.Debug($"{ConnectionInfo.Hostname} - {nameof(WriteMessageAsync)}: Sent {message.Type}");
         }
 
+        /// <summary>
+        /// Closes the SshClient
+        /// </summary>
         public void Close()
         {
             if (!_isDisposed)
@@ -632,11 +659,17 @@ namespace Surfus.Shell
             }
         }
 
+        /// <summary>
+        /// Disposes the SshClient
+        /// </summary>
         public void Dispose()
         {
             Close();
         }
 
+        /// <summary>
+        /// The state the SshClient is in
+        /// </summary>
         internal enum State
         {
             Intitial,
