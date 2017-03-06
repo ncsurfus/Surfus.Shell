@@ -15,7 +15,7 @@ namespace Surfus.Shell
         private static Logger _logger = LogManager.GetCurrentClassLogger();
         private SemaphoreSlim _terminalSemaphore = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _terminalCancellation = new CancellationTokenSource();
-        private State _channelState = State.Initial;
+        private State _terminalState = State.Initial;
         private SshChannel _channel;
         private SshClient _client;
         private bool _isDisposed;
@@ -61,19 +61,19 @@ namespace Surfus.Shell
             {
                 await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
 
-                if (_channelState != State.Initial)
+                if (_terminalState != State.Initial)
                 {
                     throw new Exception("Terminal request was already attempted.");
                 }
 
                 // Errored until success.
-                _channelState = State.Errored;
+                _terminalState = State.Errored;
 
                 await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), linkedCancellation.Token);
                 await _channel.RequestAsync(new ChannelRequestPseudoTerminal(_channel.ServerId, true, "Surfus", 80, 24), linkedCancellation.Token);
                 await _channel.RequestAsync(new ChannelRequestShell(_channel.ServerId, true), linkedCancellation.Token);
 
-                _channelState = State.Opened;
+                _terminalState = State.Opened;
 
                 _terminalSemaphore.Release();
             }
@@ -85,11 +85,11 @@ namespace Surfus.Shell
             {
                 await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
 
-                if (_channelState == State.Opened)
+                if (_terminalState == State.Opened)
                 {
                     await _channel.CloseAsync(linkedCancellation.Token);
                 }
-                _channelState = State.Closed;
+                _terminalState = State.Closed;
                 _terminalSemaphore.Release();
                 Close();
             };
@@ -101,7 +101,7 @@ namespace Surfus.Shell
             {
                 await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
 
-                if (_channelState != State.Opened)
+                if (_terminalState != State.Opened)
                 {
                     throw new Exception("Terminal not opened.");
                 }
@@ -123,7 +123,7 @@ namespace Surfus.Shell
             {
                 await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
 
-                if (_channelState != State.Opened)
+                if (_terminalState != State.Opened)
                 {
                     throw new Exception("Terminal not opened.");
                 }
