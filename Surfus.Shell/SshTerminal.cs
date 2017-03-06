@@ -181,6 +181,7 @@ namespace Surfus.Shell
         public async Task<string> ExpectAsync(string plainText, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
+            // Todo: Convert this to use Find and put the remaining data back in the buffer.
             while (!buffer.ToString().Contains(plainText))
             {
                 buffer.Append(await ReadCharAsync(cancellationToken));
@@ -191,6 +192,7 @@ namespace Surfus.Shell
         public async Task<string> ExpectRegexAsync(string regexText, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
+            // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
             while (!Regex.Match(buffer.ToString(), regexText).Success)
             {
                 buffer.Append(await ReadCharAsync(cancellationToken));
