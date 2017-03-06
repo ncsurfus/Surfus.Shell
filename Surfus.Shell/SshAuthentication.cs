@@ -99,14 +99,13 @@ namespace Surfus.Shell
             _loginSemaphore.Release();
         }
 
-        public async Task ProcessRequestFailureMessage(CancellationToken cancellationToken)
+        public async Task ProcessRequestFailureMessage( CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken);
+           
 
             if (_loginState != State.WaitingOnServiceAccept)
-            {
-                _loginState = State.Failed;
-                _loginState = State.Failed;
+            { _loginState = State.Failed;
                 _loginSemaphore.Release();
                 throw new SshException("Received unexpected login message."); ;
             }

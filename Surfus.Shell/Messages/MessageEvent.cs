@@ -1,17 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
-// <copyright file="MessageEvent.cs" company="N/A">
-//   THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-//   THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
-//   CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-//   IN THE SOFTWARE.
-// </copyright>
-// <summary>
-//   Holds the buffer containing the message and provides support to cast the message into the appropriate IMessage.
-// </summary>
-// --------------------------------------------------------------------------------------------------------------------
-
-using Surfus.Shell.Messages.Channel;
+﻿using Surfus.Shell.Messages.Channel;
 using Surfus.Shell.Messages.KeyExchange;
 using Surfus.Shell.Messages.UserAuth;
 
@@ -67,15 +54,10 @@ namespace Surfus.Shell.Messages
                     return _message;
                 }
 
-                // ReSharper disable once SwitchStatementMissingSomeCases
                 switch (Type)
                 {
                     case MessageType.SSH_MSG_KEXINIT:
                         return _message = new KexInit(Buffer);
-                   // case MessageType.SSH_MSG_KEX_DH_GEX_INIT:
-                     //   return this.message = new DhInit(this.Buffer);
-                  //  case MessageType.SSH_MSG_KEX_DH_GEX_REPLY:
-                        //return this.message = new DhReply(this.Buffer);
                     case MessageType.SSH_MSG_NEWKEYS:
                         return _message = new NewKeys(Buffer);
                     case MessageType.SSH_MSG_IGNORE:
