@@ -72,14 +72,14 @@ namespace Surfus.Shell
         private bool _isDisposed = false;
 
         /// <summary>
-        /// TcpConnection holds the underlying TCP Connection of the SshClient.
+        /// _tcpConnection holds the underlying TCP Connection of the SshClient.
         /// </summary>
-        internal TcpClient TcpConnection { get; } = new TcpClient();
+        private TcpClient _tcpConnection = new TcpClient();
 
         /// <summary>
-        /// TcpStream holds the underlying NetworkStream of the TCP Connection.
+        /// _tcpStream holds the underlying NetworkStream of the TCP Connection.
         /// </summary>
-        internal NetworkStream TcpStream => TcpConnection.GetStream();
+        private NetworkStream _tcpStream;
 
         /// <summary>
         /// InternalCancellation is the cancellation source used to cancel tasks.
@@ -89,7 +89,7 @@ namespace Surfus.Shell
         /// <summary>
         /// IsConnected determines if the SshClient is connected to the remote SSH server.
         /// </summary>
-        public bool IsConnected => TcpConnection.Connected && !_isDisposed;
+        public bool IsConnected => _tcpConnection?.Connected == true && !_isDisposed && _sshClientState == State.Connected;
 
         /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
@@ -325,21 +325,22 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the version exchange</returns>
         private async Task<string> ExchangeVersionAsync(CancellationToken cancellationToken)
         {
-            await TcpConnection.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port);
+            await _tcpConnection.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port);
+            _tcpStream = _tcpConnection.GetStream();
             var serverVersionFilter = new Regex(@"^SSH-(?<ProtoVersion>\d\.\d+)-(?<SoftwareVersion>\S+)(?<Comments>\s[^\r\n]+)?", RegexOptions.Compiled);
 
             // Buffer to receive their version.
             var buffer = new byte[ushort.MaxValue];
             var bufferPosition = 0;
 
-            while (TcpStream.CanRead)
+            while (_tcpStream.CanRead)
             {
                 if (bufferPosition == ushort.MaxValue)
                 {
                     throw new ArgumentOutOfRangeException();
                 }
 
-                var readAmount = await TcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken);
+                var readAmount = await _tcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken);
                 if (readAmount <= 0)
                 {
                     _logger.Fatal($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
@@ -369,8 +370,8 @@ namespace Surfus.Shell
 
                             // Send our version after. Seems to be a bug with some IOS versions if we're to fast and send this first.
                             var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
-                            await TcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken);
-                            await TcpStream.FlushAsync(cancellationToken);
+                            await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken);
+                            await _tcpStream.FlushAsync(cancellationToken);
 
                             return serverVersion;
                         }
@@ -424,10 +425,10 @@ namespace Surfus.Shell
         /// <returns></returns>
         private async Task ReadMessageAsync(CancellationToken cancellationToken)
         {
-            var sshPacket = await ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(TcpStream, cancellationToken);
+            var sshPacket = await ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(_tcpStream, cancellationToken);
             if (ConnectionInfo.ReadMacAlgorithm.OutputSize != 0)
             {
-                var messageAuthenticationHash = await TcpStream.ReadBytesAsync((uint)ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken);
+                var messageAuthenticationHash = await _tcpStream.ReadBytesAsync((uint)ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken);
                 if (!ConnectionInfo.ReadMacAlgorithm.VerifyMac(messageAuthenticationHash, ConnectionInfo.InboundPacketSequence, sshPacket))
                 {
                     throw new InvalidDataException("Received a malformed packet from host.");
@@ -612,15 +613,15 @@ namespace Surfus.Shell
                     ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize > 8
                     ? ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize : 8);
 
-            await TcpStream.WriteAsync(ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Raw), cancellationToken);
+            await _tcpStream.WriteAsync(ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Raw), cancellationToken);
 
             if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
             {
-                await TcpStream.WriteAsync(ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence,
+                await _tcpStream.WriteAsync(ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence,
                             sshPacket), cancellationToken);
             }
 
-            await TcpStream.FlushAsync(cancellationToken);
+            await _tcpStream.FlushAsync(cancellationToken);
             ConnectionInfo.OutboundPacketSequence = ConnectionInfo.OutboundPacketSequence != uint.MaxValue
                                                          ? ConnectionInfo.OutboundPacketSequence + 1
                                                          : 0;
@@ -655,7 +656,8 @@ namespace Surfus.Shell
                 ConnectionInfo.Authentication?.Dispose();
                 InternalCancellation.Dispose();
                 _clientSemaphore.Dispose();
-                TcpConnection.Dispose();
+                _tcpStream?.Dispose();
+                _tcpConnection?.Dispose();
             }
         }
 

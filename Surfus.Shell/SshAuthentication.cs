@@ -23,11 +23,7 @@ namespace Surfus.Shell
         private Func<string, CancellationToken, Task<string>> _interactiveResponse;
         private bool _disposed;
 
-
-        // Message Sources
-        internal TaskCompletionSource<ServiceAccept> ServiceAcceptMessage = new TaskCompletionSource<ServiceAccept>();
-        internal TaskCompletionSource<UaSuccess> UserAuthSuccessMessage = new TaskCompletionSource<UaSuccess>();
-        internal TaskCompletionSource<UaInfoRequest> UserAuthInfoRequest = new TaskCompletionSource<UaInfoRequest>();
+        private TaskCompletionSource<UaInfoRequest> UserAuthInfoRequest = new TaskCompletionSource<UaInfoRequest>();
 
         public SshAuthentication(SshClient sshClient)
         {
