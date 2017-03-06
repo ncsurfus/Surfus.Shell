@@ -126,6 +126,7 @@
     <Compile Include="SshChannel.cs" />
     <Compile Include="SshClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SshCommand.cs" />
     <Compile Include="SshConnectionInfo.cs" />
     <Compile Include="SshKeyExchanger.cs" />
     <Compile Include="SshPacket.cs" />

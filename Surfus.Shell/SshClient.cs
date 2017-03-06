@@ -62,6 +62,11 @@ namespace Surfus.Shell
         private List<SshChannel> _channels = new List<SshChannel>();
 
         /// <summary>
+        /// _disposables holds a list of the disposable objects.
+        /// </summary>
+        private List<IDisposable> _disposables = new List<IDisposable>();
+
+        /// <summary>
         /// _isDisposed holds the disposed state of the SshClient.
         /// </summary>
         private bool _isDisposed = false;
@@ -245,16 +250,17 @@ namespace Surfus.Shell
                 // Validate current state of SshClient
                 if (_sshClientState != State.Connected)
                 {
+                    _clientSemaphore.Release();
                     switch (_sshClientState)
                     {
                         case State.Intitial:
                         case State.Connecting:
-                            throw new SshException($"{nameof(ConnectAsync)} has not yet connected.");
+                            throw new SshException($"{nameof(SshClient)} has not yet connected.");
                         case State.Error:
                         case State.Closed:
-                            throw new SshException($"{nameof(ConnectAsync)} is no longer connected.");
+                            throw new SshException($"{nameof(SshClient)} is no longer connected.");
                         default:
-                            throw new SshException($"{nameof(ConnectAsync)} had an unknown error.");
+                            throw new SshException($"{nameof(SshClient)} had an unknown error.");
                     }
                 }
 
@@ -263,6 +269,7 @@ namespace Surfus.Shell
                 var terminal = new SshTerminal(this, channel);
 
                 _channels.Add(channel);
+                _disposables.Add(terminal);
                 _channelCounter++;
 
                 _clientSemaphore.Release();
@@ -270,24 +277,46 @@ namespace Surfus.Shell
             }
         }
 
-        /*
-public async Task<SshCommand> CreateCommandAsync(CancellationToken cancellationToken)
-{
-    // Channels will be touched by background thread. Must coordinate.
-    await SshClientSemaphore.WaitAsync(cancellationToken);
+        /// <summary>
+        /// Requests the result of a command from the SSH server.
+        /// </summary>
+        /// <param name="cancellationToken">The cancellation token used to cancel the terminal request</param>
+        /// <returns>A task representing the state of the terminal request</returns>
+        public async Task<SshCommand> CreateCommandAsync(CancellationToken cancellationToken)
+        {
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, InternalCancellation.Token))
+            {
+                await _clientSemaphore.WaitAsync(linkedCancellation.Token);
 
-    var channel = new SshChannel(this, _channelCounter);
-    var command = new SshCommand(this, channel);
-    Commands.Add(command);
+                // Validate current state of SshClient
+                if (_sshClientState != State.Connected)
+                {
+                    _clientSemaphore.Release();
+                    switch (_sshClientState)
+                    {
+                        case State.Intitial:
+                        case State.Connecting:
+                            throw new SshException($"{nameof(SshClient)} has not yet connected.");
+                        case State.Error:
+                        case State.Closed:
+                            throw new SshException($"{nameof(SshClient)} is no longer connected.");
+                        default:
+                            throw new SshException($"{nameof(SshClient)} had an unknown error.");
+                    }
+                }
 
-    Channels.Add(channel);
-    _channelCounter++;
+                // Setup the new terminal
+                var channel = new SshChannel(this, _channelCounter);
+                var command = new SshCommand(this, channel);
 
-    SshClientSemaphore.Release();
+                _channels.Add(channel);
+                _disposables.Add(command);
+                _channelCounter++;
 
-    return command;
-}*/
-
+                _clientSemaphore.Release();
+                return command;
+            }
+        }
 
         /// <summary>
         /// Initiates the SSH connection by exchanging versions.
@@ -523,6 +552,17 @@ public async Task<SshCommand> CreateCommandAsync(CancellationToken cancellationT
                 {
                     InternalCancellation.Cancel(true);
                 }
+
+                foreach (var disposable in _disposables)
+                {
+                    disposable.Dispose();
+                }
+
+                foreach (var channel in _channels)
+                {
+                    channel.Dispose();
+                }
+
                 _sshClientState = State.Closed;
                 ConnectionInfo.Authentication?.Dispose();
                 InternalCancellation.Dispose();

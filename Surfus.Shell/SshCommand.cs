@@ -11,143 +11,133 @@ using NLog;
 
 namespace Surfus.Shell
 {
-    public class SshCommand
+    public class SshCommand : IDisposable
     {
-        private static Logger logger = LogManager.GetCurrentClassLogger();
-
+        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private SshChannel _channel;
+        private SshClient _client;
+        private bool _isDisposed;
+        private SemaphoreSlim _commandSemaphore = new SemaphoreSlim(1, 1);
+        private CancellationTokenSource _commandCancellation = new CancellationTokenSource();
+        private State _commandState = State.Initial;
         private readonly MemoryStream _memoryStream = new MemoryStream();
-        internal TaskCompletionSource<bool> ExecuteTaskSource;
-        internal TaskCompletionSource<bool> ExecuteEofTaskSource;
-        internal TaskCompletionSource<bool> ExecuteCloseTaskSource;
 
-
-        internal TaskCompletionSource<bool> ChannelOpenTaskSource;
-        internal TaskCompletionSource<bool> ChannelCloseTaskSource;
+        public bool IsOpen => _channel?.IsOpen ?? false;
 
         internal SshCommand(SshClient sshClient, SshChannel channel)
         {
-            SshClient = sshClient;
-            ChannelManager = channel;
-            ChannelManager.OnDataReceived += (buffer, cancellationToken) =>
+            _client = sshClient;
+            _channel = channel;
+            _channel.OnDataReceived += async (buffer, cancellationToken) =>
             {
+                await _commandSemaphore.WaitAsync(cancellationToken);
+
                 _memoryStream.Write(buffer, 0, buffer.Length);
-                return Task.FromResult(true);
+
+                _commandSemaphore.Release();
             };
         }
 
-        internal SshChannel ChannelManager { get;}
-        public SshClient SshClient { get; }
-        public bool IsOpen => ChannelManager?.IsOpen ?? false;
-
         public async Task OpenAsync(CancellationToken cancellationToken)
         {
-            if(ChannelOpenTaskSource != null)
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
             {
-                throw new SshException($"OpenAsync has already been called on SshChannel");
-            }
-            ChannelOpenTaskSource = new TaskCompletionSource<bool>();
+                await _commandSemaphore.WaitAsync(linkedCancellation.Token);
 
-            cancellationToken.Register(() => SshClient.SetException(new TaskCanceledException(ChannelOpenTaskSource.Task)));
-            await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
-            {
-                Client = SshClient,
-                TaskFunction = async () =>
+                if (_commandState != State.Initial)
                 {
-                    try
-                    {
-                        await ChannelManager.OpenAsync(new ChannelOpenSession(ChannelManager.ClientId, 50000), SshClient.InternalCancellation.Token);
-                        ChannelOpenTaskSource.TrySetResult(true);
-                    }
-                    catch (Exception ex)
-                    {
-                        ChannelOpenTaskSource.TrySetException(ex);
-                    }
+                    throw new Exception("Command request was already attempted.");
                 }
-            });
 
-            await ChannelOpenTaskSource.Task;
+                // Errored until success.
+                _commandState = State.Errored;
+
+                await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), _client.InternalCancellation.Token);
+
+                _commandState = State.Opened;
+
+                _commandSemaphore.Release();
+            }
         }
 
         public async Task CloseAsync(CancellationToken cancellationToken)
         {
-            if (ChannelCloseTaskSource != null)
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
             {
-                throw new SshException($"SshCommand is already closed or closing.");
-            }
-            ChannelCloseTaskSource = new TaskCompletionSource<bool>();
+                await _commandSemaphore.WaitAsync(linkedCancellation.Token);
 
-            await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
-            {
-                Client = SshClient,
-                TaskFunction = async () =>
+                if (_commandState == State.Opened)
                 {
-                    try
-                    {
-                        await ChannelManager.CloseAsync(SshClient.InternalCancellation.Token);
-                        ChannelCloseTaskSource.TrySetResult(true);
-                    }
-                    catch (Exception ex)
-                    {
-                        ChannelCloseTaskSource.TrySetException(ex);
-                    }
+                    await _channel.CloseAsync(linkedCancellation.Token);
                 }
-            });
+                _commandState = State.Closed;
+                _commandSemaphore.Release();
+                Close();
+            };
+        }
 
-            await ChannelCloseTaskSource.Task;
+        public void Close()
+        {
+            if (!_isDisposed)
+            {
+                if(!_commandCancellation.IsCancellationRequested)
+                {
+                    _commandCancellation.Cancel(true);
+                }
+                _isDisposed = true;
+                _commandSemaphore.Dispose();
+                _commandCancellation.Dispose();
+            }
+        }
+
+        public void Dispose()
+        {
+            Close();
         }
 
         public async Task<string> ExecuteAsync(string command, CancellationToken cancellationToken)
         {
-            if (ChannelOpenTaskSource?.Task.IsCompleted != true)
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
             {
-                throw new SshException("Channel not opened.");
-            }
+                await _commandSemaphore.WaitAsync(linkedCancellation.Token);
 
-            if (ChannelCloseTaskSource?.Task.IsCompleted == true)
-            {
-                throw new SshException("Channel closed.");
-            }
-
-            if (ExecuteTaskSource != null || ExecuteEofTaskSource != null || ExecuteCloseTaskSource != null)
-            {
-                throw new SshException("Command ExecuteAsync already in progress.");
-            }
-
-            ExecuteTaskSource = new TaskCompletionSource<bool>();
-            ExecuteCloseTaskSource = new TaskCompletionSource<bool>();
-            ExecuteEofTaskSource = new TaskCompletionSource<bool>();
-            ChannelManager.OnChannelEofReceived = (message, token) => { ExecuteEofTaskSource.SetResult(true); return Task.FromResult(true); };
-            ChannelManager.OnChannelCloseReceived = (message, token) => { ExecuteCloseTaskSource.SetResult(true); return Task.FromResult(true); };
-
-            await SshClientStaticThread.AddClientTaskAsync(new SshClientStaticThread.ClientTask
-            {
-                Client = SshClient,
-                TaskFunction = async () =>
+                if (_commandState != State.Opened)
                 {
-                    try
-                    {
-                        await ChannelManager.RequestAsync(new ChannelRequestExec(ChannelManager.ServerId, true, command), SshClient.InternalCancellation.Token);
-                        await ExecuteEofTaskSource.Task;
-                        await ExecuteCloseTaskSource.Task;
-                        ExecuteTaskSource.TrySetResult(true);
-                    }
-                    catch (Exception ex)
-                    {
-                        ExecuteCloseTaskSource.TrySetException(ex);
-                        ExecuteEofTaskSource.TrySetException(ex);
-                        ExecuteTaskSource.TrySetException(ex);
-                    }
+                    throw new Exception("Command request is not opened");
                 }
-            });
 
-            await ExecuteTaskSource.Task;
-            using (_memoryStream)
-            {
-                ExecuteCloseTaskSource = null;
-                ExecuteEofTaskSource = null;
-                ExecuteTaskSource = null;
-                return Encoding.UTF8.GetString(_memoryStream.ToArray());
+                var executeCloseTaskSource = new TaskCompletionSource<bool>();
+                var executeEofTaskSource = new TaskCompletionSource<bool>();
+
+                linkedCancellation.Token.Register(() => executeCloseTaskSource?.TrySetCanceled());
+                linkedCancellation.Token.Register(() => executeEofTaskSource?.TrySetCanceled());
+
+                _channel.OnChannelEofReceived = (message, token) => { executeEofTaskSource.SetResult(true); return Task.FromResult(true); };
+                _channel.OnChannelCloseReceived = (message, token) => { executeCloseTaskSource.SetResult(true); return Task.FromResult(true); };
+
+                await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), _client.InternalCancellation.Token);
+                await executeEofTaskSource.Task;
+                await executeCloseTaskSource.Task;
+
+                _channel.OnChannelEofReceived = null;
+                _channel.OnChannelCloseReceived = null;
+
+                using (_memoryStream)
+                {
+                    _commandState = State.Completed;
+                    _commandSemaphore.Release();
+                    return Encoding.UTF8.GetString(_memoryStream.ToArray());
+                }
             }
+        }
+
+        internal enum State
+        {
+            Initial,
+            Opened,
+            Completed,
+            Closed,
+            Errored
         }
     }
 }
