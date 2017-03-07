@@ -13,6 +13,8 @@ namespace Surfus.Shell
         public ushort Port { get; internal set; }
         public string ClientVersion { get; internal set; } = "SSH-2.0-Surfus-1.00";
         public string ServerVersion { get; internal set; }
+        public byte[] ServerCertificate { get; internal set; }
+        public int ServerCertificateSize { get; internal set; }
 
         internal uint InboundPacketSequence { get; set; }
         internal uint OutboundPacketSequence { get; set; }

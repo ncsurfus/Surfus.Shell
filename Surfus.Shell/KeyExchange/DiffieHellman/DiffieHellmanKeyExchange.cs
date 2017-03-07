@@ -167,6 +167,9 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
                 _kexInitExchangeResult.ServerHostKeyAlgorithm,
                 reply.ServerPublicHostKeyAndCertificates);
 
+            _client.ConnectionInfo.ServerCertificate = reply.ServerPublicHostKeyAndCertificates;
+            _client.ConnectionInfo.ServerCertificateSize = _signingAlgorithm.GetKeySize();
+
             // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.
             using (var memoryStream = new MemoryStream())
             {

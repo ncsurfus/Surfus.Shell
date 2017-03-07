@@ -8,6 +8,7 @@ namespace Surfus.Shell.Signing
         public abstract string Name { get; }
         public abstract byte[] Raw { get; }
         public abstract bool VerifySignature(byte[] data, byte[] signature);
+        public abstract int GetKeySize();
 
         public static Signer CreateSigner(string name, byte[] serverHostKey)
         {

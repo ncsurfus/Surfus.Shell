@@ -40,6 +40,7 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CiscoSshTerminalExtensions.cs" />
     <Compile Include="Compression\CompressionAlgorithm.cs" />
     <Compile Include="Compression\NoCompression.cs" />
     <Compile Include="Crypto\AesCryptoAlgorithm.cs" />
