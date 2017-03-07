@@ -11,9 +11,17 @@ namespace Surfus.Shell
 {
     public static class CiscoSshTerminalExtensions
     {
-        public static async Task<string> GetFullPromptAsync(this SshTerminal terminal, CancellationToken cancellationToken)
+        /// <summary>
+        /// Attempts to match the prompt with the following [multiline] regex: ^(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#))\s*$
+        /// You can derive the hostname from the hostname group.
+        /// User/Privileged mode can be derived from the privilegedPrompt and userPrompt groups.
+        /// </summary>
+        /// <param name="terminal">The terminal this method extends.</param>
+        /// <param name="cancellationToken">A cancellation token to cancel the request.</param>
+        /// <returns></returns>
+        public static async Task<Match> GetFullPromptAsync(this SshTerminal terminal, CancellationToken cancellationToken)
         {
-            return (await terminal.ExpectRegexMatchAsync(@"^(?<prompt>[^>\#\s]+)(>|\#)\s*$", RegexOptions.Multiline, cancellationToken)).Groups["prompt"].Value;
+            return (await terminal.ExpectRegexMatchAsync(@"^(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#))\s*$", RegexOptions.Multiline, cancellationToken));
         }
 
         public static async Task<TerminalMode> GetTerminalModeAsync(this SshTerminal terminal, CancellationToken cancellationToken)
