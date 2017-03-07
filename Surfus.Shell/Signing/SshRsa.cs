@@ -35,6 +35,15 @@ namespace Surfus.Shell.Signing
         public override string Name { get; } = "ssh-rsa";
         public override byte[] Raw { get; }
 
+        public override int GetKeySize()
+        {
+            using (var rsaService = RSA.Create())
+            {
+                rsaService.ImportParameters(RsaParameters);
+                return rsaService.KeySize;
+            }
+        }
+
         public override bool VerifySignature(byte[] data, byte[] signature)
         {
 			using(var rsaService = RSA.Create())

@@ -200,6 +200,20 @@ namespace Surfus.Shell
             return buffer.ToString();
         }
 
+        public async Task<Match> ExpectRegexMatchAsync(string regexText, CancellationToken cancellationToken)
+        {
+            var buffer = new StringBuilder();
+            var match = Regex.Match(buffer.ToString(), regexText);
+
+            // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
+            while (!match.Success)
+            {
+                buffer.Append(await ReadCharAsync(cancellationToken));
+                match = Regex.Match(buffer.ToString(), regexText);
+            }
+            return match;
+        }
+
         public void Close()
         {
             if(!_isDisposed)
