@@ -138,6 +138,9 @@ namespace Surfus.Shell
                 }
                 _terminalSemaphore.Release();
                 _terminalReadComplete = new TaskCompletionSource<string>();
+
+                linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled());
+
                 return await _terminalReadComplete.Task;
             }
         }
@@ -162,6 +165,9 @@ namespace Surfus.Shell
                 }
                 _terminalSemaphore.Release();
                 _terminalReadComplete = new TaskCompletionSource<string>();
+
+                linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled());
+
                 var data = await _terminalReadComplete.Task;
 
                 await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
@@ -189,27 +195,37 @@ namespace Surfus.Shell
             return buffer.ToString();
         }
 
-        public async Task<string> ExpectRegexAsync(string regexText, CancellationToken cancellationToken)
+        public Task<string> ExpectRegexAsync(string regexText, CancellationToken cancellationToken)
+        {
+            return ExpectRegexAsync(regexText, RegexOptions.None, cancellationToken);
+        }
+
+        public async Task<string> ExpectRegexAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
             // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
-            while (!Regex.Match(buffer.ToString(), regexText).Success)
+            while (!Regex.Match(buffer.ToString(), regexText, regexOptions).Success)
             {
                 buffer.Append(await ReadCharAsync(cancellationToken));
             }
             return buffer.ToString();
         }
 
-        public async Task<Match> ExpectRegexMatchAsync(string regexText, CancellationToken cancellationToken)
+        public Task<Match> ExpectRegexMatchAsync(string regexText, CancellationToken cancellationToken)
+        {
+            return ExpectRegexMatchAsync(regexText, RegexOptions.None, cancellationToken);
+        }
+
+        public async Task<Match> ExpectRegexMatchAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
-            var match = Regex.Match(buffer.ToString(), regexText);
+            var match = Regex.Match(buffer.ToString(), regexText, regexOptions);
 
             // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
             while (!match.Success)
             {
                 buffer.Append(await ReadCharAsync(cancellationToken));
-                match = Regex.Match(buffer.ToString(), regexText);
+                match = Regex.Match(buffer.ToString(), regexText, regexOptions);
             }
             return match;
         }
