@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,6 +11,11 @@ namespace Surfus.Shell
 {
     public static class CiscoSshTerminalExtensions
     {
+        public static async Task<string> GetFullPromptAsync(this SshTerminal terminal, CancellationToken cancellationToken)
+        {
+            return (await terminal.ExpectRegexMatchAsync(@"^(?<prompt>[^>\#\s]+)(>|\#)\s*$", RegexOptions.Multiline, cancellationToken)).Groups["prompt"].Value;
+        }
+
         public static async Task<TerminalMode> GetTerminalModeAsync(this SshTerminal terminal, CancellationToken cancellationToken)
         {
             var initialMode = await terminal.ExpectRegexMatchAsync(@"((?<privileged>\#)|(?<user>)>)\s*", cancellationToken);
@@ -74,7 +80,6 @@ namespace Surfus.Shell
             {
                 throw new SshException("Server rejected enable request and returned to password prompt");
             }
-
         }
 
         public enum TerminalMode
