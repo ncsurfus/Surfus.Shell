@@ -21,7 +21,7 @@ namespace Surfus.Shell
         /// <returns></returns>
         public static async Task<Match> GetFullPromptAsync(this SshTerminal terminal, CancellationToken cancellationToken)
         {
-            return (await terminal.ExpectRegexMatchAsync(@"^(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#))\s*$", RegexOptions.Multiline, cancellationToken));
+            return (await terminal.ExpectRegexMatchAsync(@"^\s?(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#))\s*$", RegexOptions.Multiline, cancellationToken));
         }
 
         public static async Task<TerminalMode> GetTerminalModeAsync(this SshTerminal terminal, CancellationToken cancellationToken)
