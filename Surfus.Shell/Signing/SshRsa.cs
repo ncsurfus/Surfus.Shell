@@ -14,7 +14,11 @@ namespace Surfus.Shell.Signing
             Raw = publicCertificate;
 			using (var memoryStream = new MemoryStream(publicCertificate))
 			{
-				if (Name != memoryStream.ReadString()) throw new Exception($"Expected {Name} signature type");
+                if (Name != memoryStream.ReadString())
+                {
+                    throw new Exception($"Expected {Name} signature type");
+                }
+
 				var exponent = memoryStream.ReadBinaryString();
 				var modulus = memoryStream.ReadBinaryString();
 
@@ -50,7 +54,10 @@ namespace Surfus.Shell.Signing
             using (var memoryStream = new MemoryStream(signature))
             {
                 rsaService.ImportParameters(RsaParameters);
-                if (Name != memoryStream.ReadString()) throw new Exception($"Expected {Name} signature type");
+                if (Name != memoryStream.ReadString())
+                {
+                    throw new Exception($"Expected {Name} signature type");
+                }
 
 				return rsaService.VerifyData(data, memoryStream.ReadBinaryString(), HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
 

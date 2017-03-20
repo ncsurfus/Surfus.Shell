@@ -123,6 +123,7 @@
     <Compile Include="Messages\UserAuth\UaRequest.cs" />
     <Compile Include="Messages\UserAuth\UaSuccess.cs" />
     <Compile Include="Signing\Signer.cs" />
+    <Compile Include="Signing\SshDss.cs" />
     <Compile Include="Signing\SshRsa.cs" />
     <Compile Include="SshAuthentication.cs" />
     <Compile Include="SshChannel.cs" />
