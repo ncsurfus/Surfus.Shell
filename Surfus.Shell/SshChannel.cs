@@ -5,6 +5,7 @@ using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
 using NLog;
+using System.Text;
 
 namespace Surfus.Shell
 {
@@ -42,10 +43,11 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _client.InternalCancellation.Token))
             {
-                await _channelSemaphore.WaitAsync(linkedCancellation.Token);
                 var totalBytesLeft = buffer.Length;
                 while (totalBytesLeft > 0)
                 {
+                    await _channelSemaphore.WaitAsync(linkedCancellation.Token);
+                    _logger.Info("SendWindow is " + SendWindow);
                     if (totalBytesLeft <= SendWindow)
                     {
                         await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), linkedCancellation.Token);
@@ -60,8 +62,9 @@ namespace Surfus.Shell
                         totalBytesLeft -= SendWindow;
                         SendWindow = 0;
                     }
+                    _channelSemaphore.Release();
+                    await Task.Delay(100, linkedCancellation.Token);
                 }
-                _channelSemaphore.Release();
             }
         }
 
@@ -240,6 +243,7 @@ namespace Surfus.Shell
 
             if (OnDataReceived != null)
             {
+                _logger.Info($"ChannelData is: '{Encoding.UTF8.GetString(message.Data, 0, message.Data.Length)}'");
                 await OnDataReceived(message.Data, cancellationToken);
             }
 
