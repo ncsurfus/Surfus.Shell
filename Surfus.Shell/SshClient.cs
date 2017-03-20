@@ -331,6 +331,8 @@ namespace Surfus.Shell
         private async Task<string> ExchangeVersionAsync(CancellationToken cancellationToken)
         {
             await _tcpConnection.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port);
+
+            // Attempt to get version..
             _tcpStream = _tcpConnection.GetStream();
             var serverVersionFilter = new Regex(@"^SSH-(?<ProtoVersion>\d\.\d+)-(?<SoftwareVersion>\S+)(?<Comments>\s[^\r\n]+)?", RegexOptions.Compiled);
 
@@ -338,56 +340,67 @@ namespace Surfus.Shell
             var buffer = new byte[ushort.MaxValue];
             var bufferPosition = 0;
 
-            while (_tcpStream.CanRead)
+            while (_tcpStream.CanRead && !cancellationToken.IsCancellationRequested)
             {
                 if (bufferPosition == ushort.MaxValue)
                 {
                     throw new ArgumentOutOfRangeException();
                 }
 
-                var readAmount = await _tcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken);
-                if (readAmount <= 0)
+                if (_tcpStream.DataAvailable)
                 {
-                    _logger.Fatal($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
-                    if (bufferPosition == 0)
-                    {
-                        _logger.Fatal($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Buffer Position is 0, no data sent. Possibly too many connections");
-                        throw new EndOfStreamException($"Buffer Position is 0, no data sent. Possibly too many connections");
-                    }
-                    throw new EndOfStreamException($"Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
-                }
+                    var readAmount = await _tcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken);
 
-                if (buffer[bufferPosition] == '\0')
-                {
-                    throw new InvalidDataException();
-                }
-
-                if (bufferPosition > 1 && buffer[bufferPosition] == '\n')
-                {
-                    var serverVersion = buffer[bufferPosition - 1] == '\r'
-                                            ? Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 2)
-                                            : Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 1);
-                    var serverVersionMatch = serverVersionFilter.Match(serverVersion);
-                    if (serverVersionMatch.Success)
+                    if (readAmount <= 0)
                     {
-                        if (serverVersionMatch.Groups["ProtoVersion"].Value == "2.0" || serverVersionMatch.Groups["ProtoVersion"].Value == "1.99")
+                        _logger.Fatal($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
+                        if (bufferPosition == 0)
                         {
-
-                            // Send our version after. Seems to be a bug with some IOS versions if we're to fast and send this first.
-                            var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
-                            await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken);
-                            await _tcpStream.FlushAsync(cancellationToken);
-
-                            return serverVersion;
+                            _logger.Fatal($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Buffer Position is 0, no data sent. Possibly too many connections");
+                            throw new EndOfStreamException($"Buffer Position is 0, no data sent. Possibly too many connections");
                         }
+                        throw new EndOfStreamException($"Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
                     }
 
-                    buffer = new byte[ushort.MaxValue];
-                    bufferPosition = 0;
+                    if (buffer[bufferPosition] == '\0')
+                    {
+                        throw new InvalidDataException();
+                    }
+
+                    if (bufferPosition > 1 && buffer[bufferPosition] == '\n')
+                    {
+                        var serverVersion = buffer[bufferPosition - 1] == '\r'
+                                                ? Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 2)
+                                                : Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 1);
+                        var serverVersionMatch = serverVersionFilter.Match(serverVersion);
+                        if (serverVersionMatch.Success)
+                        {
+                            if (serverVersionMatch.Groups["ProtoVersion"].Value == "2.0" || serverVersionMatch.Groups["ProtoVersion"].Value == "1.99")
+                            {
+
+                                // Send our version after. Seems to be a bug with some IOS versions if we're to fast and send this first.
+                                var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
+                                await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken);
+                                await _tcpStream.FlushAsync(cancellationToken);
+                                return serverVersion;
+                            }
+                        }
+
+                        buffer = new byte[ushort.MaxValue];
+                        bufferPosition = 0;
+                    }
+                    bufferPosition += readAmount;
                 }
-                bufferPosition += readAmount;
+                else
+                {
+                    await Task.Delay(100);
+                }
             }
 
+            if (cancellationToken.IsCancellationRequested)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
 
             throw new SshException("Invalid version from server");
         }

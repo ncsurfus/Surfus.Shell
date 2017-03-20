@@ -14,6 +14,7 @@ namespace Surfus.Shell
     public class SshTerminal : IDisposable
     {
         public StringBuilder _dataLog = new StringBuilder();
+        public StringBuilder _readLog = new StringBuilder();
         private static Logger _logger = LogManager.GetCurrentClassLogger();
         private SemaphoreSlim _terminalSemaphore = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _terminalCancellation = new CancellationTokenSource();
@@ -33,7 +34,8 @@ namespace Surfus.Shell
             {
                 await _terminalSemaphore.WaitAsync(cancellationToken);
 
-                if(_terminalReadComplete?.TrySetResult(Encoding.UTF8.GetString(buffer)) != true)
+                _readLog.Append(Encoding.UTF8.GetString(buffer));
+                if (_terminalReadComplete?.TrySetResult(Encoding.UTF8.GetString(buffer)) != true)
                 {
                     _readBuffer.Append(Encoding.UTF8.GetString(buffer));
                 }
@@ -199,7 +201,7 @@ namespace Surfus.Shell
             }
             catch
             {
-                _dataLog.Append(buffer); // REMOVE ME - TSHOOT
+                _dataLog.Append(buffer.ToString()); // REMOVE ME - TSHOOT
                 throw;
             }
         }
@@ -241,7 +243,7 @@ namespace Surfus.Shell
             }
             catch
             {
-                _dataLog.Append(buffer); // REMOVE ME - TSHOOT
+                _dataLog.Append(buffer.ToString()); // REMOVE ME - TSHOOT
                 throw;
             }
         }
