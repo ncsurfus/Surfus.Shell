@@ -581,7 +581,7 @@ namespace Surfus.Shell
         private async Task ProcessChannelMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
             // Runs on background thread
-            _logger.Debug($"Checking Channel Message Type");
+            _logger.Debug($"Checking Channel Message Type: {messageEvent.Message.ToString()}");
             if (messageEvent.Message is IChannelRecipient channelMessage)
             {
                 await _clientSemaphore.WaitAsync(cancellationToken);
