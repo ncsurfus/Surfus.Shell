@@ -4,7 +4,7 @@ namespace Surfus.Shell.Signing
 {
     public abstract class Signer
     {
-        public static string[] Supported => new[] { "ssh-rsa"/*, "ssh-dss"*/ };
+        public static string[] Supported => new[] { "ssh-rsa", "ssh-dss" };
         public abstract string Name { get; }
         public abstract byte[] Raw { get; }
         public abstract bool VerifySignature(byte[] data, byte[] signature);
@@ -16,8 +16,8 @@ namespace Surfus.Shell.Signing
             {
                 case "ssh-rsa":
                     return new SshRsa(serverHostKey);
-                //case "ssh-dss":
-                  //  return new SshDss(serverHostKey);
+                case "ssh-dss":
+                    return new SshDss(serverHostKey);
                 default:
                     throw new Exception("Signing Type Not Supported");
             }

@@ -2,16 +2,14 @@
 using System.IO;
 using System.Linq;
 using System.Numerics;
-using Surfus.SecureShell.Exceptions;
-using Surfus.SecureShell.Extensions;
-using Org.BouncyCastle.Crypto;
+using Surfus.Shell.Exceptions;
+using Surfus.Shell.Extensions;
+using System.Security.Cryptography;
 
-namespace Surfus.SecureShell.Signing
+namespace Surfus.Shell.Signing
 {
     public sealed class SshDss : Signer
     {
-        private readonly IDsa _provider;
-
 
         public SshDss(byte[] signature)
 		{
@@ -22,57 +20,58 @@ namespace Surfus.SecureShell.Signing
                 {
                     throw new Exception($"Expected {Name} signature type");
                 }
-                P = memoryStream.ReadBigInteger();
-                Q = memoryStream.ReadBigInteger();
-                G = memoryStream.ReadBigInteger();
-                Y = memoryStream.ReadBigInteger();
+
+                var p = memoryStream.ReadBinaryString();
+                var q = memoryStream.ReadBinaryString();
+                var g = memoryStream.ReadBinaryString();
+                var y = memoryStream.ReadBinaryString();
+
+                DsaParameters = new DSAParameters
+                {
+                    P = p[0] != 0 ? p : p.Skip(1).ToArray(),
+                    Q = q[0] != 0 ? q : q.Skip(1).ToArray(),
+                    G = g[0] != 0 ? g : g.Skip(1).ToArray(),
+                    Y = y[0] != 0 ? y : y.Skip(1).ToArray()
+                };
+
+                P = CreateBigInteger.FromUnsignedBigEndian(DsaParameters.P);
+                Q = CreateBigInteger.FromUnsignedBigEndian(DsaParameters.Q);
+                G = CreateBigInteger.FromUnsignedBigEndian(DsaParameters.G);
+                Y = CreateBigInteger.FromUnsignedBigEndian(DsaParameters.Y);
             }
-			var Pbc = new Org.BouncyCastle.Math.BigInteger(P.ToString());
-			var Qbc = new Org.BouncyCastle.Math.BigInteger(Q.ToString());
-			var Gbc = new Org.BouncyCastle.Math.BigInteger(G.ToString());
-			var Ybc = new Org.BouncyCastle.Math.BigInteger(Y.ToString());
-			var dsaParamters = new Org.BouncyCastle.Crypto.Parameters.DsaParameters(Pbc, Qbc, Gbc);
-			var dsaPublicParamters = new Org.BouncyCastle.Crypto.Parameters.DsaPublicKeyParameters(Ybc, dsaParamters);
-
-			_provider = new Org.BouncyCastle.Crypto.Signers.DsaSigner();
-			_provider.Init(false, dsaPublicParamters);
-
-           /* _provider = new DSACryptoServiceProvider();
-            _provider.ImportParameters(new DSAParameters
-            {
-                P = P.ToByteArray(), 
-                Q = Q.ToByteArray(), 
-                G = G.ToByteArray(), 
-                Y = Y.ToByteArray()
-            });*/
         }
 
         public BigInteger P { get; }
         public BigInteger Q { get; }
         public BigInteger G { get; }
         public BigInteger Y { get; }
+        public DSAParameters DsaParameters { get; }
 
         public override string Name { get; } = "ssh-dss";
         public override byte[] Raw { get; }
 
+        public override int GetKeySize()
+        {
+            using (var provider = new DSACryptoServiceProvider())
+            {
+                return provider.KeySize;
+            }
+        }
+
         public override bool VerifySignature(byte[] data, byte[] signature)
         {
-			Console.WriteLine("Validating ssh-dss");
-			using (var memoryStream = new MemoryStream(signature))
-			{
-				var header = memoryStream.ReadString();
-				var blobSize = memoryStream.ReadBinaryString();
-				if (header != "ssh-dss" || blobSize.Length != 40)
-				{
-					throw new SshException("Invalid ssh-dss header.");
-				}
-				var rBytes = blobSize.Take(20).ToArray();
-				var sBytes = blobSize.Skip(20).Take(20).ToArray();
-				var rOrg = new Org.BouncyCastle.Math.BigInteger(1, rBytes);
-				var sOrg = new Org.BouncyCastle.Math.BigInteger(1, sBytes);
+            using (var provider = new DSACryptoServiceProvider())
+            using (var memoryStream = new MemoryStream(signature))
+            {
+                provider.ImportParameters(DsaParameters);
+                var header = memoryStream.ReadString();
+                if (Name != header)
+                {
+                    throw new SshException("Invalid ssh-dss header.");
+                }
 
-				return _provider.VerifySignature(data, rOrg, sOrg);
-			}
+                return provider.VerifyData(data, memoryStream.ReadBinaryString());
+            }
         }
     }
 }
