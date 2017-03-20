@@ -13,6 +13,7 @@ namespace Surfus.Shell
 {
     public class SshTerminal : IDisposable
     {
+        public StringBuilder _dataLog = new StringBuilder();
         private static Logger _logger = LogManager.GetCurrentClassLogger();
         private SemaphoreSlim _terminalSemaphore = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _terminalCancellation = new CancellationTokenSource();
@@ -136,11 +137,10 @@ namespace Surfus.Shell
                     _terminalSemaphore.Release();
                     return text;
                 }
-                _terminalSemaphore.Release();
                 _terminalReadComplete = new TaskCompletionSource<string>();
-
                 linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled());
-
+                _terminalSemaphore.Release();
+               
                 return await _terminalReadComplete.Task;
             }
         }
@@ -163,11 +163,11 @@ namespace Surfus.Shell
                     _terminalSemaphore.Release();
                     return text;
                 }
-                _terminalSemaphore.Release();
                 _terminalReadComplete = new TaskCompletionSource<string>();
-
                 linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled());
 
+                _terminalSemaphore.Release();
+                
                 var data = await _terminalReadComplete.Task;
 
                 await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
@@ -187,12 +187,21 @@ namespace Surfus.Shell
         public async Task<string> ExpectAsync(string plainText, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
-            // Todo: Convert this to use Find and put the remaining data back in the buffer.
-            while (!buffer.ToString().Contains(plainText))
+
+            try
             {
-                buffer.Append(await ReadCharAsync(cancellationToken));
+                // Todo: Convert this to use Find and put the remaining data back in the buffer.
+                while (!buffer.ToString().Contains(plainText))
+                {
+                    buffer.Append(await ReadCharAsync(cancellationToken));
+                }
+                return buffer.ToString();
             }
-            return buffer.ToString();
+            catch
+            {
+                _dataLog.Append(buffer); // REMOVE ME - TSHOOT
+                throw;
+            }
         }
 
         public Task<string> ExpectRegexAsync(string regexText, CancellationToken cancellationToken)
@@ -220,14 +229,21 @@ namespace Surfus.Shell
         {
             var buffer = new StringBuilder();
             var match = Regex.Match(buffer.ToString(), regexText, regexOptions);
-
-            // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
-            while (!match.Success)
+            try
             {
-                buffer.Append(await ReadCharAsync(cancellationToken));
-                match = Regex.Match(buffer.ToString(), regexText, regexOptions);
+                // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
+                while (!match.Success)
+                {
+                    buffer.Append(await ReadCharAsync(cancellationToken));
+                    match = Regex.Match(buffer.ToString(), regexText, regexOptions);
+                }
+                return match;
             }
-            return match;
+            catch
+            {
+                _dataLog.Append(buffer); // REMOVE ME - TSHOOT
+                throw;
+            }
         }
 
         public void Close()
