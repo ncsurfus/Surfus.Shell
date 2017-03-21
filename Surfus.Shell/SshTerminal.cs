@@ -15,7 +15,7 @@ namespace Surfus.Shell
     {
         public StringBuilder _dataLog = new StringBuilder();
         public StringBuilder _readLog = new StringBuilder();
-        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger;
         private SemaphoreSlim _terminalSemaphore = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _terminalCancellation = new CancellationTokenSource();
         private State _terminalState = State.Initial;
@@ -29,6 +29,7 @@ namespace Surfus.Shell
         internal SshTerminal(SshClient sshClient, SshChannel channel)
         {
             _client = sshClient;
+            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
             _channel = channel;
             _channel.OnDataReceived = async (buffer, cancellationToken) =>
             {
@@ -118,14 +119,10 @@ namespace Surfus.Shell
 
         public async Task WriteLineAsync(string text, CancellationToken cancellationToken)
         {
-            if (text != "")
-            {
-                await WriteAsync(text, cancellationToken);
-            }
-            await WriteAsync("\n", cancellationToken);
+            await WriteAsync(text + "\n", cancellationToken);
         }
 
-        public async Task WriteLineAsync( CancellationToken cancellationToken)
+        public async Task WriteLineAsync(CancellationToken cancellationToken)
         {
             await WriteAsync("\n", cancellationToken);
         }

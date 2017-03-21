@@ -13,7 +13,7 @@ namespace Surfus.Shell
 {
     public class SshCommand : IDisposable
     {
-        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger;
         private SshChannel _channel;
         private SshClient _client;
         private bool _isDisposed;
@@ -25,6 +25,7 @@ namespace Surfus.Shell
         internal SshCommand(SshClient sshClient, SshChannel channel)
         {
             _client = sshClient;
+            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
             _channel = channel;
             _channel.OnDataReceived += async (buffer, cancellationToken) =>
             {

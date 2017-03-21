@@ -12,7 +12,7 @@ namespace Surfus.Shell
     internal class SshChannel : IDisposable
     {
         // Fields
-        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger;
         private readonly SemaphoreSlim _channelSemaphore = new SemaphoreSlim(1, 1);
         private State _channelState = new State();
         private bool _isDisposed;
@@ -36,6 +36,7 @@ namespace Surfus.Shell
         {
             _client = client;
             ClientId = channelId;
+            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
         }
 
         // This will be called by the user, NOT the Read Loop
@@ -230,6 +231,7 @@ namespace Surfus.Shell
             var length = message.Data.Length > ReceiveWindow ? ReceiveWindow : message.Data.Length;
             if (length != message.Data.Length)
             {
+                _logger.Info($"Server sent to much data, resizing from {message.Data.Length} to {ReceiveWindow}");
                 message.ResizeData(length);
             }
 
