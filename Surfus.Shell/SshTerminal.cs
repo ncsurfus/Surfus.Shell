@@ -116,9 +116,18 @@ namespace Surfus.Shell
             }
         }
 
-        public Task WriteLineAsync(string text, CancellationToken cancellationToken)
+        public async Task WriteLineAsync(string text, CancellationToken cancellationToken)
         {
-            return WriteAsync(text + "\n", cancellationToken);
+            if (text != "")
+            {
+                await WriteAsync(text, cancellationToken);
+            }
+            await WriteAsync("\n", cancellationToken);
+        }
+
+        public async Task WriteLineAsync( CancellationToken cancellationToken)
+        {
+            await WriteAsync("\n", cancellationToken);
         }
 
         public async Task<string> ReadAsync(CancellationToken cancellationToken)
