@@ -364,7 +364,7 @@ namespace Surfus.Shell
 
                     if (buffer[bufferPosition] == '\0')
                     {
-                        throw new InvalidDataException();
+                        throw new SshException("Server sent an invalid SSH version");
                     }
 
                     if (bufferPosition > 1 && buffer[bufferPosition] == '\n')
@@ -383,6 +383,10 @@ namespace Surfus.Shell
                                 await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken);
                                 await _tcpStream.FlushAsync(cancellationToken);
                                 return serverVersion;
+                            }
+                            else if(serverVersionMatch.Groups["ProtoVersion"].Value.StartsWith("1."))
+                            {
+                                throw new SshException("SSH Version " + serverVersionMatch.Groups["ProtoVersion"].Value + " is not supported");
                             }
                         }
 
