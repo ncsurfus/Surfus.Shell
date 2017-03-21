@@ -78,7 +78,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// </summary>
         private DhgGroup _dhgGroupMessage;
 
-        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DiffieHellmanGroupKeyExchange"/> class.
@@ -95,6 +95,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         public DiffieHellmanGroupKeyExchange(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult, string shaVersion)
         {
             _client = sshClient;
+            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
             _kexInitExchangeResult = kexInitExchangeResult;
             _shaVersion = shaVersion;
         }

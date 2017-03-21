@@ -24,7 +24,7 @@ namespace Surfus.Shell
         /// <summary>
         /// _logger is the logging mechanism. 
         /// </summary>
-        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger;
 
         /// <summary>
         /// _readLoopTask holds the task of the read loop.
@@ -123,6 +123,7 @@ namespace Surfus.Shell
         {
             ConnectionInfo.Hostname = hostname;
             ConnectionInfo.Port = port;
+            _logger = LogManager.GetLogger($"{ConnectionInfo.Hostname} {ConnectionInfo.Port}");
         }
 
         /// <summary>
