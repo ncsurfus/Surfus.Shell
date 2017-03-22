@@ -13,8 +13,6 @@ namespace Surfus.Shell
 {
     public class SshTerminal : IDisposable
     {
-        public StringBuilder _dataLog = new StringBuilder();
-        public StringBuilder _readLog = new StringBuilder();
         private Logger _logger;
         private SemaphoreSlim _terminalSemaphore = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _terminalCancellation = new CancellationTokenSource();
@@ -33,15 +31,18 @@ namespace Surfus.Shell
             _channel = channel;
             _channel.OnDataReceived = async (buffer, cancellationToken) =>
             {
+                _logger.Info("Terminal OnDataReceived is waiting for the terminal Semaphore");
                 await _terminalSemaphore.WaitAsync(cancellationToken);
+                _logger.Info("Terminal OnDataReceived has got the terminal Semaphore");
+                _logger.Info($"Terminal Data: {Encoding.UTF8.GetString(buffer)}");
 
-                _readLog.Append(Encoding.UTF8.GetString(buffer));
                 if (_terminalReadComplete?.TrySetResult(Encoding.UTF8.GetString(buffer)) != true)
                 {
                     _readBuffer.Append(Encoding.UTF8.GetString(buffer));
                 }
 
                 _terminalSemaphore.Release();
+                _logger.Info("Terminal OnDataReceived has released the terminal semaphore");
             };
 
             _channel.OnChannelCloseReceived = async (close, cancellationToken) =>
@@ -104,16 +105,17 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
+                _logger.Info($"WriteAsync is getting Semaphore");
                 await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
-
+                _logger.Info($"WriteAsync has got Semaphore");
                 if (_terminalState != State.Opened)
                 {
                     throw new Exception("Terminal not opened.");
                 }
-
+                 _terminalSemaphore.Release();
+                _logger.Info($"WriteAsync released Semaphore");
+                _logger.Info($"Writing {text}");
                 await _channel.WriteDataAsync(Encoding.UTF8.GetBytes(text), linkedCancellation.Token);
-
-                _terminalSemaphore.Release();
             }
         }
 
@@ -163,39 +165,34 @@ namespace Surfus.Shell
                 {
                     throw new Exception("Terminal not opened.");
                 }
-
-                if (_readBuffer.Length > 0)
-                {
-                    var text = _readBuffer[0];
-                    _readBuffer.Remove(0, 1);
-                    _terminalSemaphore.Release();
-                    return text;
-                }
-                _terminalReadComplete = new TaskCompletionSource<string>();
-                linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled());
+                var readBufferLength = _readBuffer.Length;
 
                 _terminalSemaphore.Release();
-                
-                var data = await _terminalReadComplete.Task;
+
+                while (readBufferLength <= 0)
+                {
+                    await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                    readBufferLength = _readBuffer.Length;
+
+                    _terminalSemaphore.Release();
+                    await Task.Delay(15, linkedCancellation.Token);
+                    linkedCancellation.Token.ThrowIfCancellationRequested();
+                }
 
                 await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
-                if(data.Length > 0)
-                {
-                    _readBuffer.Append(data, 1, data.Length - 1);
-                    var text = data[0];
-                    _terminalSemaphore.Release();
-                    return text;
-                }
 
+
+                var text = _readBuffer[0];
+                _readBuffer.Remove(0, 1);
                 _terminalSemaphore.Release();
-                throw new SshException("No Character to Read....");
+                return text;
             }
         }
 
         public async Task<string> ExpectAsync(string plainText, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
-
+            _logger.Info($"ExpectAsync waiting for {plainText}");
             try
             {
                 // Todo: Convert this to use Find and put the remaining data back in the buffer.
@@ -203,11 +200,12 @@ namespace Surfus.Shell
                 {
                     buffer.Append(await ReadCharAsync(cancellationToken));
                 }
+                _logger.Info($"ExpectAsync found {plainText} as {buffer.ToString()}");
                 return buffer.ToString();
             }
             catch
             {
-                _dataLog.Append(buffer.ToString()); // REMOVE ME - TSHOOT
+                _logger.Error($"Expecting '{plainText}', but buffer contained {buffer.ToString()}");
                 throw;
             }
         }
@@ -237,6 +235,7 @@ namespace Surfus.Shell
         {
             var buffer = new StringBuilder();
             var match = Regex.Match(buffer.ToString(), regexText, regexOptions);
+            _logger.Info($"ExpectRegexMatchAsync waiting for {regexText}");
             try
             {
                 // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
@@ -245,11 +244,12 @@ namespace Surfus.Shell
                     buffer.Append(await ReadCharAsync(cancellationToken));
                     match = Regex.Match(buffer.ToString(), regexText, regexOptions);
                 }
+                _logger.Info($"ExpectRegexMatchAsync found {regexText} as {buffer.ToString()}");
                 return match;
             }
             catch
             {
-                _dataLog.Append(buffer.ToString()); // REMOVE ME - TSHOOT
+                _logger.Error($"Expecting regex '{regexText}', but buffer contained {buffer.ToString()}");
                 throw;
             }
         }

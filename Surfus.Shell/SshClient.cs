@@ -126,6 +126,11 @@ namespace Surfus.Shell
             _logger = LogManager.GetLogger($"{ConnectionInfo.Hostname} {ConnectionInfo.Port}");
         }
 
+        public Logger GetLogger()
+        {
+            return LogManager.GetLogger($"{ConnectionInfo.Hostname} {ConnectionInfo.Port}");
+        }
+
         /// <summary>
         /// ConnectAsync connects to the SSH server with the specific username and password.
         /// </summary>
@@ -457,10 +462,11 @@ namespace Surfus.Shell
                     throw new InvalidDataException("Received a malformed packet from host.");
                 }
             }
-
+           
             ConnectionInfo.InboundPacketSequence = ConnectionInfo.InboundPacketSequence != uint.MaxValue ? ConnectionInfo.InboundPacketSequence + 1 : 0;
             var messageEvent = new MessageEvent(sshPacket.Payload);
-            _logger.Debug($"{ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Received {messageEvent.Type}");
+
+            _logger.Info($"Received message {messageEvent.Type}");
 
             // Key Exchange Messages
             switch (messageEvent.Type)
@@ -490,7 +496,6 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_CHANNEL_DATA:
                 case MessageType.SSH_MSG_CHANNEL_CLOSE:
                 case MessageType.SSH_MSG_CHANNEL_EOF:
-                    _logger.Debug($"Sending Channel Message to client");
                     await ProcessChannelMessageAsync(messageEvent, cancellationToken);
                     break;
                 default:
@@ -586,7 +591,6 @@ namespace Surfus.Shell
         private async Task ProcessChannelMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
             // Runs on background thread
-            _logger.Debug($"Checking Channel Message Type: {messageEvent.Message.ToString()}");
             if (messageEvent.Message is IChannelRecipient channelMessage)
             {
                 await _clientSemaphore.WaitAsync(cancellationToken);
@@ -649,7 +653,7 @@ namespace Surfus.Shell
                                                          ? ConnectionInfo.OutboundPacketSequence + 1
                                                          : 0;
 
-            _logger.Debug($"{ConnectionInfo.Hostname} - {nameof(WriteMessageAsync)}: Sent {message.Type}");
+            _logger.Debug($"Sent {message.Type}");
         }
 
         /// <summary>
