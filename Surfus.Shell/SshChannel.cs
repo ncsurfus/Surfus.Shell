@@ -47,10 +47,13 @@ namespace Surfus.Shell
                 var totalBytesLeft = buffer.Length;
                 while (totalBytesLeft > 0)
                 {
+                    _logger.Info("WriteDataAsync is getting Semaphore");
                     await _channelSemaphore.WaitAsync(linkedCancellation.Token);
+                    _logger.Info("WriteDataAsync has Semaphore");
                     _logger.Info("SendWindow is " + SendWindow);
                     if (totalBytesLeft <= SendWindow)
                     {
+                        _logger.Info("WriteDataAsync is sending data to WriteMessageAsync");
                         await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), linkedCancellation.Token);
                         SendWindow -= totalBytesLeft;
                         totalBytesLeft = 0;
@@ -59,10 +62,12 @@ namespace Surfus.Shell
                     {
                         var smallBuffer = new byte[SendWindow];
                         Array.Copy(buffer, smallBuffer, smallBuffer.Length);
+                        _logger.Info("WriteDataAsync is sending a portion of the data to WriteMessageAsync.");
                         await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), linkedCancellation.Token);
                         totalBytesLeft -= SendWindow;
                         SendWindow = 0;
                     }
+                    _logger.Info("WriteDataAsync has released Semaphore");
                     _channelSemaphore.Release();
                     await Task.Delay(100, linkedCancellation.Token);
                 }
@@ -207,24 +212,28 @@ namespace Surfus.Shell
                 throw new SshException("Received unexpected channel message.");
             }
 
-
             SendWindow += (int)message.BytesToAdd;
+            _logger.Info($"Send window has been increased {SendWindow}");
             _channelSemaphore.Release();
         }
 
         public async Task SendMessageAsync(ChannelData message, CancellationToken cancellationToken)
         {
+            _logger.Info("SendMessageAsync (ChannelData) is getting Semaphore");
             await _channelSemaphore.WaitAsync(cancellationToken);
+            _logger.Info("SendMessageAsync (ChannelData) has got the Semaphore");
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
                 _channelState = State.Errored;
                 _channelSemaphore.Release();
+                _logger.Info("SendMessageAsync (ChannelData) has released the Semaphore and thrown an exception");
                 throw new SshException("Received unexpected channel message.");
             }
 
             if (ReceiveWindow <= 0)
             {
                 _channelSemaphore.Release();
+                _logger.Info("SendMessageAsync (ChannelData) has released the Semaphore, as the ReceiveWindow is under 0");
                 return;
             }
 
@@ -239,17 +248,20 @@ namespace Surfus.Shell
 
             if (ReceiveWindow <= 0)
             {
+                _logger.Info("SendMessageAsync (ChannelData) is waiting on the client to send a message to increase the ChannelWindow");
                 await _client.WriteMessageAsync(new ChannelWindowAdjust(ServerId, (uint)WindowRefill), cancellationToken);
                 ReceiveWindow += WindowRefill;
             }
 
             if (OnDataReceived != null)
             {
-                _logger.Info($"ChannelData is: '{Encoding.UTF8.GetString(message.Data, 0, message.Data.Length)}'");
+                _logger.Info("SendMessageAsync (ChannelData) is waiting the upper level object.");
                 await OnDataReceived(message.Data, cancellationToken);
+                _logger.Info("SendMessageAsync (ChannelData) has completed sending the data to the upper level object.");
             }
 
             _channelSemaphore.Release();
+            _logger.Info("SendMessageAsync (ChannelData) has released the Semaphore");
         }
 
         public async Task SendMessageAsync(ChannelEof message, CancellationToken cancellationToken)
