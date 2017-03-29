@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <TargetFramework>netstandard1.4</TargetFramework>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
     <Authors>Nathan Surfus</Authors>
     <Description>Surfus.Shell is an SSH Client written in C#.</Description>
     <PackageId>Surfus.Shell</PackageId>
@@ -10,8 +10,7 @@
     <PackageTags>C# SSH .NET</PackageTags>
     <Title>Surfus.Shell</Title>
     <PackOnBuild>true</PackOnBuild>
-    <Version>1.0.1</Version>
-    <PostBuildEvent></PostBuildEvent>
+    <Version>1.0.1-Debug</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NLog" Version="5.0.0-beta06" />
