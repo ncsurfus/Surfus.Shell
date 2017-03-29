@@ -24,7 +24,7 @@ namespace Surfus.Shell
         /// <summary>
         /// _logger is the logging mechanism. 
         /// </summary>
-        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger;
 
         /// <summary>
         /// _readLoopTask holds the task of the read loop.
@@ -123,6 +123,12 @@ namespace Surfus.Shell
         {
             ConnectionInfo.Hostname = hostname;
             ConnectionInfo.Port = port;
+            _logger = LogManager.GetLogger($"{ConnectionInfo.Hostname} {ConnectionInfo.Port}");
+        }
+
+        public Logger GetLogger()
+        {
+            return LogManager.GetLogger($"{ConnectionInfo.Hostname} {ConnectionInfo.Port}");
         }
 
         /// <summary>
@@ -331,6 +337,8 @@ namespace Surfus.Shell
         private async Task<string> ExchangeVersionAsync(CancellationToken cancellationToken)
         {
             await _tcpConnection.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port);
+
+            // Attempt to get version..
             _tcpStream = _tcpConnection.GetStream();
             var serverVersionFilter = new Regex(@"^SSH-(?<ProtoVersion>\d\.\d+)-(?<SoftwareVersion>\S+)(?<Comments>\s[^\r\n]+)?", RegexOptions.Compiled);
 
@@ -338,56 +346,71 @@ namespace Surfus.Shell
             var buffer = new byte[ushort.MaxValue];
             var bufferPosition = 0;
 
-            while (_tcpStream.CanRead)
+            while (_tcpStream.CanRead && !cancellationToken.IsCancellationRequested)
             {
                 if (bufferPosition == ushort.MaxValue)
                 {
                     throw new ArgumentOutOfRangeException();
                 }
 
-                var readAmount = await _tcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken);
-                if (readAmount <= 0)
+                if (_tcpStream.DataAvailable)
                 {
-                    _logger.Fatal($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
-                    if (bufferPosition == 0)
-                    {
-                        _logger.Fatal($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Buffer Position is 0, no data sent. Possibly too many connections");
-                        throw new EndOfStreamException($"Buffer Position is 0, no data sent. Possibly too many connections");
-                    }
-                    throw new EndOfStreamException($"Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
-                }
+                    var readAmount = await _tcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken);
 
-                if (buffer[bufferPosition] == '\0')
-                {
-                    throw new InvalidDataException();
-                }
-
-                if (bufferPosition > 1 && buffer[bufferPosition] == '\n')
-                {
-                    var serverVersion = buffer[bufferPosition - 1] == '\r'
-                                            ? Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 2)
-                                            : Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 1);
-                    var serverVersionMatch = serverVersionFilter.Match(serverVersion);
-                    if (serverVersionMatch.Success)
+                    if (readAmount <= 0)
                     {
-                        if (serverVersionMatch.Groups["ProtoVersion"].Value == "2.0" || serverVersionMatch.Groups["ProtoVersion"].Value == "1.99")
+                        _logger.Fatal($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
+                        if (bufferPosition == 0)
                         {
-
-                            // Send our version after. Seems to be a bug with some IOS versions if we're to fast and send this first.
-                            var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
-                            await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken);
-                            await _tcpStream.FlushAsync(cancellationToken);
-
-                            return serverVersion;
+                            _logger.Fatal($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Buffer Position is 0, no data sent. Possibly too many connections");
+                            throw new EndOfStreamException($"Buffer Position is 0, no data sent. Possibly too many connections");
                         }
+                        throw new EndOfStreamException($"Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
                     }
 
-                    buffer = new byte[ushort.MaxValue];
-                    bufferPosition = 0;
+                    if (buffer[bufferPosition] == '\0')
+                    {
+                        throw new SshException("Server sent an invalid SSH version");
+                    }
+
+                    if (bufferPosition > 1 && buffer[bufferPosition] == '\n')
+                    {
+                        var serverVersion = buffer[bufferPosition - 1] == '\r'
+                                                ? Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 2)
+                                                : Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 1);
+                        var serverVersionMatch = serverVersionFilter.Match(serverVersion);
+                        if (serverVersionMatch.Success)
+                        {
+                            if (serverVersionMatch.Groups["ProtoVersion"].Value == "2.0" || serverVersionMatch.Groups["ProtoVersion"].Value == "1.99")
+                            {
+
+                                // Send our version after. Seems to be a bug with some IOS versions if we're to fast and send this first.
+                                var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
+                                await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken);
+                                await _tcpStream.FlushAsync(cancellationToken);
+                                return serverVersion;
+                            }
+                            else if(serverVersionMatch.Groups["ProtoVersion"].Value.StartsWith("1."))
+                            {
+                                throw new SshException("SSH Version " + serverVersionMatch.Groups["ProtoVersion"].Value + " is not supported");
+                            }
+                        }
+
+                        buffer = new byte[ushort.MaxValue];
+                        bufferPosition = 0;
+                    }
+                    bufferPosition += readAmount;
                 }
-                bufferPosition += readAmount;
+                else
+                {
+                    await Task.Delay(100);
+                }
             }
 
+            if (cancellationToken.IsCancellationRequested)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
 
             throw new SshException("Invalid version from server");
         }
@@ -439,10 +462,11 @@ namespace Surfus.Shell
                     throw new InvalidDataException("Received a malformed packet from host.");
                 }
             }
-
+           
             ConnectionInfo.InboundPacketSequence = ConnectionInfo.InboundPacketSequence != uint.MaxValue ? ConnectionInfo.InboundPacketSequence + 1 : 0;
             var messageEvent = new MessageEvent(sshPacket.Payload);
-            _logger.Debug($"{ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Received {messageEvent.Type}");
+
+            _logger.Info($"Received message {messageEvent.Type}");
 
             // Key Exchange Messages
             switch (messageEvent.Type)
@@ -472,7 +496,6 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_CHANNEL_DATA:
                 case MessageType.SSH_MSG_CHANNEL_CLOSE:
                 case MessageType.SSH_MSG_CHANNEL_EOF:
-                    _logger.Debug($"Sending Channel Message to client");
                     await ProcessChannelMessageAsync(messageEvent, cancellationToken);
                     break;
                 default:
@@ -568,7 +591,6 @@ namespace Surfus.Shell
         private async Task ProcessChannelMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
             // Runs on background thread
-            _logger.Debug($"Checking Channel Message Type");
             if (messageEvent.Message is IChannelRecipient channelMessage)
             {
                 await _clientSemaphore.WaitAsync(cancellationToken);
@@ -631,7 +653,7 @@ namespace Surfus.Shell
                                                          ? ConnectionInfo.OutboundPacketSequence + 1
                                                          : 0;
 
-            _logger.Debug($"{ConnectionInfo.Hostname} - {nameof(WriteMessageAsync)}: Sent {message.Type}");
+            _logger.Debug($"Sent {message.Type}");
         }
 
         /// <summary>

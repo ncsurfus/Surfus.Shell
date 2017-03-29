@@ -13,7 +13,7 @@ namespace Surfus.Shell
 {
     public class SshTerminal : IDisposable
     {
-        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger;
         private SemaphoreSlim _terminalSemaphore = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _terminalCancellation = new CancellationTokenSource();
         private State _terminalState = State.Initial;
@@ -27,17 +27,22 @@ namespace Surfus.Shell
         internal SshTerminal(SshClient sshClient, SshChannel channel)
         {
             _client = sshClient;
+            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
             _channel = channel;
             _channel.OnDataReceived = async (buffer, cancellationToken) =>
             {
+                _logger.Info("Terminal OnDataReceived is waiting for the terminal Semaphore");
                 await _terminalSemaphore.WaitAsync(cancellationToken);
+                _logger.Info("Terminal OnDataReceived has got the terminal Semaphore");
+                _logger.Info($"Terminal Data: {Encoding.UTF8.GetString(buffer)}");
 
-                if(_terminalReadComplete?.TrySetResult(Encoding.UTF8.GetString(buffer)) != true)
+                if (_terminalReadComplete?.TrySetResult(Encoding.UTF8.GetString(buffer)) != true)
                 {
                     _readBuffer.Append(Encoding.UTF8.GetString(buffer));
                 }
 
                 _terminalSemaphore.Release();
+                _logger.Info("Terminal OnDataReceived has released the terminal semaphore");
             };
 
             _channel.OnChannelCloseReceived = async (close, cancellationToken) =>
@@ -100,22 +105,28 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
+                _logger.Info($"WriteAsync is getting Semaphore");
                 await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
-
+                _logger.Info($"WriteAsync has got Semaphore");
                 if (_terminalState != State.Opened)
                 {
                     throw new Exception("Terminal not opened.");
                 }
-
+                 _terminalSemaphore.Release();
+                _logger.Info($"WriteAsync released Semaphore");
+                _logger.Info($"Writing {text}");
                 await _channel.WriteDataAsync(Encoding.UTF8.GetBytes(text), linkedCancellation.Token);
-
-                _terminalSemaphore.Release();
             }
         }
 
-        public Task WriteLineAsync(string text, CancellationToken cancellationToken)
+        public async Task WriteLineAsync(string text, CancellationToken cancellationToken)
         {
-            return WriteAsync(text + "\n", cancellationToken);
+            await WriteAsync(text + "\n", cancellationToken);
+        }
+
+        public async Task WriteLineAsync(CancellationToken cancellationToken)
+        {
+            await WriteAsync("\n", cancellationToken);
         }
 
         public async Task<string> ReadAsync(CancellationToken cancellationToken)
@@ -136,12 +147,12 @@ namespace Surfus.Shell
                     _terminalSemaphore.Release();
                     return text;
                 }
-                _terminalSemaphore.Release();
                 _terminalReadComplete = new TaskCompletionSource<string>();
-
-                linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled());
-
-                return await _terminalReadComplete.Task;
+                using (linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled()))
+                {
+                    _terminalSemaphore.Release();
+                    return await _terminalReadComplete.Task;
+                }
             }
         }
 
@@ -163,52 +174,101 @@ namespace Surfus.Shell
                     _terminalSemaphore.Release();
                     return text;
                 }
-                _terminalSemaphore.Release();
                 _terminalReadComplete = new TaskCompletionSource<string>();
-
-                linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled());
-
-                var data = await _terminalReadComplete.Task;
-
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
-                if(data.Length > 0)
-                {
-                    _readBuffer.Append(data, 1, data.Length - 1);
-                    var text = data[0];
-                    _terminalSemaphore.Release();
-                    return text;
-                }
-
                 _terminalSemaphore.Release();
-                throw new SshException("No Character to Read....");
+
+                using (linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled()))
+                {
+                    var text = await _terminalReadComplete.Task;
+                    await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                    _readBuffer.Insert(0, text.Substring(1, text.Length - 1));
+                    _terminalSemaphore.Release();
+                    return text[0];
+                }
+            }
+        }
+
+        public async Task<string> ExpectSlowAsync(string plainText, CancellationToken cancellationToken)
+        {
+            var buffer = new StringBuilder();
+            _logger.Info($"ExpectAsync waiting for {plainText}");
+            try
+            {
+                // Todo: Convert this to use Find and put the remaining data back in the buffer.
+                while (!buffer.ToString().Contains(plainText))
+                {
+                    buffer.Append(await ReadCharAsync(cancellationToken));
+                }
+                _logger.Info($"ExpectAsync found {plainText} as {buffer.ToString()}");
+                return buffer.ToString();
+            }
+            catch
+            {
+                _logger.Error($"Expecting '{plainText}', but buffer contained {buffer.ToString()}");
+                throw;
             }
         }
 
         public async Task<string> ExpectAsync(string plainText, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
-            // Todo: Convert this to use Find and put the remaining data back in the buffer.
-            while (!buffer.ToString().Contains(plainText))
+            _logger.Info($"ExpectFastAsync waiting for {plainText}");
+            try
             {
-                buffer.Append(await ReadCharAsync(cancellationToken));
+                var index = -1;
+                while ((index = buffer.ToString().IndexOf(plainText)) == -1)
+                {
+                    buffer.Append(await ReadAsync(cancellationToken));
+                }
+                using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
+                {
+                    index = index + plainText.Length;
+                    var fixedBuffer = buffer.ToString(0, index);
+                    var overflow = buffer.ToString(index, buffer.Length - index);
+                    await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                    _readBuffer.Insert(0, overflow);
+                    _logger.Info($"ExpectAsync found {plainText} as {buffer.ToString()}");
+                    _terminalSemaphore.Release();
+                    return fixedBuffer;
+                }
             }
-            return buffer.ToString();
+            catch
+            {
+                _logger.Error($"Expecting '{plainText}', but buffer contained {buffer.ToString()}");
+                throw;
+            }
         }
 
-        public Task<string> ExpectRegexAsync(string regexText, CancellationToken cancellationToken)
+        public async Task<string> ExpectRegexAsync(string regexText, CancellationToken cancellationToken)
         {
-            return ExpectRegexAsync(regexText, RegexOptions.None, cancellationToken);
+            return (await ExpectRegexMatchAsync(regexText, RegexOptions.None, cancellationToken)).Value;
         }
 
-        public async Task<string> ExpectRegexAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
+        public async Task<string> ExpectRegexSlowAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
+        {
+            return (await ExpectRegexMatchAsync(regexText, regexOptions, cancellationToken)).Value;
+        }
+
+        public async Task<Match> ExpectRegexMatchAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
             // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
-            while (!Regex.Match(buffer.ToString(), regexText, regexOptions).Success)
+            Match regexMatch = null;
+            while (!(regexMatch = Regex.Match(buffer.ToString(), regexText, regexOptions)).Success)
             {
-                buffer.Append(await ReadCharAsync(cancellationToken));
+                buffer.Append(await ReadAsync(cancellationToken));
             }
-            return buffer.ToString();
+            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
+            {
+                var index = regexMatch.Index + regexMatch.Length;
+                var fixedBuffer = buffer.ToString(0, index);
+                var overflow = buffer.ToString(index, buffer.Length - index);
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                _readBuffer.Insert(0, overflow);
+                _logger.Info($"ExpectAsync found {regexText} as {_readBuffer}");
+                _terminalSemaphore.Release();
+                return regexMatch;
+            }
         }
 
         public Task<Match> ExpectRegexMatchAsync(string regexText, CancellationToken cancellationToken)
@@ -216,18 +276,27 @@ namespace Surfus.Shell
             return ExpectRegexMatchAsync(regexText, RegexOptions.None, cancellationToken);
         }
 
-        public async Task<Match> ExpectRegexMatchAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
+        public async Task<Match> ExpectRegexMatchSlowAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
             var match = Regex.Match(buffer.ToString(), regexText, regexOptions);
-
-            // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
-            while (!match.Success)
+            _logger.Info($"ExpectRegexMatchAsync waiting for {regexText}");
+            try
             {
-                buffer.Append(await ReadCharAsync(cancellationToken));
-                match = Regex.Match(buffer.ToString(), regexText, regexOptions);
+                // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
+                while (!match.Success)
+                {
+                    buffer.Append(await ReadCharAsync(cancellationToken));
+                    match = Regex.Match(buffer.ToString(), regexText, regexOptions);
+                }
+                _logger.Info($"ExpectRegexMatchAsync found {regexText} as {buffer.ToString()}");
+                return match;
             }
-            return match;
+            catch
+            {
+                _logger.Error($"Expecting regex '{regexText}', but buffer contained {buffer.ToString()}");
+                throw;
+            }
         }
 
         public void Close()

@@ -21,7 +21,16 @@ namespace Surfus.Shell
         /// <returns></returns>
         public static async Task<Match> GetFullPromptAsync(this SshTerminal terminal, CancellationToken cancellationToken)
         {
-            return (await terminal.ExpectRegexMatchAsync(@"^(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#))\s*$", RegexOptions.Multiline, cancellationToken));
+            await terminal.GetInitialDelimiter(cancellationToken);
+            var hostname = await terminal.ExpectRegexMatchAsync(@"^\s?(?<fullPrompt>(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#)))\s*$", RegexOptions.Multiline, cancellationToken);
+            await terminal.WriteLineAsync("", cancellationToken);
+            return hostname;
+        }
+
+        public static async Task GetInitialDelimiter(this SshTerminal terminal, CancellationToken cancellationToken)
+        {
+            await terminal.WriteLineAsync(@"terminal length 0", cancellationToken);
+            await terminal.ExpectAsync(@"terminal length 0", cancellationToken);
         }
 
         public static async Task<TerminalMode> GetTerminalModeAsync(this SshTerminal terminal, CancellationToken cancellationToken)
@@ -88,6 +97,8 @@ namespace Surfus.Shell
             {
                 throw new SshException("Server rejected enable request and returned to password prompt");
             }
+
+            //Generate new prompt
         }
 
         public enum TerminalMode
