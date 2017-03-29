@@ -1,16 +1,16 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Numerics;
+
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Extensions;
 using System.Security.Cryptography;
+using System.Numerics;
 
 namespace Surfus.Shell.Signing
 {
     public sealed class SshDss : Signer
     {
-
         public SshDss(byte[] signature)
 		{
             Raw = signature;
@@ -21,23 +21,10 @@ namespace Surfus.Shell.Signing
                     throw new Exception($"Expected {Name} signature type");
                 }
 
-                var p = memoryStream.ReadBinaryString();
-                var q = memoryStream.ReadBinaryString();
-                var g = memoryStream.ReadBinaryString();
-                var y = memoryStream.ReadBinaryString();
-
-                DsaParameters = new DSAParameters
-                {
-                    P = p[0] != 0 ? p : p.Skip(1).ToArray(),
-                    Q = q[0] != 0 ? q : q.Skip(1).ToArray(),
-                    G = g[0] != 0 ? g : g.Skip(1).ToArray(),
-                    Y = y[0] != 0 ? y : y.Skip(1).ToArray()
-                };
-
-                P = CreateBigInteger.FromUnsignedBigEndian(DsaParameters.P);
-                Q = CreateBigInteger.FromUnsignedBigEndian(DsaParameters.Q);
-                G = CreateBigInteger.FromUnsignedBigEndian(DsaParameters.G);
-                Y = CreateBigInteger.FromUnsignedBigEndian(DsaParameters.Y);
+                P = memoryStream.ReadBigInteger();
+                Q = memoryStream.ReadBigInteger();
+                G = memoryStream.ReadBigInteger();
+                Y = memoryStream.ReadBigInteger();
             }
         }
 
@@ -45,33 +32,75 @@ namespace Surfus.Shell.Signing
         public BigInteger Q { get; }
         public BigInteger G { get; }
         public BigInteger Y { get; }
-        public DSAParameters DsaParameters { get; }
 
         public override string Name { get; } = "ssh-dss";
         public override byte[] Raw { get; }
 
         public override int GetKeySize()
         {
-            using (var provider = new DSACryptoServiceProvider())
-            {
-                return provider.KeySize;
-            }
+            return Y.ToByteArray().Length * 8;
         }
 
         public override bool VerifySignature(byte[] data, byte[] signature)
         {
-            using (var provider = new DSACryptoServiceProvider())
+            using(var hashAlgorithm = SHA1.Create())
             using (var memoryStream = new MemoryStream(signature))
             {
-                provider.ImportParameters(DsaParameters);
+                var hash = CreateBigInteger.FromUnsignedBigEndian(hashAlgorithm.ComputeHash(data));
+
                 var header = memoryStream.ReadString();
                 if (Name != header)
                 {
-                    throw new SshException("Invalid ssh-dss header.");
+                    throw new SshException("Invalid DSS Header.");
+                }
+                var blob = memoryStream.ReadBinaryString();
+                var r = CreateBigInteger.FromUnsignedBigEndian(blob.Take(20).ToArray());
+                var s = CreateBigInteger.FromUnsignedBigEndian(blob.Skip(20).Take(20).ToArray());
+
+                if (r <= 0 || r >= Q)
+                {
+                    throw new SshException("Invalid DSS 'R'.");
                 }
 
-                return provider.VerifyData(data, memoryStream.ReadBinaryString());
+                if (s <= 0 || s >= Q)
+                {
+                    throw new SshException("Invalid DSS 'S'.");
+                }
+
+                var w = ModInverse(s, Q);
+                var u1 = hash * w % Q;
+                var u2 = r * w % Q;
+                u1 = BigInteger.ModPow(G, u1, P);
+                u2 = BigInteger.ModPow(Y, u2, P);
+
+                var v = ((u1 * u2) % P) % Q;
+               
+                return v == r;
             }
+        }
+
+        BigInteger ModInverse(BigInteger a, BigInteger n)
+        {
+            BigInteger i = n, v = 0, d = 1;
+
+            while (a > 0)
+            {
+                BigInteger t = i / a, x = a;
+                a = i % x;
+                i = x;
+                x = d;
+                d = v - t * x;
+                v = x;
+            }
+
+            v %= n;
+
+            if (v < 0)
+            {
+                v = (v + n) % n;
+            }
+
+            return v;
         }
     }
 }

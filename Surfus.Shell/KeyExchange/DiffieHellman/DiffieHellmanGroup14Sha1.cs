@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿using System;
+using System.Globalization;
 using System.Numerics;
 
 namespace Surfus.Shell.KeyExchange.DiffieHellman
@@ -14,7 +15,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             E = BigInteger.Zero;
 			while (E < 1 || E > P - 1)
 			{
-				if (!sshClient.ConnectionInfo.ServerVersion.Contains("OpenSSH_6.6.1p1"))
+				if (!sshClient.ConnectionInfo.ServerVersion.Contains("OpenSSH"))
 				{
 					X = GenerateRandomBigInteger(1, 4096);
 					E = BigInteger.ModPow(G, X, P);
