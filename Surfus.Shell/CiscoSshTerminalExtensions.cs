@@ -22,7 +22,7 @@ namespace Surfus.Shell
         public static async Task<Match> GetFullPromptAsync(this SshTerminal terminal, CancellationToken cancellationToken)
         {
             await terminal.GetInitialDelimiter(cancellationToken);
-            var hostname = await terminal.ExpectRegexMatchAsync(@"^\s?(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#))\s*$", RegexOptions.Multiline, cancellationToken);
+            var hostname = await terminal.ExpectRegexMatchAsync(@"^\s?(?<fullPrompt>(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#)))\s*$", RegexOptions.Multiline, cancellationToken);
             await terminal.WriteLineAsync("", cancellationToken);
             return hostname;
         }
