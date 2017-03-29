@@ -29,7 +29,7 @@ namespace Surfus.Shell.KeyExchange
             =>
                 new[]
                     {
-                         "diffie-hellman-group-exchange-sha256", "diffie-hellman-group-exchange-sha1", "diffie-hellman-group14-sha1", "diffie-hellman-group1-sha1"
+                         "diffie-hellman-group14-sha1", "diffie-hellman-group1-sha1", "diffie-hellman-group-exchange-sha1", "diffie-hellman-group-exchange-sha256"
                     };
 
         /// <summary>
@@ -122,11 +122,13 @@ namespace Surfus.Shell.KeyExchange
         {
             BigInteger randomValue;
             var randomBytes = new byte[maxValue.ToByteArray().Length + 1];
+            int i = 0;
             do
             {
                 _randomGenerator.GetBytes(randomBytes);
                 randomBytes[randomBytes.Length - 1] = 0;
                 randomValue = new BigInteger(randomBytes);
+                i++;
             }
             while (randomValue < minValue || randomValue > maxValue);
             return randomValue;

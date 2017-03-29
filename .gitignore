@@ -4,4 +4,4 @@ obj/
 packages/
 *.DS_Store
 *.userprefs
-*.user
+PublishProfiles

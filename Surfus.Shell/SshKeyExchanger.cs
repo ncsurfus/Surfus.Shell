@@ -14,7 +14,7 @@ namespace Surfus.Shell
     internal class SshKeyExchanger
     {
         // Fields
-        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly SemaphoreSlim _sshKeyExchangeSemaphore = new SemaphoreSlim(1, 1);
         private State _keyExchangeState = State.Initial;
         private KexInit _clientKexInit;
@@ -28,6 +28,7 @@ namespace Surfus.Shell
         internal SshKeyExchanger(SshClient client)
         {
             _client = client;
+            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
         }
 
         // Attempts to send a client kex init packet if we're in the expected state.

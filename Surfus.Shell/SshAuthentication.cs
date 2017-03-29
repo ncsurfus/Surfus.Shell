@@ -13,7 +13,7 @@ namespace Surfus.Shell
     {
 
         // Fields
-        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger = LogManager.GetCurrentClassLogger();
         private SshClient _client { get; }
         private readonly SemaphoreSlim _loginSemaphore = new SemaphoreSlim(1, 1);
         private State _loginState = State.Initial;
@@ -28,6 +28,7 @@ namespace Surfus.Shell
         public SshAuthentication(SshClient sshClient)
         {
             _client = sshClient;
+            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
         }
 
         public async Task LoginAsync(string username, string password, CancellationToken cancellationToken)
