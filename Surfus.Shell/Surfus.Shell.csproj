@@ -3,6 +3,14 @@
     <OutputType>Library</OutputType>
     <TargetFramework>netcoreapp1.1</TargetFramework>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageVersion>0.1</PackageVersion>
+    <Authors>Nathan Surfus</Authors>
+    <Description>Surfus.Shell is an SSH Client written in C#.</Description>
+    <PackageId>Surfus.Shell</PackageId>
+    <Owners>Nathan Surfus</Owners>
+    <PackageTags>C# SSH .NET</PackageTags>
+    <Title>Surfus.Shell</Title>
+    <PackOnBuild>true</PackOnBuild>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NLog" Version="5.0.0-beta06" />
