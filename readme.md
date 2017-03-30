@@ -1,5 +1,9 @@
-﻿# Surfus.Shell
+# Surfus.Shell
+---
+Surfus.Shell is an SSH library for .NET designed around tasks and parallelism.
 
-----
-## What is Surfus.Shell?
-Surfus.Shell is a fast SSH library developed in C# that is single threaded and fully asynchronous and task based. It's original use case was to SSH into hundreds of Cisco routers/switches simultaneously and run commands.
+## Goals
+ - Completely asynchronous, non blocking I/O, built on the Task Parallel Library
+ - Support for network devices (Routers and Switches)
+ - .NET Core and .NET Standard
+
