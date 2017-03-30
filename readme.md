@@ -1,5 +1,4 @@
 # Surfus.Shell
----
 Surfus.Shell is an SSH library for .NET designed around tasks and parallelism.
 
 ## Goals
