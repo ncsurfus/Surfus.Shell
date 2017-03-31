@@ -9,8 +9,6 @@ namespace Surfus.Shell.Crypto
 {
     internal class NoCrypto : CryptoAlgorithm
     {
-        private static Logger logger = LogManager.GetCurrentClassLogger();
-
         public override int CipherBlockSize { get; } = 8;
         public override int InitializationVectorSize { get; } = 0;
         public override int KeySize { get; } = 0;
