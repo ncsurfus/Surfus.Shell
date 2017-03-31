@@ -10,7 +10,7 @@
     <PackageTags>C# SSH .NET</PackageTags>
     <Title>Surfus.Shell</Title>
     <PackOnBuild>true</PackOnBuild>
-    <Version>1.0.1-Debug</Version>
+    <Version>1.0.5-Debug</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NLog" Version="5.0.0-beta06" />
