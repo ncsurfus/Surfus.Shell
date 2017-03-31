@@ -168,20 +168,23 @@ namespace Surfus.Shell
                 ConnectionInfo.KeyExchanger = new SshKeyExchanger(this);
                 ConnectionInfo.Authentication = new SshAuthentication(this);
 
-                // Perform version exchange and key exchange
-                linkedCancellation.Token.Register(() => _initialKeyExchangeCompleted?.TrySetCanceled());
-                _initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
-                ConnectionInfo.ServerVersion = await ExchangeVersionAsync((linkedCancellation.Token));
-                _logger.Info("Server Version: " + ConnectionInfo.ServerVersion);
-                _readLoopTask = ReadLoop();
-                await _initialKeyExchangeCompleted.Task;
+				// Perform version exchange and key exchange
+				using (linkedCancellation.Token.Register(() => _initialKeyExchangeCompleted?.TrySetCanceled()))
+				{
+					_initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
+					ConnectionInfo.ServerVersion = await ExchangeVersionAsync((linkedCancellation.Token));
+					_logger.Info("Server Version: " + ConnectionInfo.ServerVersion);
+					_readLoopTask = ReadLoop();
+					await _initialKeyExchangeCompleted.Task;
+				}
 
                 // Perform login
                 _loginCompleted = new TaskCompletionSource<bool>();
-                linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled());
-                await ConnectionInfo.Authentication.LoginAsync(username, password, linkedCancellation.Token);
-                await _loginCompleted.Task;
-
+				using (linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled()))
+				{
+					await ConnectionInfo.Authentication.LoginAsync(username, password, linkedCancellation.Token);
+					await _loginCompleted.Task;
+				}
                 // Set new state
                 _sshClientState = State.Connected;
 
@@ -226,20 +229,23 @@ namespace Surfus.Shell
                 ConnectionInfo.KeyExchanger = new SshKeyExchanger(this);
                 ConnectionInfo.Authentication = new SshAuthentication(this);
 
-                // Perform version exchange and key exchange
-                linkedCancellation.Token.Register(() => _initialKeyExchangeCompleted?.TrySetCanceled());
-                _initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
-                ConnectionInfo.ServerVersion = await ExchangeVersionAsync((linkedCancellation.Token));
-                _logger.Info("Server Version: " + ConnectionInfo.ServerVersion);
-                _readLoopTask = ReadLoop();
-                await _initialKeyExchangeCompleted.Task;
+				// Perform version exchange and key exchange
+				using (linkedCancellation.Token.Register(() => _initialKeyExchangeCompleted?.TrySetCanceled()))
+				{
+					_initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
+					ConnectionInfo.ServerVersion = await ExchangeVersionAsync((linkedCancellation.Token));
+					_logger.Info("Server Version: " + ConnectionInfo.ServerVersion);
+					_readLoopTask = ReadLoop();
+					await _initialKeyExchangeCompleted.Task;
+				}
 
                 // Perform login
                 _loginCompleted = new TaskCompletionSource<bool>();
-                linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled());
-                await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, linkedCancellation.Token);
-                await _loginCompleted.Task;
-
+				using (linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled()))
+				{
+					await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, linkedCancellation.Token);
+					await _loginCompleted.Task;
+				}
                 // Set new state
                 _sshClientState = State.Connected;
 

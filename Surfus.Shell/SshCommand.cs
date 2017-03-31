@@ -108,33 +108,35 @@ namespace Surfus.Shell
                 var executeCloseTaskSource = new TaskCompletionSource<bool>();
                 var executeEofTaskSource = new TaskCompletionSource<bool>();
 
-                linkedCancellation.Token.Register(() => executeCloseTaskSource?.TrySetCanceled());
-                linkedCancellation.Token.Register(() => executeEofTaskSource?.TrySetCanceled());
+				using (linkedCancellation.Token.Register(() => executeCloseTaskSource?.TrySetCanceled()))
+				using (linkedCancellation.Token.Register(() => executeEofTaskSource?.TrySetCanceled()))
+				{
 
-                _channel.OnChannelEofReceived = async (message, token) =>
-                {
-                    await _commandSemaphore.WaitAsync(linkedCancellation.Token);
+					_channel.OnChannelEofReceived = async (message, token) =>
+					{
+						await _commandSemaphore.WaitAsync(linkedCancellation.Token);
 
-                    executeEofTaskSource.SetResult(true);
+						executeEofTaskSource.SetResult(true);
 
-                    _commandSemaphore.Release();
-                };
+						_commandSemaphore.Release();
+					};
 
-                _channel.OnChannelCloseReceived = async (message, token) =>
-                {
-                    await _commandSemaphore.WaitAsync(linkedCancellation.Token);
+					_channel.OnChannelCloseReceived = async (message, token) =>
+					{
+						await _commandSemaphore.WaitAsync(linkedCancellation.Token);
 
-                    executeCloseTaskSource.SetResult(true);
+						executeCloseTaskSource.SetResult(true);
 
-                    _commandSemaphore.Release();
-                };
+						_commandSemaphore.Release();
+					};
 
-                await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), _client.InternalCancellation.Token);
-                _commandSemaphore.Release();
+					await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), _client.InternalCancellation.Token);
+					_commandSemaphore.Release();
 
 
-                await executeEofTaskSource.Task;
-                await executeCloseTaskSource.Task;
+					await executeEofTaskSource.Task;
+					await executeCloseTaskSource.Task;
+				}
 
                 _channel.OnChannelEofReceived = null;
                 _channel.OnChannelCloseReceived = null;
