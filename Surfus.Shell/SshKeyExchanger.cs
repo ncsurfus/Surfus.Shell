@@ -14,7 +14,7 @@ namespace Surfus.Shell
     internal class SshKeyExchanger
     {
         // Fields
-        private Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger;
         private readonly SemaphoreSlim _sshKeyExchangeSemaphore = new SemaphoreSlim(1, 1);
         private State _keyExchangeState = State.Initial;
         private KexInit _clientKexInit;

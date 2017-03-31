@@ -13,7 +13,7 @@ namespace Surfus.Shell
     {
 
         // Fields
-        private Logger _logger = LogManager.GetCurrentClassLogger();
+        private Logger _logger;
         private SshClient _client { get; }
         private readonly SemaphoreSlim _loginSemaphore = new SemaphoreSlim(1, 1);
         private State _loginState = State.Initial;
