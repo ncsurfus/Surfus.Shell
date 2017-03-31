@@ -167,7 +167,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
         public override Task<bool> SendKeyExchangeMessage30Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            throw new SshUnexpectedMessage(MessageType.SSH_MSG_KEX_Exchange_30);
         }
 
         public override async Task<bool> SendKeyExchangeMessage31Async(MessageEvent message, CancellationToken cancellationToken)
@@ -207,7 +207,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
         public override Task<bool> SendKeyExchangeMessage32Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            throw new SshUnexpectedMessage(MessageType.SSH_MSG_KEX_Exchange_32);
         }
 
         public override async Task<bool> SendKeyExchangeMessage33Async(MessageEvent message, CancellationToken cancellationToken)
@@ -278,7 +278,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
         public override Task<bool> SendKeyExchangeMessage34Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+			throw new SshUnexpectedMessage(MessageType.SSH_MSG_KEX_Exchange_34);
         }
 
         // State represents the current state of the key exchange algorithm
