@@ -21,21 +21,21 @@ namespace Surfus.Shell
         /// <returns></returns>
         public static async Task<Match> GetFullPromptAsync(this SshTerminal terminal, CancellationToken cancellationToken)
         {
-            await terminal.GetInitialDelimiter(cancellationToken);
-            var hostname = await terminal.ExpectRegexMatchAsync(@"^\s?(?<fullPrompt>(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#)))\s*$", RegexOptions.Multiline, cancellationToken);
-            await terminal.WriteLineAsync("", cancellationToken);
+            await terminal.GetInitialDelimiter(cancellationToken).ConfigureAwait(false);
+            var hostname = await terminal.ExpectRegexMatchAsync(@"^\s?(?<fullPrompt>(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#)))\s*$", RegexOptions.Multiline, cancellationToken).ConfigureAwait(false);
+            await terminal.WriteLineAsync("", cancellationToken).ConfigureAwait(false);
             return hostname;
         }
 
         public static async Task GetInitialDelimiter(this SshTerminal terminal, CancellationToken cancellationToken)
         {
-            await terminal.WriteLineAsync(@"terminal length 0", cancellationToken);
-            await terminal.ExpectAsync(@"terminal length 0", cancellationToken);
+            await terminal.WriteLineAsync(@"terminal length 0", cancellationToken).ConfigureAwait(false);
+            await terminal.ExpectAsync(@"terminal length 0", cancellationToken).ConfigureAwait(false);
         }
 
         public static async Task<TerminalMode> GetTerminalModeAsync(this SshTerminal terminal, CancellationToken cancellationToken)
         {
-            var initialMode = await terminal.ExpectRegexMatchAsync(@"((?<privileged>\#)|(?<user>)>)\s*", cancellationToken);
+            var initialMode = await terminal.ExpectRegexMatchAsync(@"((?<privileged>\#)|(?<user>)>)\s*", cancellationToken).ConfigureAwait(false);
 
             if (initialMode.Groups["privileged"].Success)
             {
@@ -53,16 +53,16 @@ namespace Surfus.Shell
         public static async Task GetEnableModeAsync(this SshTerminal terminal, string enablePassword, CancellationToken cancellationToken)
         {
             // Get current state. Return if already at privileged.
-            var currentMode = await terminal.GetTerminalModeAsync(cancellationToken);
+            var currentMode = await terminal.GetTerminalModeAsync(cancellationToken).ConfigureAwait(false);
             if(currentMode == TerminalMode.Privileged)
             {
                 return;
             }
 
             // Attempt to get enable prompt
-            await terminal.WriteLineAsync("enable", cancellationToken);
+            await terminal.WriteLineAsync("enable", cancellationToken).ConfigureAwait(false);
 
-            var enablePrompt = await terminal.ExpectRegexMatchAsync(@"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>)>)\s*", cancellationToken);
+            var enablePrompt = await terminal.ExpectRegexMatchAsync(@"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>)>)\s*", cancellationToken).ConfigureAwait(false);
             if (enablePrompt.Groups["privileged"].Success)
             {
                 return;
@@ -79,10 +79,10 @@ namespace Surfus.Shell
             }
 
             // Write enable password
-            await terminal.WriteLineAsync(enablePassword, cancellationToken);
+            await terminal.WriteLineAsync(enablePassword, cancellationToken).ConfigureAwait(false);
 
             // Check result of new prompt
-            var enableResult = await terminal.ExpectRegexMatchAsync(@"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>)>)\s*", cancellationToken);
+            var enableResult = await terminal.ExpectRegexMatchAsync(@"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>)>)\s*", cancellationToken).ConfigureAwait(false);
             if (enableResult.Groups["privileged"].Success)
             {
                 return;

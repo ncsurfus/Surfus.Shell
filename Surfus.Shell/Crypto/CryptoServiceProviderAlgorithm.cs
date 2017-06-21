@@ -104,7 +104,7 @@ namespace Surfus.Shell.Crypto
             NetworkStream networkStream, 
             CancellationToken cancellationToken)
         {
-            var initialOutput = await ReadBlocks(networkStream, 1, cancellationToken);
+            var initialOutput = await ReadBlocks(networkStream, 1, cancellationToken).ConfigureAwait(false);
             var packetLength = initialOutput.FromBigEndianToUint();
             if (packetLength > 35000)
             {
@@ -121,7 +121,7 @@ namespace Surfus.Shell.Crypto
                 / _decryptor.InputBlockSize;
 
             var secondaryOutput =
-                await ReadBlocks(networkStream, (uint)(totalEncryptedBlocks - 1), cancellationToken);
+                await ReadBlocks(networkStream, (uint)(totalEncryptedBlocks - 1), cancellationToken).ConfigureAwait(false);
 
             return new SshPacket(initialOutput, secondaryOutput);
         }
@@ -139,7 +139,7 @@ namespace Surfus.Shell.Crypto
             CancellationToken cancellationToken)
         {
             var encryptedInput =
-                await networkStream.ReadBytesAsync((uint)(_decryptor.InputBlockSize * blocks), cancellationToken);
+                await networkStream.ReadBytesAsync((uint)(_decryptor.InputBlockSize * blocks), cancellationToken).ConfigureAwait(false);
             var decryptedOutput = new byte[_decryptor.OutputBlockSize * blocks];
             var initialOutput = _decryptor.TransformBlock(
                 encryptedInput, 

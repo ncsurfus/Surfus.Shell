@@ -48,13 +48,13 @@ namespace Surfus.Shell
                 while (totalBytesLeft > 0)
                 {
                     _logger.Info("WriteDataAsync is getting Semaphore");
-                    await _channelSemaphore.WaitAsync(linkedCancellation.Token);
+                    await _channelSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
                     _logger.Info("WriteDataAsync has Semaphore");
                     _logger.Info("SendWindow is " + SendWindow);
                     if (totalBytesLeft <= SendWindow)
                     {
                         _logger.Info("WriteDataAsync is sending data to WriteMessageAsync");
-                        await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), linkedCancellation.Token);
+                        await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), linkedCancellation.Token).ConfigureAwait(false);
                         SendWindow -= totalBytesLeft;
                         totalBytesLeft = 0;
                     }
@@ -63,13 +63,13 @@ namespace Surfus.Shell
                         var smallBuffer = new byte[SendWindow];
                         Array.Copy(buffer, smallBuffer, smallBuffer.Length);
                         _logger.Info("WriteDataAsync is sending a portion of the data to WriteMessageAsync.");
-                        await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), linkedCancellation.Token);
+                        await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), linkedCancellation.Token).ConfigureAwait(false);
                         totalBytesLeft -= SendWindow;
                         SendWindow = 0;
                     }
                     _logger.Info("WriteDataAsync has released Semaphore");
                     _channelSemaphore.Release();
-                    await Task.Delay(100, linkedCancellation.Token);
+                    await Task.Delay(100, linkedCancellation.Token).ConfigureAwait(false);
                 }
             }
         }
@@ -77,7 +77,7 @@ namespace Surfus.Shell
         // This will be called by the user, NOT the Read Loop....
         public async Task RequestAsync(ChannelRequest requestMessage, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken);
+            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if (_channelState != State.ChannelIsOpen)
             {
@@ -87,10 +87,10 @@ namespace Surfus.Shell
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _client.InternalCancellation.Token))
             {
                 _channelRequestCompleted = new TaskCompletionSource<bool>();
-                await _client.WriteMessageAsync(requestMessage, linkedCancellation.Token);
+                await _client.WriteMessageAsync(requestMessage, linkedCancellation.Token).ConfigureAwait(false);
                 _channelState = State.WaitingOnRequestResponse;
                 _channelSemaphore.Release();
-                await _channelRequestCompleted.Task;
+                await _channelRequestCompleted.Task.ConfigureAwait(false);
             }
         }
 
@@ -99,7 +99,7 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _client.InternalCancellation.Token))
             {
-                await _channelSemaphore.WaitAsync(linkedCancellation.Token);
+                await _channelSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 if (_channelState != State.Initial)
                 {
@@ -108,10 +108,10 @@ namespace Surfus.Shell
 
                 _channelOpenCompleted = new TaskCompletionSource<bool>();
                 ReceiveWindow = (int)openMessage.InitialWindowSize;
-                await _client.WriteMessageAsync(openMessage, linkedCancellation.Token);
+                await _client.WriteMessageAsync(openMessage, linkedCancellation.Token).ConfigureAwait(false);
                 _channelState = State.WaitingOnOpenConfirmation;
                 _channelSemaphore.Release();
-                await _channelOpenCompleted.Task;
+                await _channelOpenCompleted.Task.ConfigureAwait(false);
             }
         }
 
@@ -120,11 +120,11 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _client.InternalCancellation.Token))
             {
-                await _channelSemaphore.WaitAsync(linkedCancellation.Token);
+                await _channelSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
                 {
-                    await _client.WriteMessageAsync(new ChannelClose(ServerId), linkedCancellation.Token);
+                    await _client.WriteMessageAsync(new ChannelClose(ServerId), linkedCancellation.Token).ConfigureAwait(false);
                     _channelState = State.Closed;
                     Close();
                 }
@@ -134,7 +134,7 @@ namespace Surfus.Shell
 
         public async Task SendMessageAsync(ChannelOpenConfirmation message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken);
+            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnOpenConfirmation)
             {
                 _channelState = State.Errored;
@@ -153,7 +153,7 @@ namespace Surfus.Shell
 
         public async Task SendMessageAsync(ChannelOpenFailure message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken);
+            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnOpenConfirmation)
             {
                 _channelState = State.Errored;
@@ -170,7 +170,7 @@ namespace Surfus.Shell
 
         public async Task SendMessageAsync(ChannelSuccess message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken);
+            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnRequestResponse)
             {
                 _channelState = State.Errored;
@@ -187,7 +187,7 @@ namespace Surfus.Shell
 
         public async Task SendMessageAsync(ChannelFailure message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken);
+            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnRequestResponse)
             {
                 _channelState = State.Errored;
@@ -204,7 +204,7 @@ namespace Surfus.Shell
 
         public async Task SendMessageAsync(ChannelWindowAdjust message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken);
+            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
                 _channelState = State.Errored;
@@ -220,7 +220,7 @@ namespace Surfus.Shell
         public async Task SendMessageAsync(ChannelData message, CancellationToken cancellationToken)
         {
             _logger.Info("SendMessageAsync (ChannelData) is getting Semaphore");
-            await _channelSemaphore.WaitAsync(cancellationToken);
+            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             _logger.Info("SendMessageAsync (ChannelData) has got the Semaphore");
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
@@ -249,14 +249,14 @@ namespace Surfus.Shell
             if (ReceiveWindow <= 0)
             {
                 _logger.Info("SendMessageAsync (ChannelData) is waiting on the client to send a message to increase the ChannelWindow");
-                await _client.WriteMessageAsync(new ChannelWindowAdjust(ServerId, (uint)WindowRefill), cancellationToken);
+                await _client.WriteMessageAsync(new ChannelWindowAdjust(ServerId, (uint)WindowRefill), cancellationToken).ConfigureAwait(false);
                 ReceiveWindow += WindowRefill;
             }
 
             if (OnDataReceived != null)
             {
                 _logger.Info("SendMessageAsync (ChannelData) is waiting the upper level object.");
-                await OnDataReceived(message.Data, cancellationToken);
+                await OnDataReceived(message.Data, cancellationToken).ConfigureAwait(false);
                 _logger.Info("SendMessageAsync (ChannelData) has completed sending the data to the upper level object.");
             }
 
@@ -266,7 +266,7 @@ namespace Surfus.Shell
 
         public async Task SendMessageAsync(ChannelEof message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken);
+            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
                 _channelState = State.Errored;
@@ -276,7 +276,7 @@ namespace Surfus.Shell
 
             if (OnChannelEofReceived != null)
             {
-                await OnChannelEofReceived(message, cancellationToken);
+                await OnChannelEofReceived(message, cancellationToken).ConfigureAwait(false);
             }
 
             _channelSemaphore.Release();
@@ -284,7 +284,7 @@ namespace Surfus.Shell
 
         public async Task SendMessageAsync(ChannelClose message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken);
+            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
                 _channelState = State.Errored;
@@ -294,7 +294,7 @@ namespace Surfus.Shell
 
             if (OnChannelCloseReceived != null)
             {
-                await OnChannelCloseReceived(message, cancellationToken);
+                await OnChannelCloseReceived(message, cancellationToken).ConfigureAwait(false);
             }
 
             _channelSemaphore.Release();

@@ -19,9 +19,9 @@ namespace Surfus.Shell.Crypto
 
         public override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, CancellationToken cancellationToken)
         {
-            var packetLength = await networkStream.ReadUInt32Async(cancellationToken);
+            var packetLength = await networkStream.ReadUInt32Async(cancellationToken).ConfigureAwait(false);
             if (packetLength > 35000) throw new InvalidOperationException($"Packet length is too large {packetLength}");
-            var secondBlock = await networkStream.ReadBytesAsync(packetLength, cancellationToken);
+            var secondBlock = await networkStream.ReadBytesAsync(packetLength, cancellationToken).ConfigureAwait(false);
 
             return new SshPacket(packetLength.GetBigEndianBytes(), secondBlock);
         }
