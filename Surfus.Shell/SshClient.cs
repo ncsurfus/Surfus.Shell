@@ -22,11 +22,6 @@ namespace Surfus.Shell
     public class SshClient : IDisposable
     {
         /// <summary>
-        /// _logger is the logging mechanism. 
-        /// </summary>
-        internal ILogger Logger { get; }
-
-        /// <summary>
         /// _readLoopTask holds the task of the read loop.
         /// </summary>
         private Task _readLoopTask;
@@ -45,6 +40,11 @@ namespace Surfus.Shell
         /// _sshClientState holds the state of the SshClient.
         /// </summary>
         private State _sshClientState = State.Intitial;
+
+        /// <summary>
+        /// _logger is the logging mechanism. 
+        /// </summary>
+        internal ILogger Logger { get; }
 
         /// <summary>
         /// InitialKeyExchangeCompleted synchronizes other actions to start once the initial key exchange has been completed.
