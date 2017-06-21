@@ -6,4 +6,5 @@ packages/
 *.userprefs
 PublishProfiles
 Surfus.Shell/Properties/
+publish/
 *.user
