@@ -6,14 +6,14 @@ using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel.Open;
 using Surfus.Shell.Messages.Channel.Requests;
-using NLog;
+using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
 
 namespace Surfus.Shell
 {
     public class SshTerminal : IDisposable
     {
-        private Logger _logger;
+        private ILogger _logger;
         private SemaphoreSlim _terminalSemaphore = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _terminalCancellation = new CancellationTokenSource();
         private State _terminalState = State.Initial;
@@ -27,14 +27,14 @@ namespace Surfus.Shell
         internal SshTerminal(SshClient sshClient, SshChannel channel)
         {
             _client = sshClient;
-            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
+            _logger = _client.Logger;
             _channel = channel;
             _channel.OnDataReceived = async (buffer, cancellationToken) =>
             {
-                _logger.Info("Terminal OnDataReceived is waiting for the terminal Semaphore");
+                _logger.LogInformation("Terminal OnDataReceived is waiting for the terminal Semaphore");
                 await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-                _logger.Info("Terminal OnDataReceived has got the terminal Semaphore");
-                _logger.Info($"Terminal Data: {Encoding.UTF8.GetString(buffer)}");
+                _logger.LogInformation("Terminal OnDataReceived has got the terminal Semaphore");
+                _logger.LogInformation($"Terminal Data: {Encoding.UTF8.GetString(buffer)}");
 
                 if (_terminalReadComplete?.TrySetResult(Encoding.UTF8.GetString(buffer)) != true)
                 {
@@ -42,7 +42,7 @@ namespace Surfus.Shell
                 }
 
                 _terminalSemaphore.Release();
-                _logger.Info("Terminal OnDataReceived has released the terminal semaphore");
+                _logger.LogInformation("Terminal OnDataReceived has released the terminal semaphore");
             };
 
             _channel.OnChannelCloseReceived = async (close, cancellationToken) =>
@@ -105,16 +105,16 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
-                _logger.Info($"WriteAsync is getting Semaphore");
+                _logger.LogInformation($"WriteAsync is getting Semaphore");
                 await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-                _logger.Info($"WriteAsync has got Semaphore");
+                _logger.LogInformation($"WriteAsync has got Semaphore");
                 if (_terminalState != State.Opened)
                 {
                     throw new Exception("Terminal not opened.");
                 }
                  _terminalSemaphore.Release();
-                _logger.Info($"WriteAsync released Semaphore");
-                _logger.Info($"Writing {text}");
+                _logger.LogInformation($"WriteAsync released Semaphore");
+                _logger.LogInformation($"Writing {text}");
                 await _channel.WriteDataAsync(Encoding.UTF8.GetBytes(text), linkedCancellation.Token).ConfigureAwait(false);
             }
         }
@@ -191,7 +191,7 @@ namespace Surfus.Shell
         public async Task<string> ExpectSlowAsync(string plainText, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
-            _logger.Info($"ExpectAsync waiting for {plainText}");
+            _logger.LogInformation($"ExpectAsync waiting for {plainText}");
             try
             {
                 // Todo: Convert this to use Find and put the remaining data back in the buffer.
@@ -199,12 +199,12 @@ namespace Surfus.Shell
                 {
                     buffer.Append(await ReadCharAsync(cancellationToken).ConfigureAwait(false));
                 }
-                _logger.Info($"ExpectAsync found {plainText} as {buffer.ToString()}");
+                _logger.LogInformation($"ExpectAsync found {plainText} as {buffer.ToString()}");
                 return buffer.ToString();
             }
             catch
             {
-                _logger.Error($"Expecting '{plainText}', but buffer contained {buffer.ToString()}");
+                _logger.LogError($"Expecting '{plainText}', but buffer contained {buffer.ToString()}");
                 throw;
             }
         }
@@ -212,7 +212,7 @@ namespace Surfus.Shell
         public async Task<string> ExpectAsync(string plainText, CancellationToken cancellationToken)
         {
             var buffer = new StringBuilder();
-            _logger.Info($"ExpectFastAsync waiting for {plainText}");
+            _logger.LogInformation($"ExpectFastAsync waiting for {plainText}");
             try
             {
                 var index = -1;
@@ -227,14 +227,14 @@ namespace Surfus.Shell
                     var overflow = buffer.ToString(index, buffer.Length - index);
                     await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
                     _readBuffer.Insert(0, overflow);
-                    _logger.Info($"ExpectAsync found {plainText} as {buffer.ToString()}");
+                    _logger.LogInformation($"ExpectAsync found {plainText} as {buffer.ToString()}");
                     _terminalSemaphore.Release();
                     return fixedBuffer;
                 }
             }
             catch
             {
-                _logger.Error($"Expecting '{plainText}', but buffer contained {buffer.ToString()}");
+                _logger.LogError($"Expecting '{plainText}', but buffer contained {buffer.ToString()}");
                 throw;
             }
         }
@@ -265,7 +265,7 @@ namespace Surfus.Shell
                 var overflow = buffer.ToString(index, buffer.Length - index);
                 await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
                 _readBuffer.Insert(0, overflow);
-                _logger.Info($"ExpectAsync found {regexText} as {_readBuffer}");
+                _logger.LogInformation($"ExpectAsync found {regexText} as {_readBuffer}");
                 _terminalSemaphore.Release();
                 return regexMatch;
             }
@@ -280,7 +280,7 @@ namespace Surfus.Shell
         {
             var buffer = new StringBuilder();
             var match = Regex.Match(buffer.ToString(), regexText, regexOptions);
-            _logger.Info($"ExpectRegexMatchAsync waiting for {regexText}");
+            _logger.LogInformation($"ExpectRegexMatchAsync waiting for {regexText}");
             try
             {
                 // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
@@ -289,12 +289,12 @@ namespace Surfus.Shell
                     buffer.Append(await ReadCharAsync(cancellationToken).ConfigureAwait(false));
                     match = Regex.Match(buffer.ToString(), regexText, regexOptions);
                 }
-                _logger.Info($"ExpectRegexMatchAsync found {regexText} as {buffer.ToString()}");
+                _logger.LogInformation($"ExpectRegexMatchAsync found {regexText} as {buffer.ToString()}");
                 return match;
             }
             catch
             {
-                _logger.Error($"Expecting regex '{regexText}', but buffer contained {buffer.ToString()}");
+                _logger.LogError($"Expecting regex '{regexText}', but buffer contained {buffer.ToString()}");
                 throw;
             }
         }

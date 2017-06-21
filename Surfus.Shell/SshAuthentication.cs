@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.UserAuth;
-using NLog;
+using Microsoft.Extensions.Logging;
 
 namespace Surfus.Shell
 {
@@ -13,7 +13,7 @@ namespace Surfus.Shell
     {
 
         // Fields
-        private Logger _logger;
+        private ILogger _logger;
         private SshClient _client { get; }
         private readonly SemaphoreSlim _loginSemaphore = new SemaphoreSlim(1, 1);
         private State _loginState = State.Initial;
@@ -28,7 +28,7 @@ namespace Surfus.Shell
         public SshAuthentication(SshClient sshClient)
         {
             _client = sshClient;
-            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
+            _logger = _logger = _client.Logger;
         }
 
         public async Task LoginAsync(string username, string password, CancellationToken cancellationToken)

@@ -7,13 +7,13 @@ using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel.Open;
 using Surfus.Shell.Messages.Channel.Requests;
-using NLog;
+using Microsoft.Extensions.Logging;
 
 namespace Surfus.Shell
 {
     public class SshCommand : IDisposable
     {
-        private Logger _logger;
+        private ILogger _logger;
         private SshChannel _channel;
         private SshClient _client;
         private bool _isDisposed;
@@ -25,7 +25,7 @@ namespace Surfus.Shell
         internal SshCommand(SshClient sshClient, SshChannel channel)
         {
             _client = sshClient;
-            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
+            _logger = _client.Logger;
             _channel = channel;
             _channel.OnDataReceived += async (buffer, cancellationToken) =>
             {
