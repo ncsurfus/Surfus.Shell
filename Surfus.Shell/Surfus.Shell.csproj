@@ -13,6 +13,6 @@
     <Version>1.0.6-Debug</Version>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="NLog" Version="5.0.0-beta06" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="1.1.2" />
   </ItemGroup>
 </Project>

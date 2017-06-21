@@ -1,4 +1,4 @@
-﻿using NLog;
+﻿using Microsoft.Extensions.Logging;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages;
@@ -24,7 +24,7 @@ namespace Surfus.Shell
         /// <summary>
         /// _logger is the logging mechanism. 
         /// </summary>
-        private Logger _logger;
+        internal ILogger Logger { get; }
 
         /// <summary>
         /// _readLoopTask holds the task of the read loop.
@@ -112,28 +112,15 @@ namespace Surfus.Shell
         public string Banner { get; private set; } = null;
 
         /// <summary>
-        /// An SshClient that can connect to the designated hostname and port 22.
-        /// </summary>
-        /// <param name="hostname">The remote SSH Server</param>
-        public SshClient(string hostname) : this(hostname, 22)
-        {
-        }
-
-        /// <summary>
         /// An SshClient that can connect designated hostname and port.
         /// </summary>
         /// <param name="hostname">The remote SSH Server</param>
         /// <param name="port">The remote SSH port</param>
-        public SshClient(string hostname, ushort port)
+        public SshClient(string hostname, ushort port = 22, ILoggerFactory loggerFactory = default(LoggerFactory))
         {
             ConnectionInfo.Hostname = hostname;
             ConnectionInfo.Port = port;
-            _logger = LogManager.GetLogger($"{ConnectionInfo.Hostname} {ConnectionInfo.Port}");
-        }
-
-        public Logger GetLogger()
-        {
-            return LogManager.GetLogger($"{ConnectionInfo.Hostname} {ConnectionInfo.Port}");
+            Logger = loggerFactory.CreateLogger($"{ConnectionInfo.Hostname} {ConnectionInfo.Port}");
         }
 
         /// <summary>
@@ -178,7 +165,7 @@ namespace Surfus.Shell
 				{
 					_initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
 					ConnectionInfo.ServerVersion = await ExchangeVersionAsync(linkedCancellation.Token).ConfigureAwait(false);
-					_logger.Info("Server Version: " + ConnectionInfo.ServerVersion);
+					Logger.LogInformation("Server Version: " + ConnectionInfo.ServerVersion);
 					_readLoopTask = ReadLoop();
 					await _initialKeyExchangeCompleted.Task.ConfigureAwait(false);
 				}
@@ -239,7 +226,7 @@ namespace Surfus.Shell
 				{
 					_initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
 					ConnectionInfo.ServerVersion = await ExchangeVersionAsync(linkedCancellation.Token).ConfigureAwait(false);
-					_logger.Info("Server Version: " + ConnectionInfo.ServerVersion);
+					Logger.LogInformation("Server Version: " + ConnectionInfo.ServerVersion);
 					_readLoopTask = ReadLoop();
 					await _initialKeyExchangeCompleted.Task.ConfigureAwait(false);
 				}
@@ -370,10 +357,10 @@ namespace Surfus.Shell
 
                     if (readAmount <= 0)
                     {
-                        _logger.Fatal($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
+                        Logger.LogCritical($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
                         if (bufferPosition == 0)
                         {
-                            _logger.Fatal($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Buffer Position is 0, no data sent. Possibly too many connections");
+                            Logger.LogCritical($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Buffer Position is 0, no data sent. Possibly too many connections");
                             throw new EndOfStreamException($"Buffer Position is 0, no data sent. Possibly too many connections");
                         }
                         throw new EndOfStreamException($"Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
@@ -434,7 +421,7 @@ namespace Surfus.Shell
         {
             try
             {
-                _logger.Info("Starting Message Read Loop...");
+                Logger.LogInformation("Starting Message Read Loop...");
                 while ((IsConnected || _isConnecting) && !InternalCancellation.IsCancellationRequested)
                 {
                     await ReadMessageAsync(InternalCancellation.Token).ConfigureAwait(false);
@@ -448,12 +435,12 @@ namespace Surfus.Shell
                     {
                         InternalCancellation.Cancel(true);
                     }
-                    _logger.Fatal("Caught Exception in Read Loop: " + ex.ToString());
+                    Logger.LogCritical("Caught Exception in Read Loop: " + ex.ToString());
                 }
             }
             finally
             {
-                _logger.Info("Ending Message Read Loop...");
+                Logger.LogInformation("Ending Message Read Loop...");
             }
         }
 
@@ -477,7 +464,7 @@ namespace Surfus.Shell
             ConnectionInfo.InboundPacketSequence = ConnectionInfo.InboundPacketSequence != uint.MaxValue ? ConnectionInfo.InboundPacketSequence + 1 : 0;
             var messageEvent = new MessageEvent(sshPacket.Payload);
 
-            _logger.Info($"Received message {messageEvent.Type}");
+            Logger.LogInformation($"Received message {messageEvent.Type}");
 
             // Key Exchange Messages
             switch (messageEvent.Type)
@@ -510,7 +497,7 @@ namespace Surfus.Shell
                     await ProcessChannelMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
                     break;
                 default:
-                    _logger.Info($"{ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Unexpected Message {messageEvent.Type}");
+                    Logger.LogInformation($"{ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Unexpected Message {messageEvent.Type}");
                     break;
             }
         }
@@ -664,7 +651,7 @@ namespace Surfus.Shell
                                                          ? ConnectionInfo.OutboundPacketSequence + 1
                                                          : 0;
 
-            _logger.Debug($"Sent {message.Type}");
+            Logger.LogDebug($"Sent {message.Type}");
         }
 
         /// <summary>

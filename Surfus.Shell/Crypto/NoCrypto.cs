@@ -1,4 +1,4 @@
-﻿using NLog;
+﻿using Microsoft.Extensions.Logging;
 using Surfus.Shell.Extensions;
 using System;
 using System.Net.Sockets;

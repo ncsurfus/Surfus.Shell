@@ -7,14 +7,14 @@ using Surfus.Shell.KeyExchange;
 using Surfus.Shell.MessageAuthentication;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.KeyExchange;
-using NLog;
+using Microsoft.Extensions.Logging;
 
 namespace Surfus.Shell
 {
     internal class SshKeyExchanger
     {
         // Fields
-        private Logger _logger;
+        private ILogger _logger;
         private readonly SemaphoreSlim _sshKeyExchangeSemaphore = new SemaphoreSlim(1, 1);
         private State _keyExchangeState = State.Initial;
         private KexInit _clientKexInit;
@@ -28,7 +28,7 @@ namespace Surfus.Shell
         internal SshKeyExchanger(SshClient client)
         {
             _client = client;
-            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
+            _logger = _client.Logger;
         }
 
         // Attempts to send a client kex init packet if we're in the expected state.

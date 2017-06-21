@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
-using NLog;
+using Microsoft.Extensions.Logging;
 using System.Text;
 
 namespace Surfus.Shell
@@ -12,7 +12,7 @@ namespace Surfus.Shell
     internal class SshChannel : IDisposable
     {
         // Fields
-        private Logger _logger;
+        private ILogger _logger;
         private readonly SemaphoreSlim _channelSemaphore = new SemaphoreSlim(1, 1);
         private State _channelState = new State();
         private bool _isDisposed;
@@ -36,7 +36,7 @@ namespace Surfus.Shell
         {
             _client = client;
             ClientId = channelId;
-            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
+            _logger = _logger = _client.Logger;
         }
 
         // This will be called by the user, NOT the Read Loop
@@ -47,13 +47,13 @@ namespace Surfus.Shell
                 var totalBytesLeft = buffer.Length;
                 while (totalBytesLeft > 0)
                 {
-                    _logger.Info("WriteDataAsync is getting Semaphore");
+                    _logger.LogInformation("WriteDataAsync is getting Semaphore");
                     await _channelSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-                    _logger.Info("WriteDataAsync has Semaphore");
-                    _logger.Info("SendWindow is " + SendWindow);
+                    _logger.LogInformation("WriteDataAsync has Semaphore");
+                    _logger.LogInformation("SendWindow is " + SendWindow);
                     if (totalBytesLeft <= SendWindow)
                     {
-                        _logger.Info("WriteDataAsync is sending data to WriteMessageAsync");
+                        _logger.LogInformation("WriteDataAsync is sending data to WriteMessageAsync");
                         await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), linkedCancellation.Token).ConfigureAwait(false);
                         SendWindow -= totalBytesLeft;
                         totalBytesLeft = 0;
@@ -62,12 +62,12 @@ namespace Surfus.Shell
                     {
                         var smallBuffer = new byte[SendWindow];
                         Array.Copy(buffer, smallBuffer, smallBuffer.Length);
-                        _logger.Info("WriteDataAsync is sending a portion of the data to WriteMessageAsync.");
+                        _logger.LogInformation("WriteDataAsync is sending a portion of the data to WriteMessageAsync.");
                         await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), linkedCancellation.Token).ConfigureAwait(false);
                         totalBytesLeft -= SendWindow;
                         SendWindow = 0;
                     }
-                    _logger.Info("WriteDataAsync has released Semaphore");
+                    _logger.LogInformation("WriteDataAsync has released Semaphore");
                     _channelSemaphore.Release();
                     await Task.Delay(100, linkedCancellation.Token).ConfigureAwait(false);
                 }
@@ -213,34 +213,34 @@ namespace Surfus.Shell
             }
 
             SendWindow += (int)message.BytesToAdd;
-            _logger.Info($"Send window has been increased {SendWindow}");
+            _logger.LogInformation($"Send window has been increased {SendWindow}");
             _channelSemaphore.Release();
         }
 
         public async Task SendMessageAsync(ChannelData message, CancellationToken cancellationToken)
         {
-            _logger.Info("SendMessageAsync (ChannelData) is getting Semaphore");
+            _logger.LogInformation("SendMessageAsync (ChannelData) is getting Semaphore");
             await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-            _logger.Info("SendMessageAsync (ChannelData) has got the Semaphore");
+            _logger.LogInformation("SendMessageAsync (ChannelData) has got the Semaphore");
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
                 _channelState = State.Errored;
                 _channelSemaphore.Release();
-                _logger.Info("SendMessageAsync (ChannelData) has released the Semaphore and thrown an exception");
+                _logger.LogInformation("SendMessageAsync (ChannelData) has released the Semaphore and thrown an exception");
                 throw new SshException("Received unexpected channel message.");
             }
 
             if (ReceiveWindow <= 0)
             {
                 _channelSemaphore.Release();
-                _logger.Info("SendMessageAsync (ChannelData) has released the Semaphore, as the ReceiveWindow is under 0");
+                _logger.LogInformation("SendMessageAsync (ChannelData) has released the Semaphore, as the ReceiveWindow is under 0");
                 return;
             }
 
             var length = message.Data.Length > ReceiveWindow ? ReceiveWindow : message.Data.Length;
             if (length != message.Data.Length)
             {
-                _logger.Info($"Server sent to much data, resizing from {message.Data.Length} to {ReceiveWindow}");
+                _logger.LogInformation($"Server sent to much data, resizing from {message.Data.Length} to {ReceiveWindow}");
                 message.ResizeData(length);
             }
 
@@ -248,20 +248,20 @@ namespace Surfus.Shell
 
             if (ReceiveWindow <= 0)
             {
-                _logger.Info("SendMessageAsync (ChannelData) is waiting on the client to send a message to increase the ChannelWindow");
+                _logger.LogInformation("SendMessageAsync (ChannelData) is waiting on the client to send a message to increase the ChannelWindow");
                 await _client.WriteMessageAsync(new ChannelWindowAdjust(ServerId, (uint)WindowRefill), cancellationToken).ConfigureAwait(false);
                 ReceiveWindow += WindowRefill;
             }
 
             if (OnDataReceived != null)
             {
-                _logger.Info("SendMessageAsync (ChannelData) is waiting the upper level object.");
+                _logger.LogInformation("SendMessageAsync (ChannelData) is waiting the upper level object.");
                 await OnDataReceived(message.Data, cancellationToken).ConfigureAwait(false);
-                _logger.Info("SendMessageAsync (ChannelData) has completed sending the data to the upper level object.");
+                _logger.LogInformation("SendMessageAsync (ChannelData) has completed sending the data to the upper level object.");
             }
 
             _channelSemaphore.Release();
-            _logger.Info("SendMessageAsync (ChannelData) has released the Semaphore");
+            _logger.LogInformation("SendMessageAsync (ChannelData) has released the Semaphore");
         }
 
         public async Task SendMessageAsync(ChannelEof message, CancellationToken cancellationToken)

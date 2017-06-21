@@ -9,7 +9,7 @@ using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup;
 using Surfus.Shell.Signing;
-using NLog;
+using Microsoft.Extensions.Logging;
 
 namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 {
@@ -78,7 +78,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// </summary>
         private DhgGroup _dhgGroupMessage;
 
-        private Logger _logger;
+        private ILogger _logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DiffieHellmanGroupKeyExchange"/> class.
@@ -95,7 +95,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         public DiffieHellmanGroupKeyExchange(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult, string shaVersion)
         {
             _client = sshClient;
-            _logger = LogManager.GetLogger($"{_client.ConnectionInfo.Hostname} {_client.ConnectionInfo.Port}");
+            _logger = _client.Logger;
             _kexInitExchangeResult = kexInitExchangeResult;
             _shaVersion = shaVersion;
         }
@@ -187,14 +187,14 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
             // Generate random number 'x'.
             _x = GenerateRandomBigInteger(1, (_dhgGroupMessage.P - 1) / 2);
-            _logger.Trace($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Generated X {_x}");
+            _logger.LogTrace($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Generated X {_x}");
 
             // Generate 'e'.
             _e = BigInteger.ModPow(_dhgGroupMessage.G, _x, _dhgGroupMessage.P);
-            _logger.Trace($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Generated E {_e}");
+            _logger.LogTrace($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Generated E {_e}");
 
             // Send 'e' to the server with the 'Init' message.
-            _logger.Debug($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Sending E");
+            _logger.LogDebug($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Sending E");
             await _client.WriteMessageAsync(new DhgInit(_e), cancellationToken).ConfigureAwait(false);
 
 
