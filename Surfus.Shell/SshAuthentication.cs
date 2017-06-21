@@ -33,7 +33,7 @@ namespace Surfus.Shell
 
         public async Task LoginAsync(string username, string password, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken);
+            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if(_loginState != State.Initial)
             {
@@ -44,7 +44,7 @@ namespace Surfus.Shell
             _password = password;
             _loginType = LoginType.Password;
 
-            await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken);
+            await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
             _loginState = State.WaitingOnServiceAccept;
 
             _loginSemaphore.Release();
@@ -52,7 +52,7 @@ namespace Surfus.Shell
 
         public async Task LoginAsync(string username, Func<string, CancellationToken, Task<string>> ResponseTask, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken);
+            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if (_loginState != State.Initial)
             {
@@ -62,7 +62,7 @@ namespace Surfus.Shell
             _username = username;
             _interactiveResponse = ResponseTask;
             _loginType = LoginType.Interactive;
-            await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken);
+            await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
             _loginState = State.WaitingOnServiceAccept;
 
             _loginSemaphore.Release();
@@ -71,7 +71,7 @@ namespace Surfus.Shell
         // Message Pumps
         public async Task ProcessMessageAsync(ServiceAccept message, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken);
+            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if(_loginState != State.WaitingOnServiceAccept)
             {
@@ -82,14 +82,14 @@ namespace Surfus.Shell
 
             if(_loginType == LoginType.Password)
             {
-                await _client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "password", _password), cancellationToken);
+                await _client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "password", _password), cancellationToken).ConfigureAwait(false);
                 _password = null;
                 _loginState = State.WaitingOnCredentialSuccess;
             }
 
             if (_loginType == LoginType.Interactive)
             {
-                await _client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken);
+                await _client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken).ConfigureAwait(false);
                 _loginState = State.WaitingOnCredentialSuccessOrInteractive;
             }
 
@@ -98,7 +98,7 @@ namespace Surfus.Shell
 
         public async Task ProcessRequestFailureMessage( CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken);
+            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
            
 
             if (_loginState != State.WaitingOnServiceAccept)
@@ -114,7 +114,7 @@ namespace Surfus.Shell
 
         public async Task ProcessMessageAsync(UaSuccess message, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken);
+            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
@@ -132,7 +132,7 @@ namespace Surfus.Shell
 
         public async Task<bool> ProcessMessageAsync(UaFailure message, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken);
+            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
@@ -147,7 +147,7 @@ namespace Surfus.Shell
 
         public async Task ProcessMessageAsync(UaInfoRequest message, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken);
+            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if (_loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
@@ -159,10 +159,10 @@ namespace Surfus.Shell
             var responses = new string[message.PromptNumber];
             for (var i = 0; i != responses.Length; i++)
             {
-                responses[i] = await _interactiveResponse(message.Prompt[i], cancellationToken);
+                responses[i] = await _interactiveResponse(message.Prompt[i], cancellationToken).ConfigureAwait(false);
             }
 
-            await _client.WriteMessageAsync(new UaInfoResponse((uint)responses.Length, responses), cancellationToken);
+            await _client.WriteMessageAsync(new UaInfoResponse((uint)responses.Length, responses), cancellationToken).ConfigureAwait(false);
 
             _loginSemaphore.Release();
 

@@ -32,7 +32,7 @@ namespace Surfus.Shell
             _channel.OnDataReceived = async (buffer, cancellationToken) =>
             {
                 _logger.Info("Terminal OnDataReceived is waiting for the terminal Semaphore");
-                await _terminalSemaphore.WaitAsync(cancellationToken);
+                await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
                 _logger.Info("Terminal OnDataReceived has got the terminal Semaphore");
                 _logger.Info($"Terminal Data: {Encoding.UTF8.GetString(buffer)}");
 
@@ -47,9 +47,9 @@ namespace Surfus.Shell
 
             _channel.OnChannelCloseReceived = async (close, cancellationToken) =>
             {
-                await _terminalSemaphore.WaitAsync(cancellationToken);
+                await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-                await CloseAsync(cancellationToken);
+                await CloseAsync(cancellationToken).ConfigureAwait(false);
                 ServerDisconnected?.Invoke();
 
                 _terminalSemaphore.Release();
@@ -65,7 +65,7 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 if (_terminalState != State.Initial)
                 {
@@ -75,9 +75,9 @@ namespace Surfus.Shell
                 // Errored until success.
                 _terminalState = State.Errored;
 
-                await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), linkedCancellation.Token);
-                await _channel.RequestAsync(new ChannelRequestPseudoTerminal(_channel.ServerId, true, "Surfus", 80, 24), linkedCancellation.Token);
-                await _channel.RequestAsync(new ChannelRequestShell(_channel.ServerId, true), linkedCancellation.Token);
+                await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), linkedCancellation.Token).ConfigureAwait(false);
+                await _channel.RequestAsync(new ChannelRequestPseudoTerminal(_channel.ServerId, true, "Surfus", 80, 24), linkedCancellation.Token).ConfigureAwait(false);
+                await _channel.RequestAsync(new ChannelRequestShell(_channel.ServerId, true), linkedCancellation.Token).ConfigureAwait(false);
 
                 _terminalState = State.Opened;
 
@@ -89,11 +89,11 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 if (_terminalState == State.Opened)
                 {
-                    await _channel.CloseAsync(linkedCancellation.Token);
+                    await _channel.CloseAsync(linkedCancellation.Token).ConfigureAwait(false);
                 }
                 _terminalState = State.Closed;
                 _terminalSemaphore.Release();
@@ -106,7 +106,7 @@ namespace Surfus.Shell
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
                 _logger.Info($"WriteAsync is getting Semaphore");
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
                 _logger.Info($"WriteAsync has got Semaphore");
                 if (_terminalState != State.Opened)
                 {
@@ -115,25 +115,25 @@ namespace Surfus.Shell
                  _terminalSemaphore.Release();
                 _logger.Info($"WriteAsync released Semaphore");
                 _logger.Info($"Writing {text}");
-                await _channel.WriteDataAsync(Encoding.UTF8.GetBytes(text), linkedCancellation.Token);
+                await _channel.WriteDataAsync(Encoding.UTF8.GetBytes(text), linkedCancellation.Token).ConfigureAwait(false);
             }
         }
 
         public async Task WriteLineAsync(string text, CancellationToken cancellationToken)
         {
-            await WriteAsync(text + "\n", cancellationToken);
+            await WriteAsync(text + "\n", cancellationToken).ConfigureAwait(false);
         }
 
         public async Task WriteLineAsync(CancellationToken cancellationToken)
         {
-            await WriteAsync("\n", cancellationToken);
+            await WriteAsync("\n", cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<string> ReadAsync(CancellationToken cancellationToken)
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 if (_terminalState != State.Opened)
                 {
@@ -151,7 +151,7 @@ namespace Surfus.Shell
                 using (linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled()))
                 {
                     _terminalSemaphore.Release();
-                    return await _terminalReadComplete.Task;
+                    return await _terminalReadComplete.Task.ConfigureAwait(false);
                 }
             }
         }
@@ -160,7 +160,7 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 if (_terminalState != State.Opened)
                 {
@@ -179,8 +179,8 @@ namespace Surfus.Shell
 
                 using (linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled()))
                 {
-                    var text = await _terminalReadComplete.Task;
-                    await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                    var text = await _terminalReadComplete.Task.ConfigureAwait(false);
+                    await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
                     _readBuffer.Insert(0, text.Substring(1, text.Length - 1));
                     _terminalSemaphore.Release();
                     return text[0];
@@ -197,7 +197,7 @@ namespace Surfus.Shell
                 // Todo: Convert this to use Find and put the remaining data back in the buffer.
                 while (!buffer.ToString().Contains(plainText))
                 {
-                    buffer.Append(await ReadCharAsync(cancellationToken));
+                    buffer.Append(await ReadCharAsync(cancellationToken).ConfigureAwait(false));
                 }
                 _logger.Info($"ExpectAsync found {plainText} as {buffer.ToString()}");
                 return buffer.ToString();
@@ -218,14 +218,14 @@ namespace Surfus.Shell
                 var index = -1;
                 while ((index = buffer.ToString().IndexOf(plainText)) == -1)
                 {
-                    buffer.Append(await ReadAsync(cancellationToken));
+                    buffer.Append(await ReadAsync(cancellationToken).ConfigureAwait(false));
                 }
                 using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
                 {
                     index = index + plainText.Length;
                     var fixedBuffer = buffer.ToString(0, index);
                     var overflow = buffer.ToString(index, buffer.Length - index);
-                    await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                    await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
                     _readBuffer.Insert(0, overflow);
                     _logger.Info($"ExpectAsync found {plainText} as {buffer.ToString()}");
                     _terminalSemaphore.Release();
@@ -241,12 +241,12 @@ namespace Surfus.Shell
 
         public async Task<string> ExpectRegexAsync(string regexText, CancellationToken cancellationToken)
         {
-            return (await ExpectRegexMatchAsync(regexText, RegexOptions.None, cancellationToken)).Value;
+            return (await ExpectRegexMatchAsync(regexText, RegexOptions.None, cancellationToken).ConfigureAwait(false)).Value;
         }
 
         public async Task<string> ExpectRegexSlowAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
         {
-            return (await ExpectRegexMatchAsync(regexText, regexOptions, cancellationToken)).Value;
+            return (await ExpectRegexMatchAsync(regexText, regexOptions, cancellationToken).ConfigureAwait(false)).Value;
         }
 
         public async Task<Match> ExpectRegexMatchAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
@@ -256,14 +256,14 @@ namespace Surfus.Shell
             Match regexMatch = null;
             while (!(regexMatch = Regex.Match(buffer.ToString(), regexText, regexOptions)).Success)
             {
-                buffer.Append(await ReadAsync(cancellationToken));
+                buffer.Append(await ReadAsync(cancellationToken).ConfigureAwait(false));
             }
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
             {
                 var index = regexMatch.Index + regexMatch.Length;
                 var fixedBuffer = buffer.ToString(0, index);
                 var overflow = buffer.ToString(index, buffer.Length - index);
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token);
+                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
                 _readBuffer.Insert(0, overflow);
                 _logger.Info($"ExpectAsync found {regexText} as {_readBuffer}");
                 _terminalSemaphore.Release();
@@ -286,7 +286,7 @@ namespace Surfus.Shell
                 // Todo: Convert this to ReadAsync and put the remaining data back in the buffer.
                 while (!match.Success)
                 {
-                    buffer.Append(await ReadCharAsync(cancellationToken));
+                    buffer.Append(await ReadCharAsync(cancellationToken).ConfigureAwait(false));
                     match = Regex.Match(buffer.ToString(), regexText, regexOptions);
                 }
                 _logger.Info($"ExpectRegexMatchAsync found {regexText} as {buffer.ToString()}");

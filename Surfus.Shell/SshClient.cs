@@ -37,6 +37,11 @@ namespace Surfus.Shell
         private SemaphoreSlim _clientSemaphore = new SemaphoreSlim(1,1);
 
         /// <summary>
+        /// _readSemaphore controls access to the read loop.
+        /// </summary>
+        private SemaphoreSlim _readSemaphore = new SemaphoreSlim(1, 1);
+
+        /// <summary>
         /// _sshClientState holds the state of the SshClient.
         /// </summary>
         private State _sshClientState = State.Intitial;
@@ -142,7 +147,7 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, InternalCancellation.Token))
             {
-                await _clientSemaphore.WaitAsync(linkedCancellation.Token);
+                await _clientSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
                 
                 // Validate current state of SshClient
                 if (_sshClientState != State.Intitial)
@@ -172,18 +177,18 @@ namespace Surfus.Shell
 				using (linkedCancellation.Token.Register(() => _initialKeyExchangeCompleted?.TrySetCanceled()))
 				{
 					_initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
-					ConnectionInfo.ServerVersion = await ExchangeVersionAsync((linkedCancellation.Token));
+					ConnectionInfo.ServerVersion = await ExchangeVersionAsync(linkedCancellation.Token).ConfigureAwait(false);
 					_logger.Info("Server Version: " + ConnectionInfo.ServerVersion);
 					_readLoopTask = ReadLoop();
-					await _initialKeyExchangeCompleted.Task;
+					await _initialKeyExchangeCompleted.Task.ConfigureAwait(false);
 				}
 
                 // Perform login
                 _loginCompleted = new TaskCompletionSource<bool>();
 				using (linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled()))
 				{
-					await ConnectionInfo.Authentication.LoginAsync(username, password, linkedCancellation.Token);
-					await _loginCompleted.Task;
+					await ConnectionInfo.Authentication.LoginAsync(username, password, linkedCancellation.Token).ConfigureAwait(false);
+					await _loginCompleted.Task.ConfigureAwait(false);
 				}
                 // Set new state
                 _sshClientState = State.Connected;
@@ -203,7 +208,7 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, InternalCancellation.Token))
             {
-                await _clientSemaphore.WaitAsync(linkedCancellation.Token);
+                await _clientSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 // Validate current state of SshClient
                 if (_sshClientState != State.Intitial)
@@ -233,18 +238,18 @@ namespace Surfus.Shell
 				using (linkedCancellation.Token.Register(() => _initialKeyExchangeCompleted?.TrySetCanceled()))
 				{
 					_initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
-					ConnectionInfo.ServerVersion = await ExchangeVersionAsync((linkedCancellation.Token));
+					ConnectionInfo.ServerVersion = await ExchangeVersionAsync(linkedCancellation.Token).ConfigureAwait(false);
 					_logger.Info("Server Version: " + ConnectionInfo.ServerVersion);
 					_readLoopTask = ReadLoop();
-					await _initialKeyExchangeCompleted.Task;
+					await _initialKeyExchangeCompleted.Task.ConfigureAwait(false);
 				}
 
                 // Perform login
                 _loginCompleted = new TaskCompletionSource<bool>();
 				using (linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled()))
 				{
-					await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, linkedCancellation.Token);
-					await _loginCompleted.Task;
+					await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, linkedCancellation.Token).ConfigureAwait(false);
+					await _loginCompleted.Task.ConfigureAwait(false);
 				}
                 // Set new state
                 _sshClientState = State.Connected;
@@ -262,7 +267,7 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, InternalCancellation.Token))
             {
-                await _clientSemaphore.WaitAsync(linkedCancellation.Token);
+                await _clientSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 // Validate current state of SshClient
                 if (_sshClientState != State.Connected)
@@ -303,7 +308,7 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, InternalCancellation.Token))
             {
-                await _clientSemaphore.WaitAsync(linkedCancellation.Token);
+                await _clientSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 // Validate current state of SshClient
                 if (_sshClientState != State.Connected)
@@ -342,7 +347,7 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the version exchange</returns>
         private async Task<string> ExchangeVersionAsync(CancellationToken cancellationToken)
         {
-            await _tcpConnection.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port);
+            await _tcpConnection.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port).ConfigureAwait(false);
 
             // Attempt to get version..
             _tcpStream = _tcpConnection.GetStream();
@@ -361,7 +366,7 @@ namespace Surfus.Shell
 
                 if (_tcpStream.DataAvailable)
                 {
-                    var readAmount = await _tcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken);
+                    var readAmount = await _tcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken).ConfigureAwait(false);
 
                     if (readAmount <= 0)
                     {
@@ -392,8 +397,8 @@ namespace Surfus.Shell
 
                                 // Send our version after. Seems to be a bug with some IOS versions if we're to fast and send this first.
                                 var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
-                                await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken);
-                                await _tcpStream.FlushAsync(cancellationToken);
+                                await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken).ConfigureAwait(false);
+                                await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
                                 return serverVersion;
                             }
                             else if(serverVersionMatch.Groups["ProtoVersion"].Value.StartsWith("1."))
@@ -409,7 +414,7 @@ namespace Surfus.Shell
                 }
                 else
                 {
-                    await Task.Delay(100);
+                    await Task.Delay(100).ConfigureAwait(false);
                 }
             }
 
@@ -432,7 +437,7 @@ namespace Surfus.Shell
                 _logger.Info("Starting Message Read Loop...");
                 while ((IsConnected || _isConnecting) && !InternalCancellation.IsCancellationRequested)
                 {
-                    await ReadMessageAsync(InternalCancellation.Token);
+                    await ReadMessageAsync(InternalCancellation.Token).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -459,10 +464,10 @@ namespace Surfus.Shell
         /// <returns></returns>
         private async Task ReadMessageAsync(CancellationToken cancellationToken)
         {
-            var sshPacket = await ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(_tcpStream, cancellationToken);
+            var sshPacket = await ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(_tcpStream, cancellationToken).ConfigureAwait(false);
             if (ConnectionInfo.ReadMacAlgorithm.OutputSize != 0)
             {
-                var messageAuthenticationHash = await _tcpStream.ReadBytesAsync((uint)ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken);
+                var messageAuthenticationHash = await _tcpStream.ReadBytesAsync((uint)ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
                 if (!ConnectionInfo.ReadMacAlgorithm.VerifyMac(messageAuthenticationHash, ConnectionInfo.InboundPacketSequence, sshPacket))
                 {
                     throw new InvalidDataException("Received a malformed packet from host.");
@@ -484,7 +489,7 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_KEX_Exchange_32:
                 case MessageType.SSH_MSG_KEX_Exchange_33:
                 case MessageType.SSH_MSG_KEX_Exchange_34:
-                    await ProcessKeyExchangeMessageAsync(messageEvent, cancellationToken);
+                    await ProcessKeyExchangeMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
                     break;
                 case MessageType.SSH_MSG_SERVICE_ACCEPT:
                 case MessageType.SSH_MSG_REQUEST_FAILURE:
@@ -492,7 +497,7 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_USERAUTH_FAILURE:
                 case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
                 case MessageType.SSH_MSG_USERAUTH_BANNER:
-                    await ProcessAuthenticationMessageAsync(messageEvent, cancellationToken);
+                    await ProcessAuthenticationMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
                     break;
                 case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
                 case MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE:
@@ -502,7 +507,7 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_CHANNEL_DATA:
                 case MessageType.SSH_MSG_CHANNEL_CLOSE:
                 case MessageType.SSH_MSG_CHANNEL_EOF:
-                    await ProcessChannelMessageAsync(messageEvent, cancellationToken);
+                    await ProcessChannelMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
                     break;
                 default:
                     _logger.Info($"{ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Unexpected Message {messageEvent.Type}");
@@ -523,10 +528,10 @@ namespace Surfus.Shell
                 switch (messageEvent.Type)
                 {
                     case MessageType.SSH_MSG_KEXINIT:
-                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
+                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
                         break;
                     case MessageType.SSH_MSG_NEWKEYS:
-                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
+                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
 
                         // If we make it to this point without an exception we've successfully completed our key exchange
                         _initialKeyExchangeCompleted?.TrySetResult(true);
@@ -536,7 +541,7 @@ namespace Surfus.Shell
                     case MessageType.SSH_MSG_KEX_Exchange_32:
                     case MessageType.SSH_MSG_KEX_Exchange_33:
                     case MessageType.SSH_MSG_KEX_Exchange_34:
-                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken);
+                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
                         break;
                 }
             }
@@ -560,21 +565,21 @@ namespace Surfus.Shell
                 switch (messageEvent.Type)
                 {
                     case MessageType.SSH_MSG_SERVICE_ACCEPT:
-                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken);
+                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken).ConfigureAwait(false);
                         break;
                     case MessageType.SSH_MSG_REQUEST_FAILURE:
-                        await ConnectionInfo.Authentication.ProcessRequestFailureMessage(cancellationToken);
+                        await ConnectionInfo.Authentication.ProcessRequestFailureMessage(cancellationToken).ConfigureAwait(false);
                         break;
                     case MessageType.SSH_MSG_USERAUTH_SUCCESS:
-                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess, cancellationToken);
+                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess, cancellationToken).ConfigureAwait(false);
                         // If we make it to this point with no exceptions we've achieved a success login.
                         _loginCompleted?.TrySetResult(true);
                         break;
                     case MessageType.SSH_MSG_USERAUTH_FAILURE:
-                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure, cancellationToken);
+                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure, cancellationToken).ConfigureAwait(false);
                         break;
                     case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken);
+                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken).ConfigureAwait(false);
                         break;
                     case MessageType.SSH_MSG_USERAUTH_BANNER:
                         Banner = (messageEvent.Message as UaBanner)?.Message;
@@ -599,35 +604,35 @@ namespace Surfus.Shell
             // Runs on background thread
             if (messageEvent.Message is IChannelRecipient channelMessage)
             {
-                await _clientSemaphore.WaitAsync(cancellationToken);
+                await _clientSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
                 var channel = _channels.Single(x => x.ClientId == channelMessage.RecipientChannel);
                 _clientSemaphore.Release();
 
                 switch (messageEvent.Message)
                 {
                     case ChannelSuccess success:
-                        await channel.SendMessageAsync(success, cancellationToken);
+                        await channel.SendMessageAsync(success, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelFailure failure:
-                        await channel.SendMessageAsync(failure, cancellationToken);
+                        await channel.SendMessageAsync(failure, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelOpenConfirmation openConfirmation:
-                        await channel.SendMessageAsync(openConfirmation, cancellationToken);
+                        await channel.SendMessageAsync(openConfirmation, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelOpenFailure openFailure:
-                        await channel.SendMessageAsync(openFailure, cancellationToken);
+                        await channel.SendMessageAsync(openFailure, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelWindowAdjust windowAdjust:
-                        await channel.SendMessageAsync(windowAdjust, cancellationToken);
+                        await channel.SendMessageAsync(windowAdjust, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelData channelData:
-                        await channel.SendMessageAsync(channelData, cancellationToken);
+                        await channel.SendMessageAsync(channelData, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelEof channelEof:
-                        await channel.SendMessageAsync(channelEof, cancellationToken);
+                        await channel.SendMessageAsync(channelEof, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelClose channelClose:
-                        await channel.SendMessageAsync(channelClose, cancellationToken);
+                        await channel.SendMessageAsync(channelClose, cancellationToken).ConfigureAwait(false);
                         break;
                 }
             }
@@ -646,15 +651,15 @@ namespace Surfus.Shell
                     ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize > 8
                     ? ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize : 8);
 
-            await _tcpStream.WriteAsync(ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Raw), cancellationToken);
+            await _tcpStream.WriteAsync(ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Raw), cancellationToken).ConfigureAwait(false);
 
             if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
             {
                 await _tcpStream.WriteAsync(ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence,
-                            sshPacket), cancellationToken);
+                            sshPacket), cancellationToken).ConfigureAwait(false);
             }
 
-            await _tcpStream.FlushAsync(cancellationToken);
+            await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
             ConnectionInfo.OutboundPacketSequence = ConnectionInfo.OutboundPacketSequence != uint.MaxValue
                                                          ? ConnectionInfo.OutboundPacketSequence + 1
                                                          : 0;

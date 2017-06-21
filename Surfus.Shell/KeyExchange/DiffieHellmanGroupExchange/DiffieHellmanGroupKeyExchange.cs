@@ -111,7 +111,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// </exception>
         public override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken);
+            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if (_keyExchangeAlgorithmState != State.Initial)
             {
@@ -119,7 +119,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             }
 
             // Send the request message to begin the Diffie-Hellman Group Key Exchange.
-            await _client.WriteMessageAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken);
+            await _client.WriteMessageAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken).ConfigureAwait(false);
 
             _keyExchangeAlgorithmState = State.WaitingonDhgGroup;
 
@@ -172,7 +172,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
         public override async Task<bool> SendKeyExchangeMessage31Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken);
+            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if (_keyExchangeAlgorithmState != State.WaitingonDhgGroup)
             {
@@ -195,7 +195,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
             // Send 'e' to the server with the 'Init' message.
             _logger.Debug($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Sending E");
-            await _client.WriteMessageAsync(new DhgInit(_e), cancellationToken);
+            await _client.WriteMessageAsync(new DhgInit(_e), cancellationToken).ConfigureAwait(false);
 
 
             _keyExchangeAlgorithmState = State.WaitingOnDhgReply;
@@ -212,7 +212,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
         public override async Task<bool> SendKeyExchangeMessage33Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken);
+            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if (_keyExchangeAlgorithmState != State.WaitingOnDhgReply)
             {

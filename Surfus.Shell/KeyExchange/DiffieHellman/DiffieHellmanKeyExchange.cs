@@ -88,14 +88,14 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// </exception>
         public override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken);
+            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if(_keyExchangeAlgorithmState != State.Initial)
             {
                 throw new SshException("Unexpected key exchange algorithm state"); ;
             }
 
-            await _client.WriteMessageAsync(new DhInit(E), cancellationToken);
+            await _client.WriteMessageAsync(new DhInit(E), cancellationToken).ConfigureAwait(false);
             _keyExchangeAlgorithmState = State.WaitingOnDhReply;
 
             _keyExchangeAlgorithmSemaphore.Release();
@@ -139,7 +139,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
 
         public override async Task<bool> SendKeyExchangeMessage31Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken);
+            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if(_keyExchangeAlgorithmState != State.WaitingOnDhReply)
             {

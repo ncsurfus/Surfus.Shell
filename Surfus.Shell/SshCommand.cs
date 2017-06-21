@@ -29,7 +29,7 @@ namespace Surfus.Shell
             _channel = channel;
             _channel.OnDataReceived += async (buffer, cancellationToken) =>
             {
-                await _commandSemaphore.WaitAsync(cancellationToken);
+                await _commandSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
                 _memoryStream.Write(buffer, 0, buffer.Length);
 
@@ -41,7 +41,7 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
             {
-                await _commandSemaphore.WaitAsync(linkedCancellation.Token);
+                await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 if (_commandState != State.Initial)
                 {
@@ -51,7 +51,7 @@ namespace Surfus.Shell
                 // Errored until success.
                 _commandState = State.Errored;
 
-                await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), _client.InternalCancellation.Token);
+                await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), _client.InternalCancellation.Token).ConfigureAwait(false);
 
                 _commandState = State.Opened;
 
@@ -63,11 +63,11 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
             {
-                await _commandSemaphore.WaitAsync(linkedCancellation.Token);
+                await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 if (_commandState == State.Opened)
                 {
-                    await _channel.CloseAsync(linkedCancellation.Token);
+                    await _channel.CloseAsync(linkedCancellation.Token).ConfigureAwait(false);
                 }
                 _commandState = State.Closed;
                 _commandSemaphore.Release();
@@ -98,7 +98,7 @@ namespace Surfus.Shell
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
             {
-                await _commandSemaphore.WaitAsync(linkedCancellation.Token);
+                await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
                 if (_commandState != State.Opened)
                 {
@@ -114,7 +114,7 @@ namespace Surfus.Shell
 
 					_channel.OnChannelEofReceived = async (message, token) =>
 					{
-						await _commandSemaphore.WaitAsync(linkedCancellation.Token);
+						await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
 						executeEofTaskSource.SetResult(true);
 
@@ -123,25 +123,25 @@ namespace Surfus.Shell
 
 					_channel.OnChannelCloseReceived = async (message, token) =>
 					{
-						await _commandSemaphore.WaitAsync(linkedCancellation.Token);
+						await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
 
 						executeCloseTaskSource.SetResult(true);
 
 						_commandSemaphore.Release();
 					};
 
-					await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), _client.InternalCancellation.Token);
+					await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), _client.InternalCancellation.Token).ConfigureAwait(false);
 					_commandSemaphore.Release();
 
 
-					await executeEofTaskSource.Task;
-					await executeCloseTaskSource.Task;
+					await executeEofTaskSource.Task.ConfigureAwait(false);
+					await executeCloseTaskSource.Task.ConfigureAwait(false);
 				}
 
                 _channel.OnChannelEofReceived = null;
                 _channel.OnChannelCloseReceived = null;
 
-                await _commandSemaphore.WaitAsync(linkedCancellation.Token);
+                await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
                 _commandState = State.Completed;
 
                 using (_memoryStream)

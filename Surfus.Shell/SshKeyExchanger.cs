@@ -34,12 +34,12 @@ namespace Surfus.Shell
         // Attempts to send a client kex init packet if we're in the expected state.
         internal async Task<bool> TrySendClientKexInitAsync(CancellationToken cancellationToken)
         {
-            await _sshKeyExchangeSemaphore.WaitAsync(cancellationToken);
+            await _sshKeyExchangeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if(_keyExchangeState == State.Initial)
             {
                 _clientKexInit = new KexInit();
-                await _client.WriteMessageAsync(_clientKexInit, cancellationToken);
+                await _client.WriteMessageAsync(_clientKexInit, cancellationToken).ConfigureAwait(false);
                 _keyExchangeState = State.SentKexNeedKex;
                 return true;
             }
@@ -51,7 +51,7 @@ namespace Surfus.Shell
         // ApplyKeyExchangeMessageAsync is called from the SshClient's ReadMessage method to move the state forward.
         internal async Task ProcessMessageAsync(MessageEvent message, CancellationToken cancellationToken)
         {
-            await _sshKeyExchangeSemaphore.WaitAsync(cancellationToken);
+            await _sshKeyExchangeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             switch (message.Type)
             {
 
@@ -59,12 +59,12 @@ namespace Surfus.Shell
                     if (_keyExchangeState == State.Initial)
                     {
                         _clientKexInit = new KexInit();
-                        await _client.WriteMessageAsync(_clientKexInit, cancellationToken);
+                        await _client.WriteMessageAsync(_clientKexInit, cancellationToken).ConfigureAwait(false);
                         _keyExchangeState = State.WaitingOnKeyExchangeProtocol;
                     }
                     else if (_keyExchangeState == State.SentKexNeedKex)
                     {
-                        await _client.WriteMessageAsync(_clientKexInit, cancellationToken);
+                        await _client.WriteMessageAsync(_clientKexInit, cancellationToken).ConfigureAwait(false);
                         _keyExchangeState = State.WaitingOnKeyExchangeProtocol;
                     }
                     else
@@ -73,7 +73,7 @@ namespace Surfus.Shell
                     }
                     KeyExchangeResult = new KexInitExchangeResult(_clientKexInit, message.Message as KexInit);
                     KeyExchangeAlgorithm = KeyExchangeAlgorithm.Create(_client, KeyExchangeResult);
-                    await KeyExchangeAlgorithm.InitiateKeyExchangeAlgorithmAsync(cancellationToken);
+                    await KeyExchangeAlgorithm.InitiateKeyExchangeAlgorithmAsync(cancellationToken).ConfigureAwait(false);
                     break;
 
                 case MessageType.SSH_MSG_KEX_Exchange_30:
@@ -86,7 +86,7 @@ namespace Surfus.Shell
                         throw new SshException("Received unexpected key exchange message."); ;
 
                     }
-                    await ApplyKeyExchangeAlgorithmMessageAsync(message, cancellationToken);
+                    await ApplyKeyExchangeAlgorithmMessageAsync(message, cancellationToken).ConfigureAwait(false);
                     break;
 
                 case MessageType.SSH_MSG_NEWKEYS:
@@ -95,7 +95,7 @@ namespace Surfus.Shell
                         throw new SshException("Received unexpected key exchange message.");
 
                     }
-                    await _client.WriteMessageAsync(new NewKeys(), cancellationToken);
+                    await _client.WriteMessageAsync(new NewKeys(), cancellationToken).ConfigureAwait(false);
                     ApplyKeyExchange();
                     _keyExchangeState = State.Initial;
                     break;
@@ -109,31 +109,31 @@ namespace Surfus.Shell
             switch (message.Type)
             {
                 case MessageType.SSH_MSG_KEX_Exchange_30:
-                    if(await KeyExchangeAlgorithm.SendKeyExchangeMessage30Async(message, cancellationToken))
+                    if(await KeyExchangeAlgorithm.SendKeyExchangeMessage30Async(message, cancellationToken).ConfigureAwait(false))
                     {
                         _keyExchangeState = State.WaitingOnNewKeys;
                     }
                     break;
                 case MessageType.SSH_MSG_KEX_Exchange_31:
-                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage31Async(message, cancellationToken))
+                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage31Async(message, cancellationToken).ConfigureAwait(false))
                     {
                         _keyExchangeState = State.WaitingOnNewKeys;
                     }
                     break;
                 case MessageType.SSH_MSG_KEX_Exchange_32:
-                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage32Async(message, cancellationToken))
+                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage32Async(message, cancellationToken).ConfigureAwait(false))
                     {
                         _keyExchangeState = State.WaitingOnNewKeys;
                     }
                     break;
                 case MessageType.SSH_MSG_KEX_Exchange_33:
-                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage33Async(message, cancellationToken))
+                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage33Async(message, cancellationToken).ConfigureAwait(false))
                     {
                         _keyExchangeState = State.WaitingOnNewKeys;
                     }
                     break;
                 case MessageType.SSH_MSG_KEX_Exchange_34:
-                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage34Async(message, cancellationToken))
+                    if (await KeyExchangeAlgorithm.SendKeyExchangeMessage34Async(message, cancellationToken).ConfigureAwait(false))
                     {
                         _keyExchangeState = State.WaitingOnNewKeys;
                     }
