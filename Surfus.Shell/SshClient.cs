@@ -116,10 +116,14 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="hostname">The remote SSH Server</param>
         /// <param name="port">The remote SSH port</param>
-        public SshClient(string hostname, ushort port = 22, ILoggerFactory loggerFactory = default(LoggerFactory))
+        public SshClient(string hostname, ushort port = 22, ILoggerFactory loggerFactory = null)
         {
             ConnectionInfo.Hostname = hostname;
             ConnectionInfo.Port = port;
+            if(loggerFactory == null)
+            {
+                loggerFactory = new LoggerFactory();
+            }
             Logger = loggerFactory.CreateLogger($"{ConnectionInfo.Hostname} {ConnectionInfo.Port}");
         }
 
