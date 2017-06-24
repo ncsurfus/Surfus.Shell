@@ -8,6 +8,8 @@ using Surfus.Shell.Messages.Channel.Open;
 using Surfus.Shell.Messages.Channel.Requests;
 using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
+using Surfus.Shell.Extensions;
+using Surfus.Shell.Messages.Channel;
 
 namespace Surfus.Shell
 {
@@ -29,41 +31,43 @@ namespace Surfus.Shell
             _client = sshClient;
             _logger = _client.Logger;
             _channel = channel;
-			
-			// TODO Let's move this out of a lambda
-            _channel.OnDataReceived = async (buffer, cancellationToken) =>
-            {
-                _logger.LogInformation("Terminal OnDataReceived is waiting for the terminal Semaphore");
-                await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogInformation("Terminal OnDataReceived has got the terminal Semaphore");
-                _logger.LogInformation($"Terminal Data: {Encoding.UTF8.GetString(buffer)}");
-				
-				//TODO Profiling notes that TrySetResult looks very performance heavy if it fails.
-                if (_terminalReadComplete?.TrySetResult(Encoding.UTF8.GetString(buffer)) != true)
-                {
-                    _readBuffer.Append(Encoding.UTF8.GetString(buffer));
-                }
-
-                _terminalSemaphore.Release();
-                _logger.LogInformation("Terminal OnDataReceived has released the terminal semaphore");
-            };
-			
-			// TODO Let's move this out of a lambda
-            _channel.OnChannelCloseReceived = async (close, cancellationToken) =>
-            {
-                await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
-                await CloseAsync(cancellationToken).ConfigureAwait(false);
-                ServerDisconnected?.Invoke();
-
-                _terminalSemaphore.Release();
-            };
+            _channel.OnDataReceived = OnDataReceived;
+            _channel.OnChannelCloseReceived = OnChannelCloseReceived;
         }
 
         public bool IsOpen => _channel.IsOpen;
         public bool DataAvailable => _readBuffer.Length > 0;
 
         public event Action ServerDisconnected;
+
+        private async Task OnDataReceived (byte[] buffer, CancellationToken cancellationToken)
+        {
+            _logger.LogInformation("Terminal OnDataReceived is waiting for the terminal Semaphore");
+            await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Terminal OnDataReceived has got the terminal Semaphore");
+
+            if(_terminalReadComplete == null || _terminalReadComplete?.Task.IsCompleted == true)
+            {
+                _readBuffer.Append(Encoding.UTF8.GetString(buffer));
+            }
+            else
+            {
+                _terminalReadComplete.SetResult(Encoding.UTF8.GetString(buffer))
+            }
+
+            _terminalSemaphore.Release();
+            _logger.LogInformation("Terminal OnDataReceived has released the terminal semaphore");
+        }
+
+        private async Task OnChannelCloseReceived(ChannelClose close, CancellationToken cancellationToken)
+        {
+            await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            await CloseAsync(cancellationToken).ConfigureAwait(false);
+            ServerDisconnected?.Invoke();
+
+            _terminalSemaphore.Release();
+        }
 
         public async Task OpenAsync(CancellationToken cancellationToken)
         {
@@ -133,7 +137,7 @@ namespace Surfus.Shell
             await WriteAsync("\n", cancellationToken).ConfigureAwait(false);
         }
 		
-		// TODO Profilinig notes this is slow...
+		// TODO Profiling notes this is slow...
         public async Task<string> ReadAsync(CancellationToken cancellationToken)
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
@@ -227,16 +231,17 @@ namespace Surfus.Shell
 				// This while loop is likely the culprit. IndexOf() is the next highest method after ToString().
 				// Look at improving this, but it might be wise to add a Task.Delay(100), after the before the buffer. This would allow more data to queue
 				// and cause the while loop to be hit as much. 
-                while ((index = buffer.ToString().IndexOf(plainText)) == -1)
+                while ((index = buffer.IndexOf(plainText)) == -1)
                 {
-                    await Task.Delay(100);
                     buffer.Append(await ReadAsync(cancellationToken).ConfigureAwait(false));
+                    await Task.Delay(100);
                 }
                 using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
                 {
                     index = index + plainText.Length;
-                    var fixedBuffer = buffer.ToString(0, index);
-                    var overflow = buffer.ToString(index, buffer.Length - index);
+                    var builderString = buffer.ToString();
+                    var fixedBuffer = builderString.Substring(0, index);
+                    var overflow = builderString.Substring(index, buffer.Length - index);
                     await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
                     _readBuffer.Insert(0, overflow);
                     _logger.LogInformation($"ExpectAsync found {plainText} as {buffer.ToString()}");
