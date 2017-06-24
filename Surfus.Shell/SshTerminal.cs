@@ -52,7 +52,7 @@ namespace Surfus.Shell
             }
             else
             {
-                _terminalReadComplete.SetResult(Encoding.UTF8.GetString(buffer))
+                _terminalReadComplete.SetResult(Encoding.UTF8.GetString(buffer));
             }
 
             _terminalSemaphore.Release();
