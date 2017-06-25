@@ -2,58 +2,117 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
-using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
-using Microsoft.Extensions.Logging;
-using System.Text;
 
 namespace Surfus.Shell
 {
+    /// <summary>
+    /// Repesents an SSH Channel. Once the SSH connections is setup channels are created and data can be passed.
+    /// </summary>
     internal class SshChannel : IDisposable
     {
-        // Fields
-        private ILogger _logger;
+        /// <summary>
+        /// Used to control access into the channel.
+        /// </summary>
         private readonly SemaphoreSlim _channelSemaphore = new SemaphoreSlim(1, 1);
-        private State _channelState = new State();
+
+        /// <summary>
+        /// The state of the channel.
+        /// </summary>
+        private State _channelState = State.Initial;
+
+        /// <summary>
+        /// The disposed state of the channel.
+        /// </summary>
         private bool _isDisposed;
+
+        /// <summary>
+        /// The SshClient that owns the channel.
+        /// </summary>
         private SshClient _client;
 
-        // Properities
+        /// <summary>
+        /// This is set once the channel open response is received.
+        /// </summary>
         private TaskCompletionSource<bool> _channelOpenCompleted;
+
+        /// <summary>
+        /// This is set once the channel request response is received.
+        /// </summary>
         private TaskCompletionSource<bool> _channelRequestCompleted;
 
-        public int WindowRefill { get; internal set; } = 50000;
-        public int SendWindow { get; internal set; }
-        public int ReceiveWindow { get; internal set; }
-        public uint ServerId { get; internal set; }
-        public uint ClientId { get; internal set; }
-        public Func<byte[], CancellationToken, Task> OnDataReceived;
-        public Func<ChannelEof, CancellationToken, Task> OnChannelEofReceived;
-        public Func<ChannelClose, CancellationToken, Task> OnChannelCloseReceived;
-        public bool IsOpen => _channelState != State.Initial && _channelState != State.Errored && _channelState != State.Closed;
+        /// <summary>
+        /// The amount of data to increase by once the receive window is empty.
+        /// </summary>
+        internal int WindowRefill { get; set; } = 50000;
 
+        /// <summary>
+        /// The amount of data we are allowed to send to the server.
+        /// </summary>
+        internal int SendWindow { get; set; }
+
+        /// <summary>
+        /// The amount of data that can be sent to us.
+        /// </summary>
+        internal int ReceiveWindow { get; set; }
+
+        /// <summary>
+        /// The id assigned to us by the server that represents this channel.
+        /// </summary>
+        internal uint ServerId { get; set; }
+
+        /// <summary>
+        /// The id we've assigned to the server that represents this channel.
+        /// </summary>
+        internal uint ClientId { get; set; }
+
+        /// <summary>
+        /// A callback once data is received.
+        /// </summary>
+        internal Func<byte[], CancellationToken, Task> OnDataReceived;
+
+        /// <summary>
+        /// A callback when a channel end of file is received.
+        /// </summary>
+        internal Func<ChannelEof, CancellationToken, Task> OnChannelEofReceived;
+
+        /// <summary>
+        /// A callback when a channel close is received.
+        /// </summary>
+        internal Func<ChannelClose, CancellationToken, Task> OnChannelCloseReceived;
+
+        /// <summary>
+        /// Returns the open/close state of the channel.
+        /// </summary>
+        internal bool IsOpen => _channelState != State.Initial && _channelState != State.Errored && _channelState != State.Closed;
+
+        /// <summary>
+        /// A channel used to pass data, open terminals, and run commands.
+        /// </summary>
+        /// <param name="client">The SshClient that owns this channel.</param>
+        /// <param name="channelId">The channel id used to uniquely represent this channel.</param>
         internal SshChannel(SshClient client, uint channelId)
         {
             _client = client;
             ClientId = channelId;
-            _logger = _logger = _client.Logger;
         }
 
-        // This will be called by the user, NOT the Read Loop
-        public async Task WriteDataAsync(byte[] buffer, CancellationToken cancellationToken)
+        /// <summary>
+        /// Writes data over the SSH channel.
+        /// </summary>
+        /// <param name="buffer">The data to send over the channel.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task WriteDataAsync(byte[] buffer, CancellationToken cancellationToken)
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _client.InternalCancellation.Token))
             {
                 var totalBytesLeft = buffer.Length;
                 while (totalBytesLeft > 0)
                 {
-                    _logger.LogInformation("WriteDataAsync is getting Semaphore");
                     await _channelSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-                    _logger.LogInformation("WriteDataAsync has Semaphore");
-                    _logger.LogInformation("SendWindow is " + SendWindow);
                     if (totalBytesLeft <= SendWindow)
                     {
-                        _logger.LogInformation("WriteDataAsync is sending data to WriteMessageAsync");
                         await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), linkedCancellation.Token).ConfigureAwait(false);
                         SendWindow -= totalBytesLeft;
                         totalBytesLeft = 0;
@@ -62,20 +121,23 @@ namespace Surfus.Shell
                     {
                         var smallBuffer = new byte[SendWindow];
                         Array.Copy(buffer, smallBuffer, smallBuffer.Length);
-                        _logger.LogInformation("WriteDataAsync is sending a portion of the data to WriteMessageAsync.");
                         await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), linkedCancellation.Token).ConfigureAwait(false);
                         totalBytesLeft -= SendWindow;
                         SendWindow = 0;
                     }
-                    _logger.LogInformation("WriteDataAsync has released Semaphore");
                     _channelSemaphore.Release();
                     await Task.Delay(100, linkedCancellation.Token).ConfigureAwait(false);
                 }
             }
         }
 
-        // This will be called by the user, NOT the Read Loop....
-        public async Task RequestAsync(ChannelRequest requestMessage, CancellationToken cancellationToken)
+        /// <summary>
+        /// Requests the channel to be opened.
+        /// </summary>
+        /// <param name="requestMessage">The request message that defines what type of channel should be opened.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task RequestAsync(ChannelRequest requestMessage, CancellationToken cancellationToken)
         {
             await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -94,8 +156,13 @@ namespace Surfus.Shell
             }
         }
 
-        // This will be called by the user, NOT the Read Loop....
-        public async Task OpenAsync(ChannelOpen openMessage, CancellationToken cancellationToken)
+        /// <summary>
+        /// Opens the channel.
+        /// </summary>
+        /// <param name="openMessage">The channel open messages that defines the opening parameters of the channel.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task OpenAsync(ChannelOpen openMessage, CancellationToken cancellationToken)
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _client.InternalCancellation.Token))
             {
@@ -115,8 +182,12 @@ namespace Surfus.Shell
             }
         }
 
-        // This will be called by the user NOT the Read Loops....
-        public async Task CloseAsync(CancellationToken cancellationToken)
+        /// <summary>
+        /// Closes the channel.
+        /// </summary>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task CloseAsync(CancellationToken cancellationToken)
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _client.InternalCancellation.Token))
             {
@@ -132,7 +203,13 @@ namespace Surfus.Shell
             }
         }
 
-        public async Task SendMessageAsync(ChannelOpenConfirmation message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a channel message that was sent by the server.
+        /// </summary>
+        /// <param name="message">The open confirmation message that was sent by the server.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task SendMessageAsync(ChannelOpenConfirmation message, CancellationToken cancellationToken)
         {
             await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnOpenConfirmation)
@@ -151,7 +228,13 @@ namespace Surfus.Shell
             _channelSemaphore.Release();
         }
 
-        public async Task SendMessageAsync(ChannelOpenFailure message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a channel message that was sent by the server.
+        /// </summary>
+        /// <param name="message">The open failure message that was sent by the server.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task SendMessageAsync(ChannelOpenFailure message, CancellationToken cancellationToken)
         {
             await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnOpenConfirmation)
@@ -168,7 +251,13 @@ namespace Surfus.Shell
             throw exception;
         }
 
-        public async Task SendMessageAsync(ChannelSuccess message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a channel message that was sent by the server.
+        /// </summary>
+        /// <param name="message">The channel success message that was sent by the server.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task SendMessageAsync(ChannelSuccess message, CancellationToken cancellationToken)
         {
             await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnRequestResponse)
@@ -185,7 +274,13 @@ namespace Surfus.Shell
             _channelSemaphore.Release();
         }
 
-        public async Task SendMessageAsync(ChannelFailure message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a channel message that was sent by the server.
+        /// </summary>
+        /// <param name="message">The channel failure message that was sent by the server.</param>
+        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task SendMessageAsync(ChannelFailure message, CancellationToken cancellationToken)
         {
             await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnRequestResponse)
@@ -202,7 +297,13 @@ namespace Surfus.Shell
             throw exception;
         }
 
-        public async Task SendMessageAsync(ChannelWindowAdjust message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a channel message that was sent by the server.
+        /// </summary>
+        /// <param name="message">The channel window adjust sent by the server. Once this is sent to us we can send more data.</param>
+        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task SendMessageAsync(ChannelWindowAdjust message, CancellationToken cancellationToken)
         {
             await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
@@ -213,34 +314,34 @@ namespace Surfus.Shell
             }
 
             SendWindow += (int)message.BytesToAdd;
-            _logger.LogInformation($"Send window has been increased {SendWindow}");
             _channelSemaphore.Release();
         }
 
-        public async Task SendMessageAsync(ChannelData message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a channel message that was sent by the server.
+        /// </summary>
+        /// <param name="message">The channel data sent by the server. This contains data that we will send in the callback method.</param>
+        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task SendMessageAsync(ChannelData message, CancellationToken cancellationToken)
         {
-            _logger.LogInformation("SendMessageAsync (ChannelData) is getting Semaphore");
             await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("SendMessageAsync (ChannelData) has got the Semaphore");
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
                 _channelState = State.Errored;
                 _channelSemaphore.Release();
-                _logger.LogInformation("SendMessageAsync (ChannelData) has released the Semaphore and thrown an exception");
                 throw new SshException("Received unexpected channel message.");
             }
 
             if (ReceiveWindow <= 0)
             {
                 _channelSemaphore.Release();
-                _logger.LogInformation("SendMessageAsync (ChannelData) has released the Semaphore, as the ReceiveWindow is under 0");
                 return;
             }
 
             var length = message.Data.Length > ReceiveWindow ? ReceiveWindow : message.Data.Length;
             if (length != message.Data.Length)
             {
-                _logger.LogInformation($"Server sent to much data, resizing from {message.Data.Length} to {ReceiveWindow}");
                 message.ResizeData(length);
             }
 
@@ -248,23 +349,25 @@ namespace Surfus.Shell
 
             if (ReceiveWindow <= 0)
             {
-                _logger.LogInformation("SendMessageAsync (ChannelData) is waiting on the client to send a message to increase the ChannelWindow");
                 await _client.WriteMessageAsync(new ChannelWindowAdjust(ServerId, (uint)WindowRefill), cancellationToken).ConfigureAwait(false);
                 ReceiveWindow += WindowRefill;
             }
 
             if (OnDataReceived != null)
             {
-                _logger.LogInformation("SendMessageAsync (ChannelData) is waiting the upper level object.");
                 await OnDataReceived(message.Data, cancellationToken).ConfigureAwait(false);
-                _logger.LogInformation("SendMessageAsync (ChannelData) has completed sending the data to the upper level object.");
             }
 
             _channelSemaphore.Release();
-            _logger.LogInformation("SendMessageAsync (ChannelData) has released the Semaphore");
         }
 
-        public async Task SendMessageAsync(ChannelEof message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a channel message that was sent by the server.
+        /// </summary>
+        /// <param name="message">The channel end of file sent by the server. We could still send data, but the server has stopped.</param>
+        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task SendMessageAsync(ChannelEof message, CancellationToken cancellationToken)
         {
             await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
@@ -282,7 +385,13 @@ namespace Surfus.Shell
             _channelSemaphore.Release();
         }
 
-        public async Task SendMessageAsync(ChannelClose message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a channel message that was sent by the server.
+        /// </summary>
+        /// <param name="message">The channel close message sent by the server.</param>
+        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task SendMessageAsync(ChannelClose message, CancellationToken cancellationToken)
         {
             await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
@@ -300,6 +409,9 @@ namespace Surfus.Shell
             _channelSemaphore.Release();
         }
 
+        /// <summary>
+        /// Closes the channel.
+        /// </summary>
         public void Close()
         {
             if(!_isDisposed)
@@ -309,11 +421,17 @@ namespace Surfus.Shell
             }
         }
 
+        /// <summary>
+        /// Disposes the channel.
+        /// </summary>
         public void Dispose()
         {
             Close();
         }
 
+        /// <summary>
+        /// The states the channel can be in.
+        /// </summary>
         internal enum State
         {
             Initial,

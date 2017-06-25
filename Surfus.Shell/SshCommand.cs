@@ -3,8 +3,6 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Surfus.Shell.Exceptions;
-using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel.Open;
 using Surfus.Shell.Messages.Channel.Requests;
 using Microsoft.Extensions.Logging;
@@ -37,7 +35,7 @@ namespace Surfus.Shell
             };
         }
 
-        public async Task OpenAsync(CancellationToken cancellationToken)
+        internal async Task OpenAsync(CancellationToken cancellationToken)
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
             {

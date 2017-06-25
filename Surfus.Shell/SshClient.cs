@@ -286,6 +286,7 @@ namespace Surfus.Shell
                 _channelCounter++;
 
                 _clientSemaphore.Release();
+                await terminal.OpenAsync(cancellationToken);
                 return terminal;
             }
         }
@@ -327,6 +328,7 @@ namespace Surfus.Shell
                 _channelCounter++;
 
                 _clientSemaphore.Release();
+                await command.OpenAsync(cancellationToken);
                 return command;
             }
         }
