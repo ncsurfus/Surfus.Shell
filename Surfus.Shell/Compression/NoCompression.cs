@@ -21,7 +21,7 @@
         /// <returns>
         /// The compressed data.
         /// </returns>
-        public override byte[] Compress(byte[] data)
+        internal override byte[] Compress(byte[] data)
         {
             return data;
         }
@@ -35,7 +35,7 @@
         /// <returns>
         /// The decompressed data.
         /// </returns>
-        public override byte[] Decompress(byte[] data)
+        internal override byte[] Decompress(byte[] data)
         {
             return data;
         }

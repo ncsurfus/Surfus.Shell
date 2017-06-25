@@ -9,7 +9,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
     /// </summary>
     internal sealed class DiffieHellmanGroup14Sha1 : DiffieHellmanKeyExchange
     {
-        public DiffieHellmanGroup14Sha1(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult)
+        internal DiffieHellmanGroup14Sha1(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult)
             : base(sshClient, kexInitExchangeResult)
         {
             E = BigInteger.Zero;

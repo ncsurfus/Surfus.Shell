@@ -4,15 +4,42 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell
 {
+    /// <summary>
+    /// Represents an SSH Packet.
+    /// </summary>
     internal class SshPacket
     {
+        /// <summary>
+        /// A random number generator used to generate padding.
+        /// </summary>
         private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
-        public readonly uint Length;
-        public readonly byte[] Padding;
-        public readonly byte[] Payload;
-        public readonly byte[] Raw;
 
-        public SshPacket(byte[] compressedPayload, int paddingMultiplier)
+        /// <summary>
+        /// The length of the SSH Packet.
+        /// </summary>
+        internal readonly uint Length;
+
+        /// <summary>
+        /// The padding of the SSH Packet.
+        /// </summary>
+        internal readonly byte[] Padding;
+
+        /// <summary>
+        /// The payload of the SSH Packet.
+        /// </summary>
+        internal readonly byte[] Payload;
+
+        /// <summary>
+        /// The raw data of the entire SSH Packet.
+        /// </summary>
+        internal readonly byte[] Raw;
+
+        /// <summary>
+        /// Constructs an SSH Packet from the compressed payload and padding multiplier. Used to write a packet.
+        /// </summary>
+        /// <param name="compressedPayload">The compressed payload.</param>
+        /// <param name="paddingMultiplier">The padding multipler.</param>
+        internal SshPacket(byte[] compressedPayload, int paddingMultiplier)
         {
             // Generate padding
             var paddingLength = -((5 + compressedPayload.Length) % paddingMultiplier) + paddingMultiplier * 2;
@@ -39,7 +66,12 @@ namespace Surfus.Shell
             Array.Copy(Padding, 0, Raw, 5 + Payload.Length, Padding.Length);
         }
 
-        public SshPacket(byte[] firstBlock, byte[] secondBlock)
+        /// <summary>
+        /// Constructs an SSH Packet from incoming data.
+        /// </summary>
+        /// <param name="firstBlock"></param>
+        /// <param name="secondBlock"></param>
+        internal SshPacket(byte[] firstBlock, byte[] secondBlock)
         {
             Raw = new byte[firstBlock.Length + secondBlock.Length];
             Array.Copy(firstBlock, 0, Raw, 0, firstBlock.Length);
@@ -56,18 +88,30 @@ namespace Surfus.Shell
             Array.Copy(Raw, 5 + Payload.Length, Padding, 0, Padding.Length);
         }
 
+        /// <summary>
+        /// The length of the packet.
+        /// </summary>
+        /// <returns></returns>
         private uint GetLength()
         {
             // Raw index: [0, 1, 2, 3]
             return Raw.FromBigEndianToUint();
         }
 
+        /// <summary>
+        /// The padding length of the packet.
+        /// </summary>
+        /// <returns></returns>
         private byte GetPaddingLength()
         {
             // Raw index: [4]
             return Raw[4];
         }
 
+        /// <summary>
+        /// The payload length of the packet.
+        /// </summary>
+        /// <returns></returns>
         private uint GetPayloadLength()
         {
             return (uint) (Length - Padding.Length - 1);

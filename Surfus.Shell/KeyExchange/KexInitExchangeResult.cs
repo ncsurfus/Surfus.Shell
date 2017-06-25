@@ -19,7 +19,7 @@ namespace Surfus.Shell.KeyExchange
         /// <param name="server">
         /// The server KexInit packet.
         /// </param>
-        public KexInitExchangeResult(KexInit client, KexInit server)
+        internal KexInitExchangeResult(KexInit client, KexInit server)
         {
             Client = client;
             Server = server;
@@ -36,52 +36,52 @@ namespace Surfus.Shell.KeyExchange
         /// <summary>
         /// Gets the client KexInit message.
         /// </summary>
-        public KexInit Client { get; }
+        internal KexInit Client { get; }
 
         /// <summary>
         /// Gets the server KexInit message.
         /// </summary>
-        public KexInit Server { get; }
+        internal KexInit Server { get; }
 
         /// <summary>
         /// Gets the key exchange algorithm.
         /// </summary>
-        public string KeyExchangeAlgorithm { get; }
+        internal string KeyExchangeAlgorithm { get; }
 
         /// <summary>
         /// Gets the server host key algorithm.
         /// </summary>
-        public string ServerHostKeyAlgorithm { get; }
+        internal string ServerHostKeyAlgorithm { get; }
 
         /// <summary>
         /// Gets the client to server encryption cipher.
         /// </summary>
-        public string EncryptionClientToServer { get; }
+        internal string EncryptionClientToServer { get; }
 
         /// <summary>
         /// Gets the server to client encryption cipher.
         /// </summary>
-        public string EncryptionServerToClient { get; }
+        internal string EncryptionServerToClient { get; }
 
         /// <summary>
         /// Gets the client to server compression algorithm.
         /// </summary>
-        public string CompressionClientToServer { get; }
+        internal string CompressionClientToServer { get; }
 
         /// <summary>
         /// Gets the server to client compression algorithm.
         /// </summary>
-        public string CompressionServerToClient { get; }
+        internal string CompressionServerToClient { get; }
 
         /// <summary>
         /// Gets the client to server message authentication algorithm.
         /// </summary>
-        public string MessageAuthenticationClientToServer { get; }
+        internal string MessageAuthenticationClientToServer { get; }
 
         /// <summary>
         /// Gets the server to client message authentication algorithm.
         /// </summary>
-        public string MessageAuthenticationServerToClient { get; }
+        internal string MessageAuthenticationServerToClient { get; }
 
         /// <summary>
         /// Selects the appropriate cipher from the client and server NameLists.

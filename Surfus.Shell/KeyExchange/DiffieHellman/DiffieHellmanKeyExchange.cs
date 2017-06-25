@@ -86,7 +86,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// <exception cref="SshException">
         /// Throws an SshException if the key exchange fails.
         /// </exception>
-        public override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
+        internal override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
         {
             await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -132,12 +132,24 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             return SHA1.Create();
         }
 
-        public override Task<bool> SendKeyExchangeMessage30Async(MessageEvent message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a key exchange message.
+        /// </summary>
+        /// <param name="message">The key exchange message to be processed.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
+        internal override Task<bool> ProcessMessage30Async(MessageEvent message, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        public override async Task<bool> SendKeyExchangeMessage31Async(MessageEvent message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a key exchange message.
+        /// </summary>
+        /// <param name="message">The key exchange message to be processed.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
+        internal override async Task<bool> ProcessMessage31Async(MessageEvent message, CancellationToken cancellationToken)
         {
             await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -198,22 +210,42 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             return true;
         }
 
-        public override Task<bool> SendKeyExchangeMessage32Async(MessageEvent message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a key exchange message.
+        /// </summary>
+        /// <param name="message">The key exchange message to be processed.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
+        internal override Task<bool> ProcessMessage32Async(MessageEvent message, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        public override Task<bool> SendKeyExchangeMessage33Async(MessageEvent message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a key exchange message.
+        /// </summary>
+        /// <param name="message">The key exchange message to be processed.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
+        internal override Task<bool> ProcessMessage33Async(MessageEvent message, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        public override Task<bool> SendKeyExchangeMessage34Async(MessageEvent message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a key exchange message.
+        /// </summary>
+        /// <param name="message">The key exchange message to be processed.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
+        internal override Task<bool> ProcessMessage34Async(MessageEvent message, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        // State represents the current state of the key exchange algorithm
+        /// <summary>
+        /// The states of the DiffieHellmanKeyExchange.
+        /// </summary>
         internal enum State
         {
             Initial,

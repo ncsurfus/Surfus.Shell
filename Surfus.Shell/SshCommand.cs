@@ -5,36 +5,81 @@ using System.Threading;
 using System.Threading.Tasks;
 using Surfus.Shell.Messages.Channel.Open;
 using Surfus.Shell.Messages.Channel.Requests;
-using Microsoft.Extensions.Logging;
 
 namespace Surfus.Shell
 {
+    /// <summary>
+    /// A command to be sent to the server.
+    /// </summary>
     public class SshCommand : IDisposable
     {
-        private ILogger _logger;
+        /// <summary>
+        /// The channel the command will be sent over.
+        /// </summary>
         private SshChannel _channel;
+
+        /// <summary>
+        /// The client the command will be sent to.
+        /// </summary>
         private SshClient _client;
+
+        /// <summary>
+        /// The disposed state of the command.
+        /// </summary>
         private bool _isDisposed;
+        
+        /// <summary>
+        /// Provides coordination between the async methods.
+        /// </summary>
         private SemaphoreSlim _commandSemaphore = new SemaphoreSlim(1, 1);
+
+        /// <summary>
+        /// The internal command cancellation.
+        /// </summary>
         private CancellationTokenSource _commandCancellation = new CancellationTokenSource();
+
+        /// <summary>
+        /// The state of the command process.
+        /// </summary>
         private State _commandState = State.Initial;
+
+        /// <summary>
+        /// The buffer to store the received command data into.
+        /// </summary>
         private readonly MemoryStream _memoryStream = new MemoryStream();
 
+        /// <summary>
+        /// Constructs the command to be sent to the server.
+        /// </summary>
+        /// <param name="sshClient">The client to send the command to.</param>
+        /// <param name="channel">The channel to send the command over.</param>
         internal SshCommand(SshClient sshClient, SshChannel channel)
         {
             _client = sshClient;
-            _logger = _client.Logger;
             _channel = channel;
-            _channel.OnDataReceived += async (buffer, cancellationToken) =>
-            {
-                await _commandSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
-                _memoryStream.Write(buffer, 0, buffer.Length);
-
-                _commandSemaphore.Release();
-            };
+            _channel.OnDataReceived = OnDataReceived;
         }
 
+        /// <summary>
+        /// Receives data from the channel and places it into the buffer.
+        /// </summary>
+        /// <param name="buffer">The received data.</param>
+        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task OnDataReceived(byte[] buffer, CancellationToken cancellationToken)
+        {
+            await _commandSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            _memoryStream.Write(buffer, 0, buffer.Length);
+
+            _commandSemaphore.Release();
+        }
+
+        /// <summary>
+        /// Opens the underlying SSH channel and requests to send commands over the channel.
+        /// </summary>
+        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
+        /// <returns></returns>
         internal async Task OpenAsync(CancellationToken cancellationToken)
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
@@ -57,6 +102,11 @@ namespace Surfus.Shell
             }
         }
 
+        /// <summary>
+        /// Closes the command. 
+        /// </summary>
+        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
+        /// <returns></returns>
         public async Task CloseAsync(CancellationToken cancellationToken)
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
@@ -73,6 +123,9 @@ namespace Surfus.Shell
             };
         }
 
+        /// <summary>
+        /// Closes the command.
+        /// </summary>
         public void Close()
         {
             if (!_isDisposed)
@@ -87,11 +140,20 @@ namespace Surfus.Shell
             }
         }
 
+        /// <summary>
+        /// Disposes the command.
+        /// </summary>
         public void Dispose()
         {
             Close();
         }
 
+        /// <summary>
+        /// Sends the command to the server.
+        /// </summary>
+        /// <param name="command"></param>
+        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
+        /// <returns>The result of the command.</returns>
         public async Task<string> ExecuteAsync(string command, CancellationToken cancellationToken)
         {
             using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
@@ -150,6 +212,9 @@ namespace Surfus.Shell
             }
         }
 
+        /// <summary>
+        /// The state of the command process.
+        /// </summary>
         internal enum State
         {
             Initial,
