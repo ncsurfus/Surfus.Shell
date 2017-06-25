@@ -78,8 +78,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// </summary>
         private DhgGroup _dhgGroupMessage;
 
-        private ILogger _logger;
-
         /// <summary>
         /// Initializes a new instance of the <see cref="DiffieHellmanGroupKeyExchange"/> class.
         /// </summary>
@@ -92,10 +90,9 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// <param name="shaVersion">
         /// The SHA version. Can be 'SHA1' or 'SHA256'.
         /// </param>
-        public DiffieHellmanGroupKeyExchange(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult, string shaVersion)
+        internal DiffieHellmanGroupKeyExchange(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult, string shaVersion)
         {
             _client = sshClient;
-            _logger = _client.Logger;
             _kexInitExchangeResult = kexInitExchangeResult;
             _shaVersion = shaVersion;
         }
@@ -109,7 +106,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// <exception cref="SshException">
         /// Throws an SshException if the key exchange fails.
         /// </exception>
-        public override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
+        internal override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
         {
             await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -165,12 +162,24 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             }
         }
 
-        public override Task<bool> SendKeyExchangeMessage30Async(MessageEvent message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a key exchange message.
+        /// </summary>
+        /// <param name="message">The key exchange message to be processed.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
+        internal override Task<bool> ProcessMessage30Async(MessageEvent message, CancellationToken cancellationToken)
         {
             throw new SshUnexpectedMessage(MessageType.SSH_MSG_KEX_Exchange_30);
         }
 
-        public override async Task<bool> SendKeyExchangeMessage31Async(MessageEvent message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a key exchange message.
+        /// </summary>
+        /// <param name="message">The key exchange message to be processed.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
+        internal override async Task<bool> ProcessMessage31Async(MessageEvent message, CancellationToken cancellationToken)
         {
             await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -187,16 +196,12 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
             // Generate random number 'x'.
             _x = GenerateRandomBigInteger(1, (_dhgGroupMessage.P - 1) / 2);
-            _logger.LogTrace($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Generated X {_x}");
 
             // Generate 'e'.
             _e = BigInteger.ModPow(_dhgGroupMessage.G, _x, _dhgGroupMessage.P);
-            _logger.LogTrace($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Generated E {_e}");
 
             // Send 'e' to the server with the 'Init' message.
-            _logger.LogDebug($"{_client.ConnectionInfo.Hostname} - {nameof(InitiateKeyExchangeAlgorithmAsync)}: Sending E");
             await _client.WriteMessageAsync(new DhgInit(_e), cancellationToken).ConfigureAwait(false);
-
 
             _keyExchangeAlgorithmState = State.WaitingOnDhgReply;
 
@@ -205,12 +210,24 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             return false;
         }
 
-        public override Task<bool> SendKeyExchangeMessage32Async(MessageEvent message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a key exchange message.
+        /// </summary>
+        /// <param name="message">The key exchange message to be processed.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
+        internal override Task<bool> ProcessMessage32Async(MessageEvent message, CancellationToken cancellationToken)
         {
             throw new SshUnexpectedMessage(MessageType.SSH_MSG_KEX_Exchange_32);
         }
 
-        public override async Task<bool> SendKeyExchangeMessage33Async(MessageEvent message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a key exchange message.
+        /// </summary>
+        /// <param name="message">The key exchange message to be processed.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
+        internal override async Task<bool> ProcessMessage33Async(MessageEvent message, CancellationToken cancellationToken)
         {
             await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -268,7 +285,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
                 }
             }
 
-
             _keyExchangeAlgorithmState = State.Complete;
 
             _keyExchangeAlgorithmSemaphore.Release();
@@ -276,12 +292,20 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             return true;
         }
 
-        public override Task<bool> SendKeyExchangeMessage34Async(MessageEvent message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes a key exchange message.
+        /// </summary>
+        /// <param name="message">The key exchange message to be processed.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
+        internal override Task<bool> ProcessMessage34Async(MessageEvent message, CancellationToken cancellationToken)
         {
 			throw new SshUnexpectedMessage(MessageType.SSH_MSG_KEX_Exchange_34);
         }
 
-        // State represents the current state of the key exchange algorithm
+        /// <summary>
+        /// The states of the diffie hellman group key exchange.
+        /// </summary>
         internal enum State
         {
             Initial,

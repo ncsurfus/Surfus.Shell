@@ -1,43 +1,85 @@
 ﻿using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.UserAuth;
-using Microsoft.Extensions.Logging;
 
 namespace Surfus.Shell
 {
+    /// <summary>
+    /// Provides authentication methods
+    /// </summary>
     internal class SshAuthentication : IDisposable
     {
-
-        // Fields
-        private ILogger _logger;
+        /// <summary>
+        /// The SshClient that owns the channel.
+        /// </summary>
         private SshClient _client { get; }
-        private readonly SemaphoreSlim _loginSemaphore = new SemaphoreSlim(1, 1);
-        private State _loginState = State.Initial;
-        private LoginType _loginType = LoginType.None;
-        private string _username;
-        private string _password;
-        private Func<string, CancellationToken, Task<string>> _interactiveResponse;
-        private bool _disposed;
 
+        /// <summary>
+        /// Used to coordinate async access.
+        /// </summary>
+        private readonly SemaphoreSlim _loginSemaphore = new SemaphoreSlim(1, 1);
+
+        /// <summary>
+        /// The current state of authentication.
+        /// </summary>
+        private State _loginState = State.Initial;
+
+        /// <summary>
+        /// The type of login to be attempted.
+        /// </summary>
+        private LoginType _loginType = LoginType.None;
+
+        /// <summary>
+        /// The provided username.
+        /// </summary>
+        private string _username;
+
+        /// <summary>
+        /// The provided password.
+        /// </summary>
+        private string _password;
+
+        /// <summary>
+        /// The interactive response callback.
+        /// </summary>
+        private Func<string, CancellationToken, Task<string>> _interactiveResponse;
+
+        /// <summary>
+        /// The disposed state of the channel.
+        /// </summary>
+        private bool _isDisposed;
+
+        /// <summary>
+        /// The Task Compeletion Source to be set once the server sends the UserAuthInfoRequest response.
+        /// </summary>
         private TaskCompletionSource<UaInfoRequest> UserAuthInfoRequest = new TaskCompletionSource<UaInfoRequest>();
 
-        public SshAuthentication(SshClient sshClient)
+        /// <summary>
+        /// Provides authentication over SSH.
+        /// </summary>
+        /// <param name="sshClient"></param>
+        internal SshAuthentication(SshClient sshClient)
         {
             _client = sshClient;
-            _logger = _logger = _client.Logger;
         }
 
-        public async Task LoginAsync(string username, string password, CancellationToken cancellationToken)
+        /// <summary>
+        /// Logs in a user.
+        /// </summary>
+        /// <param name="username">The username to login with.</param>
+        /// <param name="password">The password to login with.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task LoginAsync(string username, string password, CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             if(_loginState != State.Initial)
             {
-                throw new Exception("Cannot Login Twice...");
+                throw new SshException("Cannot Login Twice...");
             }
 
             _username = username;
@@ -50,7 +92,14 @@ namespace Surfus.Shell
             _loginSemaphore.Release();
         }
 
-        public async Task LoginAsync(string username, Func<string, CancellationToken, Task<string>> ResponseTask, CancellationToken cancellationToken)
+        /// <summary>
+        /// Logs in a user.
+        /// </summary>
+        /// <param name="username">The username to login with.</param>
+        /// <param name="ResponseTask">The interactive callback.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task LoginAsync(string username, Func<string, CancellationToken, Task<string>> ResponseTask, CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -68,8 +117,13 @@ namespace Surfus.Shell
             _loginSemaphore.Release();
         }
 
-        // Message Pumps
-        public async Task ProcessMessageAsync(ServiceAccept message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes an authentication message sent by the server.
+        /// </summary>
+        /// <param name="message">The message sent by the server.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task ProcessMessageAsync(ServiceAccept message, CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -96,7 +150,13 @@ namespace Surfus.Shell
             _loginSemaphore.Release();
         }
 
-        public async Task ProcessRequestFailureMessage( CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes an authentication message sent by the server.
+        /// </summary>
+        /// <param name="message">The message sent by the server.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task ProcessRequestFailureMessage(CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
            
@@ -112,7 +172,13 @@ namespace Surfus.Shell
             throw new SshException("Server does not accept authentication.");
         }
 
-        public async Task ProcessMessageAsync(UaSuccess message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes an authentication message sent by the server.
+        /// </summary>
+        /// <param name="message">The message sent by the server.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task ProcessMessageAsync(UaSuccess message, CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -130,7 +196,13 @@ namespace Surfus.Shell
             _loginSemaphore.Release();
         }
 
-        public async Task<bool> ProcessMessageAsync(UaFailure message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes an authentication message sent by the server.
+        /// </summary>
+        /// <param name="message">The message sent by the server.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task<bool> ProcessMessageAsync(UaFailure message, CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -145,7 +217,13 @@ namespace Surfus.Shell
             throw new SshInvalidCredentials(_username);
         }
 
-        public async Task ProcessMessageAsync(UaInfoRequest message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Processes an authentication message sent by the server.
+        /// </summary>
+        /// <param name="message">The message sent by the server.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns></returns>
+        internal async Task ProcessMessageAsync(UaInfoRequest message, CancellationToken cancellationToken)
         {
             await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -168,21 +246,30 @@ namespace Surfus.Shell
 
         }
 
-        public void Close()
+        /// <summary>
+        /// Closes the SSH Authentication.
+        /// </summary>
+        internal void Close()
         {
-            if(!_disposed)
+            if(!_isDisposed)
             {
-                _disposed = true;
+                _isDisposed = true;
                 _password = null;
                 _loginSemaphore.Dispose();
             }
         }
 
+        /// <summary>
+        /// Disposes the SSH Authentication.
+        /// </summary>
         public void Dispose()
         {
             Close();
         }
 
+        /// <summary>
+        /// The state of the authentication process.
+        /// </summary>
         internal enum State
         {
             Initial,
@@ -193,6 +280,9 @@ namespace Surfus.Shell
             Failed
         }
 
+        /// <summary>
+        /// The SSH login Type.
+        /// </summary>
         internal enum LoginType
         {
             None,

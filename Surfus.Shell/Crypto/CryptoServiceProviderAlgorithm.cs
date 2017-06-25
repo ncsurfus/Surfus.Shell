@@ -52,7 +52,7 @@ namespace Surfus.Shell.Crypto
         /// </summary>
         /// <param name="byteArray">The data to encrypt.</param>
         /// <returns></returns>
-        public override byte[] Encrypt(byte[] byteArray)
+        internal override byte[] Encrypt(byte[] byteArray)
         {
             var encryptedBlocks =
                 new byte[byteArray.Length / _encryptor.InputBlockSize * _encryptor.OutputBlockSize];
@@ -70,7 +70,7 @@ namespace Surfus.Shell.Crypto
         /// </summary>
         /// <param name="initializationVector">The initialization vector for the cipher.</param>
         /// <param name="key">The key for the cipher.</param>
-        public override void Initialize(byte[] initializationVector, byte[] key)
+        internal override void Initialize(byte[] initializationVector, byte[] key)
         {
             var usableEncryptionKey = key.Take(KeySize).ToArray();
             var usableInitialIv = initializationVector.Take(InitializationVectorSize).ToArray();
@@ -100,7 +100,7 @@ namespace Surfus.Shell.Crypto
         /// <returns>
         /// The SSH Packet.
         /// </returns>
-        public override async Task<SshPacket> ReadPacketAsync(
+        internal override async Task<SshPacket> ReadPacketAsync(
             NetworkStream networkStream, 
             CancellationToken cancellationToken)
         {

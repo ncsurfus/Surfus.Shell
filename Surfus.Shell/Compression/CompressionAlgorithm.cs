@@ -11,7 +11,7 @@ namespace Surfus.Shell.Compression
         /// <summary>
         /// Supported compression algorithms.
         /// </summary>
-        public static string[] Supported => new[] { "none" };
+        internal static string[] Supported => new[] { "none" };
 
         /// <summary>
         /// Creates the specified compression algorithm.
@@ -19,7 +19,7 @@ namespace Surfus.Shell.Compression
         /// <param name="name">
         /// The name of the compression algorithm.
         /// </param>
-        public static CompressionAlgorithm Create(string name)
+        internal static CompressionAlgorithm Create(string name)
         {
             if (name == "none")
             {
@@ -38,7 +38,7 @@ namespace Surfus.Shell.Compression
         /// <returns>
         /// The compressed data.
         /// </returns>
-        public abstract byte[] Compress(byte[] data);
+        internal abstract byte[] Compress(byte[] data);
 
         /// <summary>
         /// Decompresses the data.
@@ -49,7 +49,7 @@ namespace Surfus.Shell.Compression
         /// <returns>
         /// The decompressed data.
         /// </returns>
-        public abstract byte[] Decompress(byte[] data);
+        internal abstract byte[] Decompress(byte[] data);
 
         /// <summary>
         /// Disposes the compression algorithm.

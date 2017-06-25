@@ -114,8 +114,8 @@ namespace Surfus.Shell
         /// <summary>
         /// An SshClient that can connect designated hostname and port.
         /// </summary>
-        /// <param name="hostname">The remote SSH Server</param>
-        /// <param name="port">The remote SSH port</param>
+        /// <param name="hostname">The remote SSH Server.</param>
+        /// <param name="port">The remote SSH port.</param>
         public SshClient(string hostname, ushort port = 22, ILoggerFactory loggerFactory = null)
         {
             ConnectionInfo.Hostname = hostname;
@@ -604,28 +604,28 @@ namespace Surfus.Shell
                 switch (messageEvent.Message)
                 {
                     case ChannelSuccess success:
-                        await channel.SendMessageAsync(success, cancellationToken).ConfigureAwait(false);
+                        await channel.ProcessMessageAsync(success, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelFailure failure:
-                        await channel.SendMessageAsync(failure, cancellationToken).ConfigureAwait(false);
+                        await channel.ProcessMessageAsync(failure, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelOpenConfirmation openConfirmation:
-                        await channel.SendMessageAsync(openConfirmation, cancellationToken).ConfigureAwait(false);
+                        await channel.ProcessMessageAsync(openConfirmation, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelOpenFailure openFailure:
-                        await channel.SendMessageAsync(openFailure, cancellationToken).ConfigureAwait(false);
+                        await channel.ProcessMessageAsync(openFailure, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelWindowAdjust windowAdjust:
-                        await channel.SendMessageAsync(windowAdjust, cancellationToken).ConfigureAwait(false);
+                        await channel.ProcessMessageAsync(windowAdjust, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelData channelData:
-                        await channel.SendMessageAsync(channelData, cancellationToken).ConfigureAwait(false);
+                        await channel.ProcessMessageAsync(channelData, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelEof channelEof:
-                        await channel.SendMessageAsync(channelEof, cancellationToken).ConfigureAwait(false);
+                        await channel.ProcessMessageAsync(channelEof, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelClose channelClose:
-                        await channel.SendMessageAsync(channelClose, cancellationToken).ConfigureAwait(false);
+                        await channel.ProcessMessageAsync(channelClose, cancellationToken).ConfigureAwait(false);
                         break;
                 }
             }
@@ -685,6 +685,7 @@ namespace Surfus.Shell
 
                 _sshClientState = State.Closed;
                 ConnectionInfo.Authentication?.Dispose();
+                ConnectionInfo.Dispose(); // Recently added.
                 InternalCancellation.Dispose();
                 _clientSemaphore.Dispose();
                 _tcpStream?.Dispose();

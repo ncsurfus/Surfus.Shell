@@ -15,22 +15,22 @@ namespace Surfus.Shell.Crypto
         /// <summary>
         /// Supported crypto algorithms.
         /// </summary>
-        public static string[] Supported => new[] { "aes256-ctr", "aes192-ctr", "aes128-ctr", "aes256-cbc", "aes192-cbc", "aes128-cbc", "3des-cbc" };
+        internal static string[] Supported => new[] { "aes256-ctr", "aes192-ctr", "aes128-ctr", "aes256-cbc", "aes192-cbc", "aes128-cbc", "3des-cbc" };
 
         /// <summary>
         /// Gets the size of the cipher block.
         /// </summary>
-        public abstract int CipherBlockSize { get; }
+        internal abstract int CipherBlockSize { get; }
 
         /// <summary>
         /// Gets the size of the Initialization Vector.
         /// </summary>
-        public abstract int InitializationVectorSize { get; }
+        internal abstract int InitializationVectorSize { get; }
 
         /// <summary>
         /// Gets the key size.
         /// </summary>
-        public abstract int KeySize { get; }
+        internal abstract int KeySize { get; }
 
         /// <summary>
         /// Creates the specified crypto algorithm.
@@ -38,7 +38,7 @@ namespace Surfus.Shell.Crypto
         /// <param name="name">
         /// The name of the crypto algorithm.
         /// </param>
-        public static CryptoAlgorithm Create(string name)
+        internal static CryptoAlgorithm Create(string name)
         {
             switch (name)
             {
@@ -73,14 +73,14 @@ namespace Surfus.Shell.Crypto
         /// The data to be encrypted
         /// </param>
         /// <returns>The encrypted data</returns>
-        public abstract byte[] Encrypt(byte[] plainText);
+        internal abstract byte[] Encrypt(byte[] plainText);
 
         /// <summary>
         /// Initializes the cipher. You must initialize the cipher before caling Encrypt or ReadPacket.
         /// </summary>
         /// <param name="initializationVector">The initialization vector for the cipher.</param>
         /// <param name="key">The key for the cipher.</param>
-        public abstract void Initialize(byte[] initializationVector, byte[] key);
+        internal abstract void Initialize(byte[] initializationVector, byte[] key);
 
         /// <summary>
         /// Decrypts the next packet in the network stream.
@@ -94,6 +94,6 @@ namespace Surfus.Shell.Crypto
         /// <returns>
         /// The SSH Packet.
         /// </returns>
-        public abstract Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, CancellationToken cancellationToken);
+        internal abstract Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, CancellationToken cancellationToken);
     }
 }
