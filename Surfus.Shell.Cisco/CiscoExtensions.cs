@@ -7,9 +7,9 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Surfus.Shell
+namespace Surfus.Shell.Cisco
 {
-    public static class CiscoSshTerminalExtensions
+    public static class CiscoExtensions
     {
         /// <summary>
         /// Attempts to match the prompt with the following [multiline] regex: ^(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#))\s*$
@@ -27,10 +27,16 @@ namespace Surfus.Shell
             return hostname;
         }
 
-        public static async Task GetInitialDelimiter(this SshTerminal terminal, CancellationToken cancellationToken)
+        public static async Task GetIosInitialDelimiter(this SshTerminal terminal, CancellationToken cancellationToken)
         {
             await terminal.WriteLineAsync(@"terminal length 0", cancellationToken).ConfigureAwait(false);
             await terminal.ExpectAsync(@"terminal length 0", cancellationToken).ConfigureAwait(false);
+        }
+
+        public static async Task GetAsaInitialDelimiter(this SshTerminal terminal, CancellationToken cancellationToken)
+        {
+            await terminal.WriteLineAsync(@"terminal pager 0", cancellationToken).ConfigureAwait(false);
+            await terminal.ExpectAsync(@"terminal pager 0", cancellationToken).ConfigureAwait(false);
         }
 
         public static async Task<TerminalMode> GetTerminalModeAsync(this SshTerminal terminal, CancellationToken cancellationToken)
@@ -54,7 +60,7 @@ namespace Surfus.Shell
         {
             // Get current state. Return if already at privileged.
             var currentMode = await terminal.GetTerminalModeAsync(cancellationToken).ConfigureAwait(false);
-            if(currentMode == TerminalMode.Privileged)
+            if (currentMode == TerminalMode.Privileged)
             {
                 return;
             }
