@@ -10,7 +10,7 @@ Surfus.Shell is an SSH library for .NET designed to be super quick! It's been pr
     {
         await client.ConnectAsync("user", "pass", CancellationToken.None);
         var terminal = await client.CreateTerminalAsync(CancellationToken.None);
-        var terminal.WriteAsync("Hello World!", CancellationToken.None);
+        terminal.WriteAsync("Hello World!", CancellationToken.None);
     }
 	
 ## Todo
