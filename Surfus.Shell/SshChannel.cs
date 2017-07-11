@@ -12,11 +12,6 @@ namespace Surfus.Shell
     internal class SshChannel : IDisposable
     {
         /// <summary>
-        /// Used to coordinate access into the channel.
-        /// </summary>
-        private readonly SemaphoreSlim _channelSemaphore = new SemaphoreSlim(1, 1);
-
-        /// <summary>
         /// The state of the channel.
         /// </summary>
         private State _channelState = State.Initial;
@@ -108,7 +103,6 @@ namespace Surfus.Shell
             var totalBytesLeft = buffer.Length;
             while (totalBytesLeft > 0)
             {
-                await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
                 if (totalBytesLeft <= SendWindow)
                 {
                     await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), cancellationToken).ConfigureAwait(false);
@@ -124,7 +118,6 @@ namespace Surfus.Shell
                     SendWindow = 0;
                     await _client.ReadUntilAsync(() => SendWindow > 0, cancellationToken);
                 }
-                _channelSemaphore.Release();
             }
         }
 
@@ -136,8 +129,6 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task RequestAsync(ChannelRequest requestMessage, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if (_channelState != State.ChannelIsOpen)
             {
                 throw new Exception("Channel is not ready for request.");
@@ -146,7 +137,6 @@ namespace Surfus.Shell
             _channelRequestCompleted = new TaskCompletionSource<bool>();
             await _client.WriteMessageAsync(requestMessage, cancellationToken).ConfigureAwait(false);
             _channelState = State.WaitingOnRequestResponse;
-            _channelSemaphore.Release();
             await _channelRequestCompleted.Task.ConfigureAwait(false);
         }
 
@@ -158,8 +148,6 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task OpenAsync(ChannelOpen openMessage, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if (_channelState != State.Initial)
             {
                 throw new Exception("Channel is already open");
@@ -169,7 +157,6 @@ namespace Surfus.Shell
             ReceiveWindow = (int)openMessage.InitialWindowSize;
             await _client.WriteMessageAsync(openMessage, cancellationToken).ConfigureAwait(false);
             _channelState = State.WaitingOnOpenConfirmation;
-            _channelSemaphore.Release();
             await _channelOpenCompleted.Task.ConfigureAwait(false);
         }
 
@@ -180,15 +167,12 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task CloseAsync(CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
                 await _client.WriteMessageAsync(new ChannelClose(ServerId), cancellationToken).ConfigureAwait(false);
                 _channelState = State.Closed;
                 Close();
             }
-            _channelSemaphore.Release();
         }
 
         /// <summary>
@@ -199,11 +183,9 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(ChannelOpenConfirmation message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnOpenConfirmation)
             {
                 _channelState = State.Errored;
-                _channelSemaphore.Release();
                 throw new SshException("Received unexpected channel message.");
             }
 
@@ -212,8 +194,6 @@ namespace Surfus.Shell
             _channelState = State.ChannelIsOpen;
 
             _channelOpenCompleted?.TrySetResult(true);
-
-            _channelSemaphore.Release();
         }
 
         /// <summary>
@@ -224,18 +204,15 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(ChannelOpenFailure message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnOpenConfirmation)
             {
                 _channelState = State.Errored;
-                _channelSemaphore.Release();
                 throw new SshException("Received unexpected channel message.");
             }
 
             var exception = new SshException("Server refused to open channel."); ;
             _channelState = State.Errored;
             _channelOpenCompleted?.TrySetException(exception);
-            _channelSemaphore.Release();
             throw exception;
         }
 
@@ -247,19 +224,15 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(ChannelSuccess message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnRequestResponse)
             {
                 _channelState = State.Errored;
-                _channelSemaphore.Release();
                 throw new SshException("Received unexpected channel message.");
             }
 
             // Reset state to ChannelIsOpen
             _channelState = State.ChannelIsOpen;
             _channelRequestCompleted?.TrySetResult(true);
-
-            _channelSemaphore.Release();
         }
 
         /// <summary>
@@ -270,18 +243,15 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(ChannelFailure message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState != State.WaitingOnRequestResponse)
             {
                 _channelState = State.Errored;
-                _channelSemaphore.Release();
                 throw new SshException("Received unexpected channel message.");
             }
 
             var exception = new SshException("Server had channel request failure."); ;
             _channelState = State.Errored;
             _channelRequestCompleted?.TrySetException(exception);
-            _channelSemaphore.Release();
             throw exception;
         }
 
@@ -293,17 +263,13 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(ChannelWindowAdjust message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
                 _channelState = State.Errored;
-                _channelSemaphore.Release();
                 throw new SshException("Received unexpected channel message.");
             }
 
-            SendWindow += (int)message.BytesToAdd;
-            _channelSemaphore.Release();
-        }
+            SendWindow += (int)message.BytesToAdd;        }
 
         /// <summary>
         /// Processes a channel message that was sent by the server.
@@ -313,17 +279,14 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(ChannelData message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
                 _channelState = State.Errored;
-                _channelSemaphore.Release();
                 throw new SshException("Received unexpected channel message.");
             }
 
             if (ReceiveWindow <= 0)
             {
-                _channelSemaphore.Release();
                 return;
             }
 
@@ -345,8 +308,6 @@ namespace Surfus.Shell
             {
                 await OnDataReceived(message.Data, cancellationToken).ConfigureAwait(false);
             }
-
-            _channelSemaphore.Release();
         }
 
         /// <summary>
@@ -357,11 +318,9 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(ChannelEof message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
                 _channelState = State.Errored;
-                _channelSemaphore.Release();
                 throw new SshException("Received unexpected channel message.");
             }
 
@@ -369,8 +328,6 @@ namespace Surfus.Shell
             {
                 await OnChannelEofReceived(message, cancellationToken).ConfigureAwait(false);
             }
-
-            _channelSemaphore.Release();
         }
 
         /// <summary>
@@ -381,11 +338,9 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(ChannelClose message, CancellationToken cancellationToken)
         {
-            await _channelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
                 _channelState = State.Errored;
-                _channelSemaphore.Release();
                 throw new SshException("Received unexpected channel message.");
             }
 
@@ -393,8 +348,6 @@ namespace Surfus.Shell
             {
                 await OnChannelCloseReceived(message, cancellationToken).ConfigureAwait(false);
             }
-
-            _channelSemaphore.Release();
         }
 
         /// <summary>
@@ -405,7 +358,6 @@ namespace Surfus.Shell
             if(!_isDisposed)
             {
                 _isDisposed = true;
-                _channelSemaphore.Dispose();
             }
         }
 

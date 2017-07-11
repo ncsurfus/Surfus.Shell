@@ -21,11 +21,6 @@ namespace Surfus.Shell
     public class SshClient : IDisposable
     {
         /// <summary>
-        /// _clientSemaphore forces single access to objects of the SshClient.
-        /// </summary>
-        private SemaphoreSlim _clientSemaphore = new SemaphoreSlim(1,1);
-
-        /// <summary>
         /// _readSemaphore controls access to the read loop.
         /// </summary>
         private SemaphoreSlimSingle _readSemaphore = new SemaphoreSlimSingle();
@@ -642,7 +637,6 @@ namespace Surfus.Shell
                 _sshClientState = State.Closed;
                 ConnectionInfo.Authentication?.Dispose();
                 ConnectionInfo.Dispose();
-                _clientSemaphore.Dispose();
                 _tcpStream?.Dispose();
                 _tcpConnection?.Dispose();
                 _readSemaphore.Dispose();
