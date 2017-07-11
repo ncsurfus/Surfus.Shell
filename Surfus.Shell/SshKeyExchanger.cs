@@ -16,11 +16,6 @@ namespace Surfus.Shell
     internal class SshKeyExchanger
     {
         /// <summary>
-        /// Coordinates access into the key exchangers.
-        /// </summary>
-        private readonly SemaphoreSlim _sshKeyExchangeSemaphore = new SemaphoreSlim(1, 1);
-
-        /// <summary>
         /// The state of the key exchange.
         /// </summary>
         private State _keyExchangeState = State.Initial;
@@ -66,8 +61,6 @@ namespace Surfus.Shell
         /// <returns>If we sent the KexInit or not.</returns>
         internal async Task<bool> TrySendClientKexInitAsync(CancellationToken cancellationToken)
         {
-            await _sshKeyExchangeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if(_keyExchangeState == State.Initial)
             {
                 _clientKexInit = new KexInit();
@@ -75,8 +68,6 @@ namespace Surfus.Shell
                 _keyExchangeState = State.SentKexNeedKex;
                 return true;
             }
-
-            _sshKeyExchangeSemaphore.Release();
             return false;
         }
 
@@ -88,7 +79,6 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(MessageEvent message, CancellationToken cancellationToken)
         {
-            await _sshKeyExchangeSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             switch (message.Type)
             {
 
@@ -137,7 +127,6 @@ namespace Surfus.Shell
                     _keyExchangeState = State.Initial;
                     break;
             }
-            _sshKeyExchangeSemaphore.Release();
         }
 
         /// <summary>
