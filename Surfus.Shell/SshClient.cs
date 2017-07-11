@@ -33,7 +33,7 @@ namespace Surfus.Shell
         /// <summary>
         /// _channels holds a list of the channels associated to this SshClient.
         /// </summary>
-        private List<SshChannel> _channels = new List<SshChannel>();
+        private Dictionary<uint, SshChannel> _channels = new Dictionary<uint, SshChannel>();
 
         /// <summary>
         /// _disposables holds a list of the disposable objects.
@@ -156,6 +156,68 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// ConnectAsync connects to the SSH server with the specific username and password.
+        /// </summary>
+        /// <param name="hostname">The host to connect to</param>
+        /// <param name="username">The username to login as</param>
+        /// <param name="password">The password to login with</param>
+        /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
+        /// <returns>A task representing the state of the connection attempt</returns>
+        public static async Task<SshClient> ConnectAsync(string hostname, string username, string password, CancellationToken cancellationToken)
+        {
+            var sshClient = new SshClient(hostname);
+            await sshClient.ConnectAsync(username, password, cancellationToken);
+            return sshClient;
+        }
+
+        /// <summary>
+        /// ConnectAsync connects to the SSH server with the specific username and interactive login callback.
+        /// </summary>
+        /// <param name="username">The username to login as</param>
+        /// <param name="hostname">The host to connect to</param>
+        /// <param name="interactiveResponse">interactiveResponse is a callback to a method for interactive login</param>
+        /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
+        /// <returns>A task representing the state of the connection attempt</returns>
+        public static async Task<SshClient> ConnectAsync(string hostname, string username, Func<string, CancellationToken, Task<string>> interactiveResponse, CancellationToken cancellationToken)
+        {
+            var sshClient = new SshClient(hostname);
+            await sshClient.ConnectAsync(username, interactiveResponse, cancellationToken);
+            return sshClient;
+        }
+
+        /// <summary>
+        /// ConnectAsync connects to the SSH server with the specific username and password.
+        /// </summary>
+        /// <param name="hostname">The host to connect to</param>
+        /// <param name="port">The port to connect to</param>
+        /// <param name="username">The username to login as</param>
+        /// <param name="password">The password to login with</param>
+        /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
+        /// <returns>A task representing the state of the connection attempt</returns>
+        public static async Task<SshClient> ConnectAsync(string hostname, uint port, string username, string password, CancellationToken cancellationToken)
+        {
+            var sshClient = new SshClient(hostname);
+            await sshClient.ConnectAsync(username, password, cancellationToken);
+            return sshClient;
+        }
+
+        /// <summary>
+        /// ConnectAsync connects to the SSH server with the specific username and interactive login callback.
+        /// </summary>
+        /// <param name="username">The username to login as</param>
+        /// <param name="port">The port to connect to</param>
+        /// <param name="hostname">The host to connect to</param>
+        /// <param name="interactiveResponse">interactiveResponse is a callback to a method for interactive login</param>
+        /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
+        /// <returns>A task representing the state of the connection attempt</returns>
+        public static async Task<SshClient> ConnectAsync(string hostname, uint port, string username, Func<string, CancellationToken, Task<string>> interactiveResponse, CancellationToken cancellationToken)
+        {
+            var sshClient = new SshClient(hostname);
+            await sshClient.ConnectAsync(username, interactiveResponse, cancellationToken);
+            return sshClient;
+        }
+
+        /// <summary>
         /// Requests a terminal from the SSH server.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token used to cancel the terminal request</param>
@@ -172,7 +234,7 @@ namespace Surfus.Shell
             var channel = new SshChannel(this, _channelCounter);
             var terminal = new SshTerminal(this, channel);
 
-            _channels.Add(channel);
+            _channels[_channelCounter] = channel;
             _disposables.Add(terminal);
             _channelCounter++;
 
@@ -197,7 +259,7 @@ namespace Surfus.Shell
             var channel = new SshChannel(this, _channelCounter);
             var command = new SshCommand(this, channel);
 
-            _channels.Add(channel);
+            _channels[_channelCounter] = channel;
             _disposables.Add(command);
             _channelCounter++;
 
@@ -469,7 +531,12 @@ namespace Surfus.Shell
             // Runs on background thread
             if (messageEvent.Message is IChannelRecipient channelMessage)
             {
-                var channel = _channels.Single(x => x.ClientId == channelMessage.RecipientChannel);
+               if(!_channels.ContainsKey(channelMessage.RecipientChannel))
+                {
+                    throw new SshException("Server sent a message for a invalid recipient channel.");
+                }
+
+                var channel = _channels[channelMessage.RecipientChannel];
 
                 switch (messageEvent.Message)
                 {
