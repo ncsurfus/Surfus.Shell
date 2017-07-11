@@ -182,6 +182,11 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             _client.ConnectionInfo.ServerCertificate = reply.ServerPublicHostKeyAndCertificates;
             _client.ConnectionInfo.ServerCertificateSize = _signingAlgorithm.GetKeySize();
 
+            if(_client.HostKeyCallback != null && !_client.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates))
+            {
+                throw new SshException("Rejected Host Key.");
+            }
+
             // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.
             using (var memoryStream = new MemoryStream())
             {
