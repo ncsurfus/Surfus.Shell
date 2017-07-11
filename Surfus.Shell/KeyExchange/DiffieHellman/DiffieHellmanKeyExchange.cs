@@ -18,11 +18,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
     internal abstract class DiffieHellmanKeyExchange : KeyExchangeAlgorithm
     {
         /// <summary>
-        /// A semaphore that keeps the key exchange algorithm in check.
-        /// </summary>
-        private readonly SemaphoreSlim _keyExchangeAlgorithmSemaphore = new SemaphoreSlim(1, 1);
-
-        /// <summary>
         /// The state of the Key Exchange Algorithm
         /// </summary>
         private State _keyExchangeAlgorithmState = State.Initial;
@@ -88,8 +83,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// </exception>
         internal override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if(_keyExchangeAlgorithmState != State.Initial)
             {
                 throw new SshException("Unexpected key exchange algorithm state"); ;
@@ -97,8 +90,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
 
             await _client.WriteMessageAsync(new DhInit(E), cancellationToken).ConfigureAwait(false);
             _keyExchangeAlgorithmState = State.WaitingOnDhReply;
-
-            _keyExchangeAlgorithmSemaphore.Release();
         }
 
         /// <summary>
@@ -151,8 +142,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
         internal override async Task<bool> ProcessMessage31Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if(_keyExchangeAlgorithmState != State.WaitingOnDhReply)
             {
                 throw new SshException("Unexpected key exchange algorithm message");
@@ -209,10 +198,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             }
 
             _keyExchangeAlgorithmState = State.Complete;
-
-            _keyExchangeAlgorithmSemaphore.Release();
-
-            return true;
+            return await Task.FromResult(true);
         }
 
         /// <summary>

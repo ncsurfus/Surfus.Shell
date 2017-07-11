@@ -18,11 +18,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
     internal class DiffieHellmanGroupKeyExchange : KeyExchangeAlgorithm
     {
         /// <summary>
-        /// A semaphore that keeps the key exchange algorithm in check.
-        /// </summary>
-        private readonly SemaphoreSlim _keyExchangeAlgorithmSemaphore = new SemaphoreSlim(1, 1);
-
-        /// <summary>
         /// The state of the Key Exchange Algorithm
         /// </summary>
         private State _keyExchangeAlgorithmState = State.Initial;
@@ -107,8 +102,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// </exception>
         internal override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if (_keyExchangeAlgorithmState != State.Initial)
             {
                 throw new SshException("Unexpected key exchange algorithm state"); ;
@@ -118,8 +111,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             await _client.WriteMessageAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken).ConfigureAwait(false);
 
             _keyExchangeAlgorithmState = State.WaitingonDhgGroup;
-
-            _keyExchangeAlgorithmSemaphore.Release();
         }
 
         /// <summary>
@@ -180,8 +171,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
         internal override async Task<bool> ProcessMessage31Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if (_keyExchangeAlgorithmState != State.WaitingonDhgGroup)
             {
                 throw new SshException("Unexpected key exchange algorithm message"); ;
@@ -203,9 +192,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             await _client.WriteMessageAsync(new DhgInit(_e), cancellationToken).ConfigureAwait(false);
 
             _keyExchangeAlgorithmState = State.WaitingOnDhgReply;
-
-            _keyExchangeAlgorithmSemaphore.Release();
-
             return false;
         }
 
@@ -228,8 +214,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
         internal override async Task<bool> ProcessMessage33Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            await _keyExchangeAlgorithmSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if (_keyExchangeAlgorithmState != State.WaitingOnDhgReply)
             {
                 throw new SshException("Unexpected key exchange algorithm message");
@@ -284,10 +268,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             }
 
             _keyExchangeAlgorithmState = State.Complete;
-
-            _keyExchangeAlgorithmSemaphore.Release();
-
-            return true;
+            return await Task.FromResult(true);
         }
 
         /// <summary>
