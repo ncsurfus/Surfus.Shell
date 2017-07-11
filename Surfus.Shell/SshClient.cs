@@ -406,51 +406,56 @@ namespace Surfus.Shell
         /// <returns></returns>
         private async Task ReadMessageAsync(CancellationToken cancellationToken)
         {
-            var sshPacket = await ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(_tcpStream, cancellationToken).ConfigureAwait(false);
-            if (ConnectionInfo.ReadMacAlgorithm.OutputSize != 0)
+            var cancelRead = new TaskCompletionSource<bool>();
+            using (cancellationToken.Register(() => cancelRead.TrySetResult(true)))
             {
-                var messageAuthenticationHash = await _tcpStream.ReadBytesAsync((uint)ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
-                if (!ConnectionInfo.ReadMacAlgorithm.VerifyMac(messageAuthenticationHash, ConnectionInfo.InboundPacketSequence, sshPacket))
+                var readPacket = ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(_tcpStream, cancellationToken).ConfigureAwait(false);
+                var sshPacket = await Task.WhenAny(cancelRead, readPacket);
+                if (ConnectionInfo.ReadMacAlgorithm.OutputSize != 0)
                 {
-                    throw new InvalidDataException("Received a malformed packet from host.");
+                    var messageAuthenticationHash = await _tcpStream.ReadBytesAsync((uint)ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
+                    if (!ConnectionInfo.ReadMacAlgorithm.VerifyMac(messageAuthenticationHash, ConnectionInfo.InboundPacketSequence, sshPacket))
+                    {
+                        throw new InvalidDataException("Received a malformed packet from host.");
+                    }
                 }
-            }
-           
-            ConnectionInfo.InboundPacketSequence = ConnectionInfo.InboundPacketSequence != uint.MaxValue ? ConnectionInfo.InboundPacketSequence + 1 : 0;
-            var messageEvent = new MessageEvent(sshPacket.Payload);
 
-            // Key Exchange Messages
-            switch (messageEvent.Type)
-            {
-                case MessageType.SSH_MSG_KEXINIT:
-                case MessageType.SSH_MSG_NEWKEYS:
-                case MessageType.SSH_MSG_KEX_Exchange_30:
-                case MessageType.SSH_MSG_KEX_Exchange_31:
-                case MessageType.SSH_MSG_KEX_Exchange_32:
-                case MessageType.SSH_MSG_KEX_Exchange_33:
-                case MessageType.SSH_MSG_KEX_Exchange_34:
-                    await ProcessKeyExchangeMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
-                    break;
-                case MessageType.SSH_MSG_SERVICE_ACCEPT:
-                case MessageType.SSH_MSG_REQUEST_FAILURE:
-                case MessageType.SSH_MSG_USERAUTH_SUCCESS:
-                case MessageType.SSH_MSG_USERAUTH_FAILURE:
-                case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                case MessageType.SSH_MSG_USERAUTH_BANNER:
-                    await ProcessAuthenticationMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
-                    break;
-                case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
-                case MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE:
-                case MessageType.SSH_MSG_CHANNEL_SUCCESS:
-                case MessageType.SSH_MSG_CHANNEL_FAILURE:
-                case MessageType.SSH_MSG_CHANNEL_WINDOW_ADJUST:
-                case MessageType.SSH_MSG_CHANNEL_DATA:
-                case MessageType.SSH_MSG_CHANNEL_CLOSE:
-                case MessageType.SSH_MSG_CHANNEL_EOF:
-                    await ProcessChannelMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
-                    break;
-                default:
-                    break;
+                ConnectionInfo.InboundPacketSequence = ConnectionInfo.InboundPacketSequence != uint.MaxValue ? ConnectionInfo.InboundPacketSequence + 1 : 0;
+                var messageEvent = new MessageEvent(sshPacket.Payload);
+
+                // Key Exchange Messages
+                switch (messageEvent.Type)
+                {
+                    case MessageType.SSH_MSG_KEXINIT:
+                    case MessageType.SSH_MSG_NEWKEYS:
+                    case MessageType.SSH_MSG_KEX_Exchange_30:
+                    case MessageType.SSH_MSG_KEX_Exchange_31:
+                    case MessageType.SSH_MSG_KEX_Exchange_32:
+                    case MessageType.SSH_MSG_KEX_Exchange_33:
+                    case MessageType.SSH_MSG_KEX_Exchange_34:
+                        await ProcessKeyExchangeMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
+                        break;
+                    case MessageType.SSH_MSG_SERVICE_ACCEPT:
+                    case MessageType.SSH_MSG_REQUEST_FAILURE:
+                    case MessageType.SSH_MSG_USERAUTH_SUCCESS:
+                    case MessageType.SSH_MSG_USERAUTH_FAILURE:
+                    case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
+                    case MessageType.SSH_MSG_USERAUTH_BANNER:
+                        await ProcessAuthenticationMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
+                        break;
+                    case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
+                    case MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE:
+                    case MessageType.SSH_MSG_CHANNEL_SUCCESS:
+                    case MessageType.SSH_MSG_CHANNEL_FAILURE:
+                    case MessageType.SSH_MSG_CHANNEL_WINDOW_ADJUST:
+                    case MessageType.SSH_MSG_CHANNEL_DATA:
+                    case MessageType.SSH_MSG_CHANNEL_CLOSE:
+                    case MessageType.SSH_MSG_CHANNEL_EOF:
+                        await ProcessChannelMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
+                        break;
+                    default:
+                        break;
+                }
             }
         }
 
