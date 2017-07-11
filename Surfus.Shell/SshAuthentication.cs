@@ -18,11 +18,6 @@ namespace Surfus.Shell
         private SshClient _client { get; }
 
         /// <summary>
-        /// Used to coordinate async access.
-        /// </summary>
-        private readonly SemaphoreSlim _loginSemaphore = new SemaphoreSlim(1, 1);
-
-        /// <summary>
         /// The current state of authentication.
         /// </summary>
         private State _loginState = State.Initial;
@@ -75,8 +70,6 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task LoginAsync(string username, string password, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if(_loginState != State.Initial)
             {
                 throw new SshException("Cannot Login Twice...");
@@ -88,8 +81,6 @@ namespace Surfus.Shell
 
             await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
             _loginState = State.WaitingOnServiceAccept;
-
-            _loginSemaphore.Release();
         }
 
         /// <summary>
@@ -101,8 +92,6 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task LoginAsync(string username, Func<string, CancellationToken, Task<string>> ResponseTask, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if (_loginState != State.Initial)
             {
                 throw new Exception("Cannot Login Twice...");
@@ -113,8 +102,6 @@ namespace Surfus.Shell
             _loginType = LoginType.Interactive;
             await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
             _loginState = State.WaitingOnServiceAccept;
-
-            _loginSemaphore.Release();
         }
 
         /// <summary>
@@ -125,12 +112,9 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(ServiceAccept message, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if(_loginState != State.WaitingOnServiceAccept)
             {
                 _loginState = State.Failed;
-                _loginSemaphore.Release();
                 throw new SshException("Received unexpected login message.");
             }
 
@@ -146,8 +130,6 @@ namespace Surfus.Shell
                 await _client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken).ConfigureAwait(false);
                 _loginState = State.WaitingOnCredentialSuccessOrInteractive;
             }
-
-            _loginSemaphore.Release();
         }
 
         /// <summary>
@@ -156,19 +138,13 @@ namespace Surfus.Shell
         /// <param name="message">The message sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task ProcessRequestFailureMessage(CancellationToken cancellationToken)
+        internal void ProcessRequestFailureMessage(CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-           
-
+            _loginState = State.Failed;
             if (_loginState != State.WaitingOnServiceAccept)
-            { _loginState = State.Failed;
-                _loginSemaphore.Release();
+            {
                 throw new SshException("Received unexpected login message."); ;
             }
-
-            _loginState = State.Failed;
-            _loginSemaphore.Release();
             throw new SshException("Server does not accept authentication.");
         }
 
@@ -178,22 +154,15 @@ namespace Surfus.Shell
         /// <param name="message">The message sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task ProcessMessageAsync(UaSuccess message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(UaSuccess message, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
-                _loginSemaphore.Release();
                 throw new SshException("Received unexpected login message.");
             }
 
             _loginState = State.Completed;
-
-            // SshClient will properly set the task completion source once this returns...
-
-            _loginSemaphore.Release();
         }
 
         /// <summary>
@@ -202,18 +171,13 @@ namespace Surfus.Shell
         /// <param name="message">The message sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task<bool> ProcessMessageAsync(UaFailure message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(UaFailure message, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
-                _loginSemaphore.Release();
                 throw new SshException("Received unexpected login message.");
             }
-           
-            _loginSemaphore.Release();
             throw new SshInvalidCredentials(_username);
         }
 
@@ -225,12 +189,9 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(UaInfoRequest message, CancellationToken cancellationToken)
         {
-            await _loginSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             if (_loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
-                _loginSemaphore.Release();
                 throw new SshException("Received unexpected login message."); ;
             }
 
@@ -241,9 +202,6 @@ namespace Surfus.Shell
             }
 
             await _client.WriteMessageAsync(new UaInfoResponse((uint)responses.Length, responses), cancellationToken).ConfigureAwait(false);
-
-            _loginSemaphore.Release();
-
         }
 
         /// <summary>
@@ -255,7 +213,6 @@ namespace Surfus.Shell
             {
                 _isDisposed = true;
                 _password = null;
-                _loginSemaphore.Dispose();
             }
         }
 

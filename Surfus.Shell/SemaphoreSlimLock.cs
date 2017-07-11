@@ -5,7 +5,8 @@ using System.Threading.Tasks;
 namespace Surfus.Shell
 {
     /// <summary>
-    /// Represents a use of the SemaphoreSlimSingle.
+    /// Represents a use of the 
+    /// SlimSingle.
     /// </summary>
     internal class SemaphoreSlimLock : IDisposable
     {
