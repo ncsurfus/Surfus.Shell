@@ -21,11 +21,6 @@ namespace Surfus.Shell
         private SemaphoreSlim _terminalSemaphore = new SemaphoreSlim(1, 1);
 
         /// <summary>
-        /// A cancellation token source used to cancel tasks within the terminal.
-        /// </summary>
-        private CancellationTokenSource _terminalCancellation = new CancellationTokenSource();
-
-        /// <summary>
         /// The state of the terminal.
         /// </summary>
         private State _terminalState = State.Initial;
@@ -128,26 +123,23 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task OpenAsync(CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
+            await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            if (_terminalState != State.Initial)
             {
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-
-                if (_terminalState != State.Initial)
-                {
-                    throw new Exception("Terminal request was already attempted.");
-                }
-
-                // Errored until success.
-                _terminalState = State.Errored;
-
-                await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), linkedCancellation.Token).ConfigureAwait(false);
-                await _channel.RequestAsync(new ChannelRequestPseudoTerminal(_channel.ServerId, true, "Surfus", 80, 24), linkedCancellation.Token).ConfigureAwait(false);
-                await _channel.RequestAsync(new ChannelRequestShell(_channel.ServerId, true), linkedCancellation.Token).ConfigureAwait(false);
-
-                _terminalState = State.Opened;
-
-                _terminalSemaphore.Release();
+                throw new Exception("Terminal request was already attempted.");
             }
+
+            // Errored until success.
+            _terminalState = State.Errored;
+
+            await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
+            await _channel.RequestAsync(new ChannelRequestPseudoTerminal(_channel.ServerId, true, "Surfus", 80, 24), cancellationToken).ConfigureAwait(false);
+            await _channel.RequestAsync(new ChannelRequestShell(_channel.ServerId, true), cancellationToken).ConfigureAwait(false);
+
+            _terminalState = State.Opened;
+
+            _terminalSemaphore.Release();
         }
 
         /// <summary>
@@ -157,18 +149,15 @@ namespace Surfus.Shell
         /// <returns></returns>
         public async Task CloseAsync(CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
-            {
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
+            await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-                if (_terminalState == State.Opened)
-                {
-                    await _channel.CloseAsync(linkedCancellation.Token).ConfigureAwait(false);
-                }
-                _terminalState = State.Closed;
-                _terminalSemaphore.Release();
-                Close();
-            };
+            if (_terminalState == State.Opened)
+            {
+                await _channel.CloseAsync(cancellationToken).ConfigureAwait(false);
+            }
+            _terminalState = State.Closed;
+            _terminalSemaphore.Release();
+            Close();
         }
 
         /// <summary>
@@ -179,16 +168,13 @@ namespace Surfus.Shell
         /// <returns></returns>
         public async Task WriteAsync(string text, CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
+            await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            if (_terminalState != State.Opened)
             {
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-                if (_terminalState != State.Opened)
-                {
-                    throw new Exception("Terminal not opened.");
-                }
-                 _terminalSemaphore.Release();
-                await _channel.WriteDataAsync(Encoding.UTF8.GetBytes(text), linkedCancellation.Token).ConfigureAwait(false);
+                throw new Exception("Terminal not opened.");
             }
+            _terminalSemaphore.Release();
+            await _channel.WriteDataAsync(Encoding.UTF8.GetBytes(text), cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -219,29 +205,26 @@ namespace Surfus.Shell
         /// <returns>Text from the server.</returns>
         public async Task<string> ReadAsync(CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
+            await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            if (_terminalState != State.Opened)
             {
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
+                throw new Exception("Terminal not opened.");
+            }
 
-                if (_terminalState != State.Opened)
-                {
-                    throw new Exception("Terminal not opened.");
-                }
+            if (_readBuffer.Length > 0)
+            {
+                var text = _readBuffer.ToString();
+                _readBuffer.Clear();
+                _terminalSemaphore.Release();
+                return text;
+            }
+            _terminalReadComplete = new TaskCompletionSource<string>();
 
-                if (_readBuffer.Length > 0)
-                {
-                    var text = _readBuffer.ToString();
-                    _readBuffer.Clear();
-                    _terminalSemaphore.Release();
-                    return text;
-                }
-                _terminalReadComplete = new TaskCompletionSource<string>();
-
-                using (linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled()))
-                {
-                    _terminalSemaphore.Release();
-                    return await _client.ReadUntilAsync(_terminalReadComplete.Task, cancellationToken).ConfigureAwait(false);
-                }
+            using (cancellationToken.Register(() => _terminalReadComplete?.TrySetCanceled()))
+            {
+                _terminalSemaphore.Release();
+                return await _client.ReadUntilAsync(_terminalReadComplete.Task, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -252,33 +235,30 @@ namespace Surfus.Shell
         /// <returns>a single character from the server.</returns>
         public async Task<char> ReadCharAsync(CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
+            await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            if (_terminalState != State.Opened)
             {
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
+                throw new Exception("Terminal not opened.");
+            }
 
-                if (_terminalState != State.Opened)
-                {
-                    throw new Exception("Terminal not opened.");
-                }
-
-                if (_readBuffer.Length > 0)
-                {
-                    var text = _readBuffer[0];
-                    _readBuffer.Remove(0, 1);
-                    _terminalSemaphore.Release();
-                    return text;
-                }
-                _terminalReadComplete = new TaskCompletionSource<string>();
+            if (_readBuffer.Length > 0)
+            {
+                var text = _readBuffer[0];
+                _readBuffer.Remove(0, 1);
                 _terminalSemaphore.Release();
+                return text;
+            }
+            _terminalReadComplete = new TaskCompletionSource<string>();
+            _terminalSemaphore.Release();
 
-                using (linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled()))
-                {
-                    var text = await _client.ReadUntilAsync(_terminalReadComplete.Task, cancellationToken).ConfigureAwait(false);
-                    await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-                    _readBuffer.Insert(0, text.Substring(1, text.Length - 1));
-                    _terminalSemaphore.Release();
-                    return text[0];
-                }
+            using (cancellationToken.Register(() => _terminalReadComplete?.TrySetCanceled()))
+            {
+                var text = await _client.ReadUntilAsync(_terminalReadComplete.Task, cancellationToken).ConfigureAwait(false);
+                await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                _readBuffer.Insert(0, text.Substring(1, text.Length - 1));
+                _terminalSemaphore.Release();
+                return text[0];
             }
         }
 
@@ -299,17 +279,15 @@ namespace Surfus.Shell
                     buffer.Append(await ReadAsync(cancellationToken).ConfigureAwait(false));
                     await Task.Delay(100).ConfigureAwait(false);
                 }
-                using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
-                {
-                    index = index + plainText.Length;
-                    var builderString = buffer.ToString();
-                    var fixedBuffer = builderString.Substring(0, index);
-                    var overflow = builderString.Substring(index, buffer.Length - index);
-                    await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-                    _readBuffer.Insert(0, overflow);
-                    _terminalSemaphore.Release();
-                    return fixedBuffer;
-                }
+                index = index + plainText.Length;
+                var builderString = buffer.ToString();
+                var fixedBuffer = builderString.Substring(0, index);
+                var overflow = builderString.Substring(index, buffer.Length - index);
+                await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                _readBuffer.Insert(0, overflow);
+                _terminalSemaphore.Release();
+                return fixedBuffer;
+
             }
             catch
             {
@@ -344,16 +322,13 @@ namespace Surfus.Shell
             {
                 buffer.Append(await ReadAsync(cancellationToken).ConfigureAwait(false));
             }
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _terminalCancellation.Token))
-            {
-                var index = regexMatch.Index + regexMatch.Length;
-                var fixedBuffer = buffer.ToString(0, index);
-                var overflow = buffer.ToString(index, buffer.Length - index);
-                await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-                _readBuffer.Insert(0, overflow);
-                _terminalSemaphore.Release();
-                return regexMatch;
-            }
+            var index = regexMatch.Index + regexMatch.Length;
+            var fixedBuffer = buffer.ToString(0, index);
+            var overflow = buffer.ToString(index, buffer.Length - index);
+            await _terminalSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            _readBuffer.Insert(0, overflow);
+            _terminalSemaphore.Release();
+            return regexMatch;
         }
 
         /// <summary>
@@ -376,7 +351,6 @@ namespace Surfus.Shell
             {
                 _isDisposed = true;
                 _terminalSemaphore.Dispose();
-                _terminalCancellation.Dispose();
             }
         }
 

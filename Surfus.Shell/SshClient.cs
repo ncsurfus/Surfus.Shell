@@ -37,11 +37,6 @@ namespace Surfus.Shell
         private State _sshClientState = State.Intitial;
 
         /// <summary>
-        /// _logger is the logging mechanism. 
-        /// </summary>
-        internal ILogger Logger { get; }
-
-        /// <summary>
         /// InitialKeyExchangeCompleted synchronizes other actions to start once the initial key exchange has been completed.
         /// </summary>
         private TaskCompletionSource<bool> _initialKeyExchangeCompleted { get; set; }
@@ -82,11 +77,6 @@ namespace Surfus.Shell
         private NetworkStream _tcpStream;
 
         /// <summary>
-        /// InternalCancellation is the cancellation source used to cancel tasks.
-        /// </summary>
-        internal CancellationTokenSource InternalCancellation = new CancellationTokenSource();
-
-        /// <summary>
         /// IsConnected determines if the SshClient is connected to the remote SSH server.
         /// </summary>
         public bool IsConnected => _tcpConnection?.Connected == true && !_isDisposed && _sshClientState == State.Connected;
@@ -111,15 +101,10 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="hostname">The remote SSH Server.</param>
         /// <param name="port">The remote SSH port.</param>
-        public SshClient(string hostname, ushort port = 22, ILoggerFactory loggerFactory = null)
+        public SshClient(string hostname, ushort port = 22)
         {
             ConnectionInfo.Hostname = hostname;
             ConnectionInfo.Port = port;
-            if(loggerFactory == null)
-            {
-                loggerFactory = new LoggerFactory();
-            }
-            Logger = loggerFactory.CreateLogger($"{ConnectionInfo.Hostname} {ConnectionInfo.Port}");
         }
 
         /// <summary>
@@ -131,57 +116,51 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the connection attempt</returns>
         public async Task ConnectAsync(string username, string password, CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, InternalCancellation.Token))
+            await _clientSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            // Validate current state of SshClient
+            if (_sshClientState != State.Intitial)
             {
-                await _clientSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-                
-                // Validate current state of SshClient
-                if (_sshClientState != State.Intitial)
+                switch (_sshClientState)
                 {
-                    switch(_sshClientState)
-                    {
-                        case State.Connecting:
-                            throw new SshException($"{nameof(ConnectAsync)} is already in progress.");
-                        case State.Connected:
-                            throw new SshException($"{nameof(ConnectAsync)} is already connected.");
-                        case State.Error:
-                        case State.Closed:
-                            throw new SshException($"{nameof(ConnectAsync)} had previously connected.");
-                        default:
-                            throw new SshException($"{nameof(ConnectAsync)} had an unknown error.");
-                    }
+                    case State.Connecting:
+                        throw new SshException($"{nameof(ConnectAsync)} is already in progress.");
+                    case State.Connected:
+                        throw new SshException($"{nameof(ConnectAsync)} is already connected.");
+                    case State.Error:
+                    case State.Closed:
+                        throw new SshException($"{nameof(ConnectAsync)} had previously connected.");
+                    default:
+                        throw new SshException($"{nameof(ConnectAsync)} had an unknown error.");
                 }
-
-                // Set new state of SshClient
-                _sshClientState = State.Connecting;
-
-                // Set SshClient defaults
-                ConnectionInfo.KeyExchanger = new SshKeyExchanger(this);
-                ConnectionInfo.Authentication = new SshAuthentication(this);
-
-				// Perform version exchange and key exchange
-				using (linkedCancellation.Token.Register(() => _initialKeyExchangeCompleted?.TrySetCanceled()))
-				{
-					_initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
-					ConnectionInfo.ServerVersion = await ExchangeVersionAsync(linkedCancellation.Token).ConfigureAwait(false);
-					Logger.LogInformation("Server Version: " + ConnectionInfo.ServerVersion);
-                    await ReadUntilAsync(() => _initialKeyExchangeCompleted.Task.IsCompleted, cancellationToken);
-                    await _initialKeyExchangeCompleted.Task.ConfigureAwait(false);
-				}
-
-                // Perform login
-                _loginCompleted = new TaskCompletionSource<bool>();
-				using (linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled()))
-				{
-					await ConnectionInfo.Authentication.LoginAsync(username, password, linkedCancellation.Token).ConfigureAwait(false);
-                    await ReadUntilAsync(() => _loginCompleted.Task.IsCompleted, cancellationToken);
-                    await _loginCompleted.Task.ConfigureAwait(false);
-				}
-                // Set new state
-                _sshClientState = State.Connected;
-
-                _clientSemaphore.Release();
             }
+
+            // Set new state of SshClient
+            _sshClientState = State.Connecting;
+
+            // Set SshClient defaults
+            ConnectionInfo.KeyExchanger = new SshKeyExchanger(this);
+            ConnectionInfo.Authentication = new SshAuthentication(this);
+
+            // Perform version exchange and key exchange
+            _initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
+            using (cancellationToken.Register(() => _initialKeyExchangeCompleted.TrySetCanceled()))
+            {
+                ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
+                await ReadUntilAsync(_initialKeyExchangeCompleted.Task, cancellationToken).ConfigureAwait(false);
+            }
+
+            // Perform login
+            _loginCompleted = new TaskCompletionSource<bool>();
+            using (cancellationToken.Register(() => _loginCompleted.TrySetCanceled()))
+            {
+                await ConnectionInfo.Authentication.LoginAsync(username, password, cancellationToken).ConfigureAwait(false);
+                await ReadUntilAsync(_loginCompleted.Task, cancellationToken).ConfigureAwait(false);
+            }
+            // Set new state
+            _sshClientState = State.Connected;
+
+            _clientSemaphore.Release();
         }
 
         /// <summary>
@@ -193,58 +172,52 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the connection attempt</returns>
         public async Task ConnectAsync(string username, Func<string, CancellationToken, Task<string>> interactiveResponse, CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, InternalCancellation.Token))
+            await _clientSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            // Validate current state of SshClient
+            if (_sshClientState != State.Intitial)
             {
-                await _clientSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-
-                // Validate current state of SshClient
-                if (_sshClientState != State.Intitial)
+                switch (_sshClientState)
                 {
-                    switch (_sshClientState)
-                    {
-                        case State.Connecting:
-                            throw new SshException($"{nameof(ConnectAsync)} is already in progress.");
-                        case State.Connected:
-                            throw new SshException($"{nameof(ConnectAsync)} is already connected.");
-                        case State.Error:
-                        case State.Closed:
-                            throw new SshException($"{nameof(ConnectAsync)} had previously connected.");
-                        default:
-                            throw new SshException($"{nameof(ConnectAsync)} had an unknown error.");
-                    }
+                    case State.Connecting:
+                        throw new SshException($"{nameof(ConnectAsync)} is already in progress.");
+                    case State.Connected:
+                        throw new SshException($"{nameof(ConnectAsync)} is already connected.");
+                    case State.Error:
+                    case State.Closed:
+                        throw new SshException($"{nameof(ConnectAsync)} had previously connected.");
+                    default:
+                        throw new SshException($"{nameof(ConnectAsync)} had an unknown error.");
                 }
-
-                // Set new state of SshClient
-                _sshClientState = State.Connecting;
-
-                // Set SshClient defaults
-                ConnectionInfo.KeyExchanger = new SshKeyExchanger(this);
-                ConnectionInfo.Authentication = new SshAuthentication(this);
-
-				// Perform version exchange and key exchange
-				using (linkedCancellation.Token.Register(() => _initialKeyExchangeCompleted?.TrySetCanceled()))
-				{
-					_initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
-					ConnectionInfo.ServerVersion = await ExchangeVersionAsync(linkedCancellation.Token).ConfigureAwait(false);
-					Logger.LogInformation("Server Version: " + ConnectionInfo.ServerVersion);
-
-                    await ReadUntilAsync(() => _initialKeyExchangeCompleted.Task.IsCompleted, cancellationToken);
-					await _initialKeyExchangeCompleted.Task.ConfigureAwait(false);
-				}
-
-                // Perform login
-                _loginCompleted = new TaskCompletionSource<bool>();
-				using (linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled()))
-				{
-					await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, linkedCancellation.Token).ConfigureAwait(false);
-                    await ReadUntilAsync(() => _loginCompleted.Task.IsCompleted, cancellationToken);
-                    await _loginCompleted.Task.ConfigureAwait(false);
-				}
-                // Set new state
-                _sshClientState = State.Connected;
-
-                _clientSemaphore.Release();
             }
+
+            // Set new state of SshClient
+            _sshClientState = State.Connecting;
+
+            // Set SshClient defaults
+            ConnectionInfo.KeyExchanger = new SshKeyExchanger(this);
+            ConnectionInfo.Authentication = new SshAuthentication(this);
+
+            // Perform version exchange and key exchange
+            _initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
+            using (cancellationToken.Register(() => _initialKeyExchangeCompleted.TrySetCanceled()))
+            {
+                ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
+                await ReadUntilAsync(_initialKeyExchangeCompleted.Task, cancellationToken).ConfigureAwait(false);
+            }
+
+            // Perform login
+            _loginCompleted = new TaskCompletionSource<bool>();
+            using (cancellationToken.Register(() => _loginCompleted?.TrySetCanceled()))
+            {
+                await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, cancellationToken).ConfigureAwait(false);
+                await ReadUntilAsync(_loginCompleted.Task, cancellationToken).ConfigureAwait(false);
+                await _loginCompleted.Task.ConfigureAwait(false);
+            }
+            // Set new state
+            _sshClientState = State.Connected;
+
+            _clientSemaphore.Release();
         }
 
         /// <summary>
@@ -254,39 +227,36 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the terminal request</returns>
         public async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, InternalCancellation.Token))
+            await _clientSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            // Validate current state of SshClient
+            if (_sshClientState != State.Connected)
             {
-                await _clientSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-
-                // Validate current state of SshClient
-                if (_sshClientState != State.Connected)
-                {
-                    _clientSemaphore.Release();
-                    switch (_sshClientState)
-                    {
-                        case State.Intitial:
-                        case State.Connecting:
-                            throw new SshException($"{nameof(SshClient)} has not yet connected.");
-                        case State.Error:
-                        case State.Closed:
-                            throw new SshException($"{nameof(SshClient)} is no longer connected.");
-                        default:
-                            throw new SshException($"{nameof(SshClient)} had an unknown error.");
-                    }
-                }
-
-                // Setup the new terminal
-                var channel = new SshChannel(this, _channelCounter);
-                var terminal = new SshTerminal(this, channel);
-
-                _channels.Add(channel);
-                _disposables.Add(terminal);
-                _channelCounter++;
-
                 _clientSemaphore.Release();
-                await ReadUntilAsync(terminal.OpenAsync(cancellationToken), cancellationToken);
-                return terminal;
+                switch (_sshClientState)
+                {
+                    case State.Intitial:
+                    case State.Connecting:
+                        throw new SshException($"{nameof(SshClient)} has not yet connected.");
+                    case State.Error:
+                    case State.Closed:
+                        throw new SshException($"{nameof(SshClient)} is no longer connected.");
+                    default:
+                        throw new SshException($"{nameof(SshClient)} had an unknown error.");
+                }
             }
+
+            // Setup the new terminal
+            var channel = new SshChannel(this, _channelCounter);
+            var terminal = new SshTerminal(this, channel);
+
+            _channels.Add(channel);
+            _disposables.Add(terminal);
+            _channelCounter++;
+
+            _clientSemaphore.Release();
+            await ReadUntilAsync(terminal.OpenAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+            return terminal;
         }
 
         /// <summary>
@@ -296,39 +266,36 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the terminal request</returns>
         public async Task<SshCommand> CreateCommandAsync(CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, InternalCancellation.Token))
+            await _clientSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            // Validate current state of SshClient
+            if (_sshClientState != State.Connected)
             {
-                await _clientSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-
-                // Validate current state of SshClient
-                if (_sshClientState != State.Connected)
-                {
-                    _clientSemaphore.Release();
-                    switch (_sshClientState)
-                    {
-                        case State.Intitial:
-                        case State.Connecting:
-                            throw new SshException($"{nameof(SshClient)} has not yet connected.");
-                        case State.Error:
-                        case State.Closed:
-                            throw new SshException($"{nameof(SshClient)} is no longer connected.");
-                        default:
-                            throw new SshException($"{nameof(SshClient)} had an unknown error.");
-                    }
-                }
-
-                // Setup the new terminal
-                var channel = new SshChannel(this, _channelCounter);
-                var command = new SshCommand(this, channel);
-
-                _channels.Add(channel);
-                _disposables.Add(command);
-                _channelCounter++;
-
                 _clientSemaphore.Release();
-                await ReadUntilAsync(command.OpenAsync(cancellationToken), cancellationToken);
-                return command;
+                switch (_sshClientState)
+                {
+                    case State.Intitial:
+                    case State.Connecting:
+                        throw new SshException($"{nameof(SshClient)} has not yet connected.");
+                    case State.Error:
+                    case State.Closed:
+                        throw new SshException($"{nameof(SshClient)} is no longer connected.");
+                    default:
+                        throw new SshException($"{nameof(SshClient)} had an unknown error.");
+                }
             }
+
+            // Setup the new terminal
+            var channel = new SshChannel(this, _channelCounter);
+            var command = new SshCommand(this, channel);
+
+            _channels.Add(channel);
+            _disposables.Add(command);
+            _channelCounter++;
+
+            _clientSemaphore.Release();
+            await ReadUntilAsync(command.OpenAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+            return command;
         }
 
         /// <summary>
@@ -361,10 +328,8 @@ namespace Surfus.Shell
 
                     if (readAmount <= 0)
                     {
-                        Logger.LogCritical($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
                         if (bufferPosition == 0)
                         {
-                            Logger.LogCritical($"{ConnectionInfo.Hostname} - { nameof(ExchangeVersionAsync)}: Buffer Position is 0, no data sent. Possibly too many connections");
                             throw new EndOfStreamException($"Buffer Position is 0, no data sent. Possibly too many connections");
                         }
                         throw new EndOfStreamException($"Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
@@ -495,8 +460,6 @@ namespace Surfus.Shell
             ConnectionInfo.InboundPacketSequence = ConnectionInfo.InboundPacketSequence != uint.MaxValue ? ConnectionInfo.InboundPacketSequence + 1 : 0;
             var messageEvent = new MessageEvent(sshPacket.Payload);
 
-            Logger.LogInformation($"Received message {messageEvent.Type}");
-
             // Key Exchange Messages
             switch (messageEvent.Type)
             {
@@ -528,7 +491,6 @@ namespace Surfus.Shell
                     await ProcessChannelMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
                     break;
                 default:
-                    Logger.LogInformation($"{ConnectionInfo.Hostname} - {nameof(ReadMessageAsync)}: Unexpected Message {messageEvent.Type}");
                     break;
             }
         }
@@ -681,8 +643,6 @@ namespace Surfus.Shell
             ConnectionInfo.OutboundPacketSequence = ConnectionInfo.OutboundPacketSequence != uint.MaxValue
                                                          ? ConnectionInfo.OutboundPacketSequence + 1
                                                          : 0;
-
-            Logger.LogDebug($"Sent {message.Type}");
         }
 
         /// <summary>
@@ -693,10 +653,6 @@ namespace Surfus.Shell
             if (!_isDisposed)
             {
                 _isDisposed = true;
-                if (!InternalCancellation.IsCancellationRequested)
-                {
-                    InternalCancellation.Cancel(true);
-                }
 
                 foreach (var disposable in _disposables)
                 {
@@ -711,7 +667,6 @@ namespace Surfus.Shell
                 _sshClientState = State.Closed;
                 ConnectionInfo.Authentication?.Dispose();
                 ConnectionInfo.Dispose(); // Recently added.
-                InternalCancellation.Dispose();
                 _clientSemaphore.Dispose();
                 _tcpStream?.Dispose();
                 _tcpConnection?.Dispose();

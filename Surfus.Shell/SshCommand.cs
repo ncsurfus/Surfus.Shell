@@ -34,11 +34,6 @@ namespace Surfus.Shell
         private SemaphoreSlim _commandSemaphore = new SemaphoreSlim(1, 1);
 
         /// <summary>
-        /// The internal command cancellation.
-        /// </summary>
-        private CancellationTokenSource _commandCancellation = new CancellationTokenSource();
-
-        /// <summary>
         /// The state of the command process.
         /// </summary>
         private State _commandState = State.Initial;
@@ -82,24 +77,21 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task OpenAsync(CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
+            await _commandSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            if (_commandState != State.Initial)
             {
-                await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-
-                if (_commandState != State.Initial)
-                {
-                    throw new Exception("Command request was already attempted.");
-                }
-
-                // Errored until success.
-                _commandState = State.Errored;
-
-                await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), _client.InternalCancellation.Token).ConfigureAwait(false);
-
-                _commandState = State.Opened;
-
-                _commandSemaphore.Release();
+                throw new Exception("Command request was already attempted.");
             }
+
+            // Errored until success.
+            _commandState = State.Errored;
+
+            await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
+
+            _commandState = State.Opened;
+
+            _commandSemaphore.Release();
         }
 
         /// <summary>
@@ -109,18 +101,15 @@ namespace Surfus.Shell
         /// <returns></returns>
         public async Task CloseAsync(CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
-            {
-                await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
+            await _commandSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-                if (_commandState == State.Opened)
-                {
-                    await _channel.CloseAsync(linkedCancellation.Token).ConfigureAwait(false);
-                }
-                _commandState = State.Closed;
-                _commandSemaphore.Release();
-                Close();
-            };
+            if (_commandState == State.Opened)
+            {
+                await _channel.CloseAsync(cancellationToken).ConfigureAwait(false);
+            }
+            _commandState = State.Closed;
+            _commandSemaphore.Release();
+            Close();
         }
 
         /// <summary>
@@ -130,13 +119,8 @@ namespace Surfus.Shell
         {
             if (!_isDisposed)
             {
-                if(!_commandCancellation.IsCancellationRequested)
-                {
-                    _commandCancellation.Cancel(true);
-                }
                 _isDisposed = true;
                 _commandSemaphore.Dispose();
-                _commandCancellation.Dispose();
             }
         }
 
@@ -156,58 +140,55 @@ namespace Surfus.Shell
         /// <returns>The result of the command.</returns>
         public async Task<string> ExecuteAsync(string command, CancellationToken cancellationToken)
         {
-            using (var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _commandCancellation.Token))
+            await _commandSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            if (_commandState != State.Opened)
             {
-                await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
+                throw new Exception("Command request is not opened");
+            }
 
-                if (_commandState != State.Opened)
+            var executeCloseTaskSource = new TaskCompletionSource<bool>();
+            var executeEofTaskSource = new TaskCompletionSource<bool>();
+
+            using (cancellationToken.Register(() => executeCloseTaskSource?.TrySetCanceled()))
+            using (cancellationToken.Register(() => executeEofTaskSource?.TrySetCanceled()))
+            {
+                _channel.OnChannelEofReceived = async (message, token) =>
                 {
-                    throw new Exception("Command request is not opened");
-                }
+                    await _commandSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-                var executeCloseTaskSource = new TaskCompletionSource<bool>();
-                var executeEofTaskSource = new TaskCompletionSource<bool>();
+                    executeEofTaskSource.SetResult(true);
 
-				using (linkedCancellation.Token.Register(() => executeCloseTaskSource?.TrySetCanceled()))
-				using (linkedCancellation.Token.Register(() => executeEofTaskSource?.TrySetCanceled()))
-				{
-					_channel.OnChannelEofReceived = async (message, token) =>
-					{
-						await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-
-						executeEofTaskSource.SetResult(true);
-
-						_commandSemaphore.Release();
-					};
-
-					_channel.OnChannelCloseReceived = async (message, token) =>
-					{
-						await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-
-						executeCloseTaskSource.SetResult(true);
-
-						_commandSemaphore.Release();
-					};
-
-					await _client.ReadUntilAsync(_channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), _client.InternalCancellation.Token), cancellationToken).ConfigureAwait(false);
-					_commandSemaphore.Release();
-
-
-					await _client.ReadUntilAsync(executeEofTaskSource.Task, cancellationToken).ConfigureAwait(false);
-					await _client.ReadUntilAsync(executeCloseTaskSource.Task, cancellationToken).ConfigureAwait(false);
-				}
-
-                _channel.OnChannelEofReceived = null;
-                _channel.OnChannelCloseReceived = null;
-
-                await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
-                _commandState = State.Completed;
-
-                using (_memoryStream)
-                {
                     _commandSemaphore.Release();
-                    return Encoding.UTF8.GetString(_memoryStream.ToArray());
-                }
+                };
+
+                _channel.OnChannelCloseReceived = async (message, token) =>
+                {
+                    await _commandSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+                    executeCloseTaskSource.SetResult(true);
+
+                    _commandSemaphore.Release();
+                };
+
+                await _client.ReadUntilAsync(_channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken), cancellationToken).ConfigureAwait(false);
+                _commandSemaphore.Release();
+
+
+                await _client.ReadUntilAsync(executeEofTaskSource.Task, cancellationToken).ConfigureAwait(false);
+                await _client.ReadUntilAsync(executeCloseTaskSource.Task, cancellationToken).ConfigureAwait(false);
+            }
+
+            _channel.OnChannelEofReceived = null;
+            _channel.OnChannelCloseReceived = null;
+
+            await _commandSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            _commandState = State.Completed;
+
+            using (_memoryStream)
+            {
+                _commandSemaphore.Release();
+                return Encoding.UTF8.GetString(_memoryStream.ToArray());
             }
         }
 
