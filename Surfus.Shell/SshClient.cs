@@ -561,19 +561,19 @@ namespace Surfus.Shell
                 switch (messageEvent.Message)
                 {
                     case ChannelSuccess success:
-                        await channel.ProcessMessageAsync(success, cancellationToken).ConfigureAwait(false);
+                        channel.ProcessMessageAsync(success, cancellationToken);
                         break;
                     case ChannelFailure failure:
-                        await channel.ProcessMessageAsync(failure, cancellationToken).ConfigureAwait(false);
+                        channel.ProcessMessageAsync(failure, cancellationToken);
                         break;
                     case ChannelOpenConfirmation openConfirmation:
-                        await channel.ProcessMessageAsync(openConfirmation, cancellationToken).ConfigureAwait(false);
+                        channel.ProcessMessageAsync(openConfirmation, cancellationToken);
                         break;
                     case ChannelOpenFailure openFailure:
-                        await channel.ProcessMessageAsync(openFailure, cancellationToken).ConfigureAwait(false);
+                        channel.ProcessMessageAsync(openFailure, cancellationToken);
                         break;
                     case ChannelWindowAdjust windowAdjust:
-                        await channel.ProcessMessageAsync(windowAdjust, cancellationToken).ConfigureAwait(false);
+                        channel.ProcessMessageAsync(windowAdjust, cancellationToken);
                         break;
                     case ChannelData channelData:
                         await channel.ProcessMessageAsync(channelData, cancellationToken).ConfigureAwait(false);

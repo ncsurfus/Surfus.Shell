@@ -181,7 +181,7 @@ namespace Surfus.Shell
         /// <param name="message">The open confirmation message that was sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task ProcessMessageAsync(ChannelOpenConfirmation message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelOpenConfirmation message, CancellationToken cancellationToken)
         {
             if (_channelState != State.WaitingOnOpenConfirmation)
             {
@@ -202,7 +202,7 @@ namespace Surfus.Shell
         /// <param name="message">The open failure message that was sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task ProcessMessageAsync(ChannelOpenFailure message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelOpenFailure message, CancellationToken cancellationToken)
         {
             if (_channelState != State.WaitingOnOpenConfirmation)
             {
@@ -222,7 +222,7 @@ namespace Surfus.Shell
         /// <param name="message">The channel success message that was sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task ProcessMessageAsync(ChannelSuccess message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelSuccess message, CancellationToken cancellationToken)
         {
             if (_channelState != State.WaitingOnRequestResponse)
             {
@@ -241,7 +241,7 @@ namespace Surfus.Shell
         /// <param name="message">The channel failure message that was sent by the server.</param>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task ProcessMessageAsync(ChannelFailure message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelFailure message, CancellationToken cancellationToken)
         {
             if (_channelState != State.WaitingOnRequestResponse)
             {
@@ -261,7 +261,7 @@ namespace Surfus.Shell
         /// <param name="message">The channel window adjust sent by the server. Once this is sent to us we can send more data.</param>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task ProcessMessageAsync(ChannelWindowAdjust message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelWindowAdjust message, CancellationToken cancellationToken)
         {
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
