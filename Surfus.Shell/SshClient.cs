@@ -238,7 +238,7 @@ namespace Surfus.Shell
             _disposables.Add(terminal);
             _channelCounter++;
 
-            await ReadUntilAsync(terminal.OpenAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+            await terminal.OpenAsync(cancellationToken).ConfigureAwait(false);
             return terminal;
         }
 
@@ -263,7 +263,7 @@ namespace Surfus.Shell
             _disposables.Add(command);
             _channelCounter++;
 
-            await ReadUntilAsync(command.OpenAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+            await command.OpenAsync(cancellationToken);
             return command;
         }
 

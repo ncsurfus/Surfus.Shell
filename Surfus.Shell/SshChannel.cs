@@ -22,16 +22,6 @@ namespace Surfus.Shell
         private SshClient _client;
 
         /// <summary>
-        /// This is set once the channel open response is received.
-        /// </summary>
-        private TaskCompletionSource<bool> _channelOpenCompleted;
-
-        /// <summary>
-        /// This is set once the channel request response is received.
-        /// </summary>
-        private TaskCompletionSource<bool> _channelRequestCompleted;
-
-        /// <summary>
         /// The amount of data to increase by once the receive window is empty.
         /// </summary>
         internal int WindowRefill { get; set; } = 50000;
@@ -129,10 +119,9 @@ namespace Surfus.Shell
                 throw new Exception("Channel is not ready for request.");
             }
 
-            _channelRequestCompleted = new TaskCompletionSource<bool>();
             await _client.WriteMessageAsync(requestMessage, cancellationToken).ConfigureAwait(false);
             _channelState = State.WaitingOnRequestResponse;
-            await _channelRequestCompleted.Task.ConfigureAwait(false);
+            await _client.ReadUntilAsync(() => _channelState != State.WaitingOnRequestResponse, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -148,11 +137,10 @@ namespace Surfus.Shell
                 throw new Exception("Channel is already open");
             }
 
-            _channelOpenCompleted = new TaskCompletionSource<bool>();
             ReceiveWindow = (int)openMessage.InitialWindowSize;
             await _client.WriteMessageAsync(openMessage, cancellationToken).ConfigureAwait(false);
             _channelState = State.WaitingOnOpenConfirmation;
-            await _channelOpenCompleted.Task.ConfigureAwait(false);
+            await _client.ReadUntilAsync(() => _channelState != State.WaitingOnOpenConfirmation, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -186,8 +174,6 @@ namespace Surfus.Shell
             ServerId = message.SenderChannel;
             SendWindow = (int)message.InitialWindowSize;
             _channelState = State.ChannelIsOpen;
-
-            _channelOpenCompleted?.TrySetResult(true);
         }
 
         /// <summary>
@@ -206,7 +192,6 @@ namespace Surfus.Shell
 
             var exception = new SshException("Server refused to open channel."); ;
             _channelState = State.Errored;
-            _channelOpenCompleted?.TrySetException(exception);
             throw exception;
         }
 
@@ -226,7 +211,6 @@ namespace Surfus.Shell
 
             // Reset state to ChannelIsOpen
             _channelState = State.ChannelIsOpen;
-            _channelRequestCompleted?.TrySetResult(true);
         }
 
         /// <summary>
@@ -245,7 +229,6 @@ namespace Surfus.Shell
 
             var exception = new SshException("Server had channel request failure."); ;
             _channelState = State.Errored;
-            _channelRequestCompleted?.TrySetException(exception);
             throw exception;
         }
 
