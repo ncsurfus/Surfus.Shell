@@ -28,7 +28,7 @@ namespace Surfus.Shell
         /// <summary>
         /// _readSemaphore controls access to the read loop.
         /// </summary>
-        private SemaphoreSlim _readSemaphore = new SemaphoreSlim(1, 1);
+        private SemaphoreSlimSingle _readSemaphore = new SemaphoreSlimSingle();
 
         /// <summary>
         /// _sshClientState holds the state of the SshClient.
@@ -120,8 +120,6 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the connection attempt</returns>
         public async Task ConnectAsync(string username, string password, CancellationToken cancellationToken)
         {
-            await _clientSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             // Validate current state of SshClient
             if (_sshClientState != State.Intitial)
             {
@@ -163,8 +161,6 @@ namespace Surfus.Shell
             }
             // Set new state
             _sshClientState = State.Connected;
-
-            _clientSemaphore.Release();
         }
 
         /// <summary>
@@ -176,8 +172,6 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the connection attempt</returns>
         public async Task ConnectAsync(string username, Func<string, CancellationToken, Task<string>> interactiveResponse, CancellationToken cancellationToken)
         {
-            await _clientSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             // Validate current state of SshClient
             if (_sshClientState != State.Intitial)
             {
@@ -220,8 +214,6 @@ namespace Surfus.Shell
             }
             // Set new state
             _sshClientState = State.Connected;
-
-            _clientSemaphore.Release();
         }
 
         /// <summary>
@@ -231,12 +223,9 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the terminal request</returns>
         public async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken)
         {
-            await _clientSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             // Validate current state of SshClient
             if (_sshClientState != State.Connected)
             {
-                _clientSemaphore.Release();
                 switch (_sshClientState)
                 {
                     case State.Intitial:
@@ -258,7 +247,6 @@ namespace Surfus.Shell
             _disposables.Add(terminal);
             _channelCounter++;
 
-            _clientSemaphore.Release();
             await ReadUntilAsync(terminal.OpenAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
             return terminal;
         }
@@ -270,12 +258,9 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the terminal request</returns>
         public async Task<SshCommand> CreateCommandAsync(CancellationToken cancellationToken)
         {
-            await _clientSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
             // Validate current state of SshClient
             if (_sshClientState != State.Connected)
             {
-                _clientSemaphore.Release();
                 switch (_sshClientState)
                 {
                     case State.Intitial:
@@ -297,7 +282,6 @@ namespace Surfus.Shell
             _disposables.Add(command);
             _channelCounter++;
 
-            _clientSemaphore.Release();
             await ReadUntilAsync(command.OpenAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
             return command;
         }
@@ -387,46 +371,49 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Adds read pressure
+        /// Reads packets from the server until the callback method returns true.
         /// </summary>
         /// <returns></returns>
         internal async Task ReadUntilAsync(Func<bool> method, CancellationToken cancellationToken)
         {
-            await _readSemaphore.WaitAsync(cancellationToken);
-            while(!method())
+            using (await _readSemaphore.WaitAsync(cancellationToken))
             {
-                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+                while (!method())
+                {
+                    await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
-            _readSemaphore.Release();
         }
 
         /// <summary>
-        /// Adds read pressure
+        /// Reads packets from the server until the task is complete.
         /// </summary>
         /// <returns></returns>
         internal async Task ReadUntilAsync(Task task, CancellationToken cancellationToken)
         {
-            await _readSemaphore.WaitAsync(cancellationToken);
-            while (!task.IsCompleted)
+            using (await _readSemaphore.WaitAsync(cancellationToken))
             {
-                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+                while (!task.IsCompleted)
+                {
+                    await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+                }
+                await task.ConfigureAwait(false);
             }
-            await task.ConfigureAwait(false);
-            _readSemaphore.Release();
         }
 
         /// <summary>
-        /// Adds read pressure
+        /// Reads packets from the server until the task is complete.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The result of the task.</returns>
         internal async Task<T> ReadUntilAsync<T>(Task<T> task, CancellationToken cancellationToken)
         {
-            await _readSemaphore.WaitAsync(cancellationToken);
-            while (!task.IsCompleted)
+            using (await _readSemaphore.WaitAsync(cancellationToken))
             {
-                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+                while (!task.IsCompleted)
+                {
+                    await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
-            _readSemaphore.Release();
             return await task.ConfigureAwait(false);
         }
 
@@ -574,9 +561,7 @@ namespace Surfus.Shell
             // Runs on background thread
             if (messageEvent.Message is IChannelRecipient channelMessage)
             {
-                await _clientSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
                 var channel = _channels.Single(x => x.ClientId == channelMessage.RecipientChannel);
-                _clientSemaphore.Release();
 
                 switch (messageEvent.Message)
                 {
@@ -656,10 +641,11 @@ namespace Surfus.Shell
 
                 _sshClientState = State.Closed;
                 ConnectionInfo.Authentication?.Dispose();
-                ConnectionInfo.Dispose(); // Recently added.
+                ConnectionInfo.Dispose();
                 _clientSemaphore.Dispose();
                 _tcpStream?.Dispose();
                 _tcpConnection?.Dispose();
+                _readSemaphore.Dispose();
             }
         }
 
