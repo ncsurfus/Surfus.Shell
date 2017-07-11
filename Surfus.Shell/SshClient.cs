@@ -26,16 +26,6 @@ namespace Surfus.Shell
         private State _sshClientState = State.Intitial;
 
         /// <summary>
-        /// InitialKeyExchangeCompleted synchronizes other actions to start once the initial key exchange has been completed.
-        /// </summary>
-        private TaskCompletionSource<bool> _initialKeyExchangeCompleted { get; set; }
-
-        /// <summary>
-        /// LoginCompleted represents the current state of authentication.
-        /// </summary>
-        private TaskCompletionSource<bool> _loginCompleted { get; set; }
-
-        /// <summary>
         /// _channelCounter holds the current channel index used to derive new channel IDs.
         /// </summary>
         private uint _channelCounter = 0;
@@ -68,12 +58,12 @@ namespace Surfus.Shell
         /// <summary>
         /// IsConnected determines if the SshClient is connected to the remote SSH server.
         /// </summary>
-        public bool IsConnected => _tcpConnection?.Connected == true && !_isDisposed && _sshClientState == State.Connected;
+        public bool IsConnected => _tcpConnection?.Connected == true && !_isDisposed && _sshClientState == State.Authenticated;
 
         /// <summary>
         /// IsConnecting determines if the SshClient is connecting to the remote SSH server.
         /// </summary>
-        private bool _isConnecting => _tcpConnection?.Connected == true && !_isDisposed && _sshClientState == State.Connecting;
+        private bool _isConnecting => _tcpConnection?.Connected == true && !_isDisposed && (_sshClientState == State.Connecting || _sshClientState == State.Connected || _sshClientState == State.Authenticating);
 
         /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
@@ -113,18 +103,7 @@ namespace Surfus.Shell
             // Validate current state of SshClient
             if (_sshClientState != State.Intitial)
             {
-                switch (_sshClientState)
-                {
-                    case State.Connecting:
-                        throw new SshException($"{nameof(ConnectAsync)} is already in progress.");
-                    case State.Connected:
-                        throw new SshException($"{nameof(ConnectAsync)} is already connected.");
-                    case State.Error:
-                    case State.Closed:
-                        throw new SshException($"{nameof(ConnectAsync)} had previously connected.");
-                    default:
-                        throw new SshException($"{nameof(ConnectAsync)} had an unknown error.");
-                }
+                ThrowOnInvalidState();
             }
 
             // Set new state of SshClient
@@ -135,22 +114,13 @@ namespace Surfus.Shell
             ConnectionInfo.Authentication = new SshAuthentication(this);
 
             // Perform version exchange and key exchange
-            _initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
-            using (cancellationToken.Register(() => _initialKeyExchangeCompleted.TrySetCanceled()))
-            {
-                ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
-                await ReadUntilAsync(_initialKeyExchangeCompleted.Task, cancellationToken).ConfigureAwait(false);
-            }
+            ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
+            await ReadUntilAsync(() => _sshClientState != State.Connecting, cancellationToken).ConfigureAwait(false);
 
             // Perform login
-            _loginCompleted = new TaskCompletionSource<bool>();
-            using (cancellationToken.Register(() => _loginCompleted.TrySetCanceled()))
-            {
-                await ConnectionInfo.Authentication.LoginAsync(username, password, cancellationToken).ConfigureAwait(false);
-                await ReadUntilAsync(_loginCompleted.Task, cancellationToken).ConfigureAwait(false);
-            }
-            // Set new state
-            _sshClientState = State.Connected;
+            _sshClientState = State.Authenticating;
+            await ConnectionInfo.Authentication.LoginAsync(username, password, cancellationToken).ConfigureAwait(false);
+            await ReadUntilAsync(() => _sshClientState != State.Authenticating, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -165,18 +135,7 @@ namespace Surfus.Shell
             // Validate current state of SshClient
             if (_sshClientState != State.Intitial)
             {
-                switch (_sshClientState)
-                {
-                    case State.Connecting:
-                        throw new SshException($"{nameof(ConnectAsync)} is already in progress.");
-                    case State.Connected:
-                        throw new SshException($"{nameof(ConnectAsync)} is already connected.");
-                    case State.Error:
-                    case State.Closed:
-                        throw new SshException($"{nameof(ConnectAsync)} had previously connected.");
-                    default:
-                        throw new SshException($"{nameof(ConnectAsync)} had an unknown error.");
-                }
+                ThrowOnInvalidState();
             }
 
             // Set new state of SshClient
@@ -187,23 +146,13 @@ namespace Surfus.Shell
             ConnectionInfo.Authentication = new SshAuthentication(this);
 
             // Perform version exchange and key exchange
-            _initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
-            using (cancellationToken.Register(() => _initialKeyExchangeCompleted.TrySetCanceled()))
-            {
-                ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
-                await ReadUntilAsync(_initialKeyExchangeCompleted.Task, cancellationToken).ConfigureAwait(false);
-            }
+            ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
+            await ReadUntilAsync(() => _sshClientState != State.Connecting, cancellationToken).ConfigureAwait(false);
 
             // Perform login
-            _loginCompleted = new TaskCompletionSource<bool>();
-            using (cancellationToken.Register(() => _loginCompleted?.TrySetCanceled()))
-            {
-                await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, cancellationToken).ConfigureAwait(false);
-                await ReadUntilAsync(_loginCompleted.Task, cancellationToken).ConfigureAwait(false);
-                await _loginCompleted.Task.ConfigureAwait(false);
-            }
-            // Set new state
-            _sshClientState = State.Connected;
+            _sshClientState = State.Authenticating;
+            await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, cancellationToken).ConfigureAwait(false);
+            await ReadUntilAsync(() => _sshClientState != State.Authenticating, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -214,19 +163,9 @@ namespace Surfus.Shell
         public async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken)
         {
             // Validate current state of SshClient
-            if (_sshClientState != State.Connected)
+            if (!IsConnected)
             {
-                switch (_sshClientState)
-                {
-                    case State.Intitial:
-                    case State.Connecting:
-                        throw new SshException($"{nameof(SshClient)} has not yet connected.");
-                    case State.Error:
-                    case State.Closed:
-                        throw new SshException($"{nameof(SshClient)} is no longer connected.");
-                    default:
-                        throw new SshException($"{nameof(SshClient)} had an unknown error.");
-                }
+                ThrowOnInvalidState();
             }
 
             // Setup the new terminal
@@ -249,19 +188,9 @@ namespace Surfus.Shell
         public async Task<SshCommand> CreateCommandAsync(CancellationToken cancellationToken)
         {
             // Validate current state of SshClient
-            if (_sshClientState != State.Connected)
+            if (!IsConnected)
             {
-                switch (_sshClientState)
-                {
-                    case State.Intitial:
-                    case State.Connecting:
-                        throw new SshException($"{nameof(SshClient)} has not yet connected.");
-                    case State.Error:
-                    case State.Closed:
-                        throw new SshException($"{nameof(SshClient)} is no longer connected.");
-                    default:
-                        throw new SshException($"{nameof(SshClient)} had an unknown error.");
-                }
+                ThrowOnInvalidState();
             }
 
             // Setup the new terminal
@@ -475,32 +404,24 @@ namespace Surfus.Shell
         /// <returns></returns>
         private async Task ProcessKeyExchangeMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
-            try
+            switch (messageEvent.Type)
             {
-                switch (messageEvent.Type)
-                {
-                    case MessageType.SSH_MSG_KEXINIT:
-                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
-                        break;
-                    case MessageType.SSH_MSG_NEWKEYS:
-                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
+                case MessageType.SSH_MSG_KEXINIT:
+                    await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
+                    break;
+                case MessageType.SSH_MSG_NEWKEYS:
+                    await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
 
-                        // If we make it to this point without an exception we've successfully completed our key exchange
-                        _initialKeyExchangeCompleted?.TrySetResult(true);
-                        break;
-                    case MessageType.SSH_MSG_KEX_Exchange_30:
-                    case MessageType.SSH_MSG_KEX_Exchange_31:
-                    case MessageType.SSH_MSG_KEX_Exchange_32:
-                    case MessageType.SSH_MSG_KEX_Exchange_33:
-                    case MessageType.SSH_MSG_KEX_Exchange_34:
-                        await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                _initialKeyExchangeCompleted?.TrySetException(ex);
-                throw;
+                    // If we make it to this point without an exception we've successfully completed our key exchange
+                    _sshClientState = State.Connected;
+                    break;
+                case MessageType.SSH_MSG_KEX_Exchange_30:
+                case MessageType.SSH_MSG_KEX_Exchange_31:
+                case MessageType.SSH_MSG_KEX_Exchange_32:
+                case MessageType.SSH_MSG_KEX_Exchange_33:
+                case MessageType.SSH_MSG_KEX_Exchange_34:
+                    await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
+                    break;
             }
         }
 
@@ -512,36 +433,28 @@ namespace Surfus.Shell
         /// <returns></returns>
         private async Task ProcessAuthenticationMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
-            try
+            switch (messageEvent.Type)
             {
-                switch (messageEvent.Type)
-                {
-                    case MessageType.SSH_MSG_SERVICE_ACCEPT:
-                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken).ConfigureAwait(false);
-                        break;
-                    case MessageType.SSH_MSG_REQUEST_FAILURE:
-                        ConnectionInfo.Authentication.ProcessRequestFailureMessage(cancellationToken);
-                        break;
-                    case MessageType.SSH_MSG_USERAUTH_SUCCESS:
-                        ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess, cancellationToken);
-                        // If we make it to this point with no exceptions we've achieved a success login.
-                        _loginCompleted?.TrySetResult(true);
-                        break;
-                    case MessageType.SSH_MSG_USERAUTH_FAILURE:
-                        ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure, cancellationToken);
-                        break;
-                    case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken).ConfigureAwait(false);
-                        break;
-                    case MessageType.SSH_MSG_USERAUTH_BANNER:
-                        Banner = (messageEvent.Message as UaBanner)?.Message;
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                _loginCompleted?.TrySetException(ex);
-                throw;
+                case MessageType.SSH_MSG_SERVICE_ACCEPT:
+                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken).ConfigureAwait(false);
+                    break;
+                case MessageType.SSH_MSG_REQUEST_FAILURE:
+                    ConnectionInfo.Authentication.ProcessRequestFailureMessage();
+                    break;
+                case MessageType.SSH_MSG_USERAUTH_SUCCESS:
+                    ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess);
+                    // If we make it to this point with no exceptions we've achieved a success login.
+                    _sshClientState = State.Authenticated;
+                    break;
+                case MessageType.SSH_MSG_USERAUTH_FAILURE:
+                    ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure);
+                    break;
+                case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
+                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken).ConfigureAwait(false);
+                    break;
+                case MessageType.SSH_MSG_USERAUTH_BANNER:
+                    Banner = (messageEvent.Message as UaBanner)?.Message;
+                    break;
             }
         }
 
@@ -561,28 +474,28 @@ namespace Surfus.Shell
                 switch (messageEvent.Message)
                 {
                     case ChannelSuccess success:
-                        channel.ProcessMessageAsync(success, cancellationToken);
+                        channel.ProcessMessageAsync(success);
                         break;
                     case ChannelFailure failure:
-                        channel.ProcessMessageAsync(failure, cancellationToken);
+                        channel.ProcessMessageAsync(failure);
                         break;
                     case ChannelOpenConfirmation openConfirmation:
-                        channel.ProcessMessageAsync(openConfirmation, cancellationToken);
+                        channel.ProcessMessageAsync(openConfirmation);
                         break;
                     case ChannelOpenFailure openFailure:
-                        channel.ProcessMessageAsync(openFailure, cancellationToken);
+                        channel.ProcessMessageAsync(openFailure);
                         break;
                     case ChannelWindowAdjust windowAdjust:
-                        channel.ProcessMessageAsync(windowAdjust, cancellationToken);
+                        channel.ProcessMessageAsync(windowAdjust);
                         break;
                     case ChannelData channelData:
                         await channel.ProcessMessageAsync(channelData, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelEof channelEof:
-                        channel.ProcessMessageAsync(channelEof, cancellationToken);
+                        channel.ProcessMessageAsync(channelEof);
                         break;
                     case ChannelClose channelClose:
-                        channel.ProcessMessageAsync(channelClose, cancellationToken);
+                        channel.ProcessMessageAsync(channelClose);
                         break;
                 }
             }
@@ -629,11 +542,6 @@ namespace Surfus.Shell
                     disposable.Dispose();
                 }
 
-                foreach (var channel in _channels)
-                {
-                    channel.Dispose();
-                }
-
                 _sshClientState = State.Closed;
                 ConnectionInfo.Authentication?.Dispose();
                 ConnectionInfo.Dispose();
@@ -651,6 +559,27 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Throws an SshException if the SshClient is in an invalid state to continue.
+        /// </summary>
+        private void ThrowOnInvalidState()
+        {
+            switch (_sshClientState)
+            {
+                case State.Connecting:
+                case State.Connected:
+                case State.Authenticating:
+                    throw new SshException($"The Connection is already in progress. Did you try to connect twice?");
+                case State.Authenticated:
+                    throw new SshException($"The Connection is already connected. Did you try to connect twice?");
+                case State.Error:
+                case State.Closed:
+                    throw new SshException($"The Connection had an error and could not continue.");
+                default:
+                    throw new SshException($"The connection had an unknown error and could not continue.");
+            }
+        }
+
+        /// <summary>
         /// The state the SshClient is in
         /// </summary>
         internal enum State
@@ -658,6 +587,8 @@ namespace Surfus.Shell
             Intitial,
             Connecting,
             Connected,
+            Authenticating,
+            Authenticated,
             Closed,
             Error
         }

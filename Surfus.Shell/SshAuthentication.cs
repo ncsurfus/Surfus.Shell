@@ -138,7 +138,7 @@ namespace Surfus.Shell
         /// <param name="message">The message sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal void ProcessRequestFailureMessage(CancellationToken cancellationToken)
+        internal void ProcessRequestFailureMessage()
         {
             _loginState = State.Failed;
             if (_loginState != State.WaitingOnServiceAccept)
@@ -154,7 +154,7 @@ namespace Surfus.Shell
         /// <param name="message">The message sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal void ProcessMessageAsync(UaSuccess message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(UaSuccess message)
         {
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
@@ -171,7 +171,7 @@ namespace Surfus.Shell
         /// <param name="message">The message sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal void ProcessMessageAsync(UaFailure message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(UaFailure message)
         {
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
