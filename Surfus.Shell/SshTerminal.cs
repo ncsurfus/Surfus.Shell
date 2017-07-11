@@ -79,7 +79,7 @@ namespace Surfus.Shell
         /// <param name="buffer">The data sent through the channel.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        private async Task OnDataReceived (byte[] buffer, CancellationToken cancellationToken)
+        private void OnDataReceived (byte[] buffer)
         {
             if(_terminalReadComplete == null || _terminalReadComplete?.Task.IsCompleted == true)
             {
@@ -97,9 +97,8 @@ namespace Surfus.Shell
         /// <param name="close">The channel close message.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        private async Task OnChannelCloseReceived(ChannelClose close, CancellationToken cancellationToken)
+        private void OnChannelCloseReceived(ChannelClose close)
         {
-            await CloseAsync(cancellationToken).ConfigureAwait(false);
             ServerDisconnected?.Invoke();
         }
 

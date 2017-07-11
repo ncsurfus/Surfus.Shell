@@ -56,9 +56,9 @@ namespace Surfus.Shell
         /// <param name="buffer">The received data.</param>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task OnDataReceived(byte[] buffer, CancellationToken cancellationToken)
+        internal void OnDataReceived(byte[] buffer)
         {
-            await _memoryStream.WriteAsync(buffer, 0, buffer.Length, cancellationToken);
+            _memoryStream.Write(buffer, 0, buffer.Length);
         }
 
         /// <summary>
@@ -135,12 +135,12 @@ namespace Surfus.Shell
             using (cancellationToken.Register(() => executeCloseTaskSource?.TrySetCanceled()))
             using (cancellationToken.Register(() => executeEofTaskSource?.TrySetCanceled()))
             {
-                _channel.OnChannelEofReceived = async (message, token) =>
+                _channel.OnChannelEofReceived = (message) =>
                 {
                     executeEofTaskSource.SetResult(true);
                 };
 
-                _channel.OnChannelCloseReceived = async (message, token) =>
+                _channel.OnChannelCloseReceived = (message) =>
                 {
                     executeCloseTaskSource.SetResult(true);
                 };

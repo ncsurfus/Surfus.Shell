@@ -566,10 +566,10 @@ namespace Surfus.Shell
                         await channel.ProcessMessageAsync(channelData, cancellationToken).ConfigureAwait(false);
                         break;
                     case ChannelEof channelEof:
-                        await channel.ProcessMessageAsync(channelEof, cancellationToken).ConfigureAwait(false);
+                        channel.ProcessMessageAsync(channelEof, cancellationToken);
                         break;
                     case ChannelClose channelClose:
-                        await channel.ProcessMessageAsync(channelClose, cancellationToken).ConfigureAwait(false);
+                        channel.ProcessMessageAsync(channelClose, cancellationToken);
                         break;
                 }
             }
