@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
-using Surfus.Shell.Exceptions;
+﻿using Surfus.Shell.Exceptions;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;

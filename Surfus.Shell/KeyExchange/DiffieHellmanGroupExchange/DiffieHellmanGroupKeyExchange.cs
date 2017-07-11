@@ -9,7 +9,6 @@ using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup;
 using Surfus.Shell.Signing;
-using Microsoft.Extensions.Logging;
 
 namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 {
