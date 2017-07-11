@@ -64,6 +64,11 @@ namespace Surfus.Shell
         public bool DataAvailable => _readBuffer.Length > 0;
 
         /// <summary>
+        /// Do Not Use (Yet).
+        /// </summary>
+        public Func<string, bool> DataReceivedCallback;
+
+        /// <summary>
         /// The callback if the server disconnects.
         /// </summary>
         public event Action ServerDisconnected;
@@ -76,7 +81,16 @@ namespace Surfus.Shell
         /// <returns></returns>
         private void OnDataReceived(byte[] buffer)
         {
-            _readBuffer.Append(Encoding.UTF8.GetString(buffer));
+            var data = Encoding.UTF8.GetString(buffer);
+
+            if (DataReceivedCallback == null)
+            {
+                _readBuffer.Append(data);
+            }
+            else if (DataReceivedCallback(data))
+            {
+                _readBuffer.Append(data);
+            }
         }
 
         /// <summary>
