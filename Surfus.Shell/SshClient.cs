@@ -120,7 +120,7 @@ namespace Surfus.Shell
             // Perform login
             _sshClientState = State.Authenticating;
             await ConnectionInfo.Authentication.LoginAsync(username, password, cancellationToken).ConfigureAwait(false);
-            await ReadUntilAsync(() => _sshClientState != State.Authenticating, cancellationToken).ConfigureAwait(false);
+            _sshClientState = State.Authenticated;
         }
 
         /// <summary>
@@ -152,7 +152,7 @@ namespace Surfus.Shell
             // Perform login
             _sshClientState = State.Authenticating;
             await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, cancellationToken).ConfigureAwait(false);
-            await ReadUntilAsync(() => _sshClientState != State.Authenticating, cancellationToken).ConfigureAwait(false);
+            _sshClientState = State.Authenticated;
         }
 
         /// <summary>
@@ -479,8 +479,6 @@ namespace Surfus.Shell
                     break;
                 case MessageType.SSH_MSG_USERAUTH_SUCCESS:
                     ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess);
-                    // If we make it to this point with no exceptions we've achieved a success login.
-                    _sshClientState = State.Authenticated;
                     break;
                 case MessageType.SSH_MSG_USERAUTH_FAILURE:
                     ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure);
