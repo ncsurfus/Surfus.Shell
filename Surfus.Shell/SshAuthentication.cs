@@ -48,11 +48,6 @@ namespace Surfus.Shell
         private bool _isDisposed;
 
         /// <summary>
-        /// The Task Compeletion Source to be set once the server sends the UserAuthInfoRequest response.
-        /// </summary>
-        private TaskCompletionSource<UaInfoRequest> UserAuthInfoRequest = new TaskCompletionSource<UaInfoRequest>();
-
-        /// <summary>
         /// Provides authentication over SSH.
         /// </summary>
         /// <param name="sshClient"></param>

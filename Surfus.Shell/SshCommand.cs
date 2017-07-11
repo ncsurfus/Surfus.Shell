@@ -129,29 +129,14 @@ namespace Surfus.Shell
                 throw new Exception("Command request is not opened");
             }
 
-            var executeCloseTaskSource = new TaskCompletionSource<bool>();
-            var executeEofTaskSource = new TaskCompletionSource<bool>();
+            bool eof = false;
+            bool closed = false;
 
-            using (cancellationToken.Register(() => executeCloseTaskSource?.TrySetCanceled()))
-            using (cancellationToken.Register(() => executeEofTaskSource?.TrySetCanceled()))
-            {
-                _channel.OnChannelEofReceived = (message) =>
-                {
-                    executeEofTaskSource.SetResult(true);
-                };
+            _channel.OnChannelEofReceived = (message) => { eof = true; };
+            _channel.OnChannelCloseReceived = (message) => { closed = true; };
 
-                _channel.OnChannelCloseReceived = (message) =>
-                {
-                    executeCloseTaskSource.SetResult(true);
-                };
-
-                await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken).ConfigureAwait(false);
-                await _client.ReadUntilAsync(executeEofTaskSource.Task, cancellationToken).ConfigureAwait(false);
-                await _client.ReadUntilAsync(executeCloseTaskSource.Task, cancellationToken).ConfigureAwait(false);
-            }
-
-            _channel.OnChannelEofReceived = null;
-            _channel.OnChannelCloseReceived = null;
+            await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken).ConfigureAwait(false);
+            await _client.ReadUntilAsync(() => eof && closed, cancellationToken).ConfigureAwait(false);
 
             _commandState = State.Completed;
 
