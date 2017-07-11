@@ -220,7 +220,6 @@ namespace Surfus.Shell
                 while ((index = buffer.IndexOf(plainText)) == -1)
                 {
                     buffer.Append(await ReadAsync(cancellationToken).ConfigureAwait(false));
-                    await Task.Delay(100).ConfigureAwait(false);
                 }
                 index = index + plainText.Length;
                 var builderString = buffer.ToString();
