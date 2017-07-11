@@ -36,11 +36,6 @@ namespace Surfus.Shell
         private bool _isDisposed;
 
         /// <summary>
-        /// The TaskCompletionSource for when the terminal has completed a reading operaiton.
-        /// </summary>
-        private TaskCompletionSource<string> _terminalReadComplete;
-
-        /// <summary>
         /// The read buffer.
         /// </summary>
         private readonly StringBuilder _readBuffer = new StringBuilder();
@@ -79,16 +74,9 @@ namespace Surfus.Shell
         /// <param name="buffer">The data sent through the channel.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        private void OnDataReceived (byte[] buffer)
+        private void OnDataReceived(byte[] buffer)
         {
-            if(_terminalReadComplete == null || _terminalReadComplete?.Task.IsCompleted == true)
-            {
-                _readBuffer.Append(Encoding.UTF8.GetString(buffer));
-            }
-            else
-            {
-                _terminalReadComplete.SetResult(Encoding.UTF8.GetString(buffer));
-            }
+            _readBuffer.Append(Encoding.UTF8.GetString(buffer));
         }
 
         /// <summary>
@@ -187,18 +175,13 @@ namespace Surfus.Shell
                 throw new Exception("Terminal not opened.");
             }
 
-            if (_readBuffer.Length > 0)
+            if (_readBuffer.Length == 0)
             {
-                var text = _readBuffer.ToString();
-                _readBuffer.Clear();
-                return text;
+                await _client.ReadUntilAsync(() => _readBuffer.Length > 0, cancellationToken).ConfigureAwait(false);
             }
-
-            _terminalReadComplete = new TaskCompletionSource<string>();
-            using (cancellationToken.Register(() => _terminalReadComplete.TrySetCanceled()))
-            {
-                return await _client.ReadUntilAsync(_terminalReadComplete.Task, cancellationToken).ConfigureAwait(false);
-            }
+            var text = _readBuffer.ToString();
+            _readBuffer.Clear();
+            return text;
         }
 
         /// <summary>
@@ -213,20 +196,13 @@ namespace Surfus.Shell
                 throw new Exception("Terminal not opened.");
             }
 
-            if (_readBuffer.Length > 0)
+            if (_readBuffer.Length == 0)
             {
-                var text = _readBuffer[0];
-                _readBuffer.Remove(0, 1);
-                return text;
+                await _client.ReadUntilAsync(() => _readBuffer.Length > 0, cancellationToken).ConfigureAwait(false);
             }
-            _terminalReadComplete = new TaskCompletionSource<string>();
-
-            using (cancellationToken.Register(() => _terminalReadComplete?.TrySetCanceled()))
-            {
-                var text = await _client.ReadUntilAsync(_terminalReadComplete.Task, cancellationToken).ConfigureAwait(false);
-                _readBuffer.Insert(0, text.Substring(1, text.Length - 1));
-                return text[0];
-            }
+            var text = _readBuffer[0];
+            _readBuffer.Remove(0, 1);
+            return text;
         }
 
         /// <summary>
