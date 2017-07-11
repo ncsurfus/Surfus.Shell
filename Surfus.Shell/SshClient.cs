@@ -520,15 +520,15 @@ namespace Surfus.Shell
                         await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken).ConfigureAwait(false);
                         break;
                     case MessageType.SSH_MSG_REQUEST_FAILURE:
-                        await ConnectionInfo.Authentication.ProcessRequestFailureMessage(cancellationToken).ConfigureAwait(false);
+                        ConnectionInfo.Authentication.ProcessRequestFailureMessage(cancellationToken);
                         break;
                     case MessageType.SSH_MSG_USERAUTH_SUCCESS:
-                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess, cancellationToken).ConfigureAwait(false);
+                        ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess, cancellationToken);
                         // If we make it to this point with no exceptions we've achieved a success login.
                         _loginCompleted?.TrySetResult(true);
                         break;
                     case MessageType.SSH_MSG_USERAUTH_FAILURE:
-                        await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure, cancellationToken).ConfigureAwait(false);
+                        ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure, cancellationToken);
                         break;
                     case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
                         await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken).ConfigureAwait(false);
