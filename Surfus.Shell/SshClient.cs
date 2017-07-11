@@ -115,7 +115,7 @@ namespace Surfus.Shell
 
             // Perform version exchange and key exchange
             ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
-            await ReadUntilAsync(() => _sshClientState != State.Connecting, cancellationToken).ConfigureAwait(false);
+            await ConnectionInfo.KeyExchanger.AwaitKeyExchangeAsync(cancellationToken).ConfigureAwait(false);
             await ConnectionInfo.Authentication.LoginAsync(username, password, cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
