@@ -76,6 +76,8 @@ namespace Surfus.Shell
 
             await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
             _loginState = State.WaitingOnServiceAccept;
+
+            await _client.ReadUntilAsync(() => _loginState == State.Completed || _loginState == State.Failed, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
