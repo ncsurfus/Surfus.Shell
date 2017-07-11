@@ -637,26 +637,26 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Processes packets in the background for the specified amount of milliseconds or until there are no incoming packets left.
+        /// Processes at least 1 packet and conintues to process packets until there are no incoming packets left.
         /// </summary>
-        /// <param name="milliseconds">The amount of milliseconds to wait for.</param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        internal async Task ProcessPacketsIfAdditionalAsync(int milliseconds, CancellationToken cancellationToken)
+        internal async Task ProcessAdditionalAsync(int delay, CancellationToken cancellationToken)
         {
-            var taskTimer = Task.Delay(milliseconds, cancellationToken);
-            await ReadUntilAsync(() => taskTimer.IsCompleted || !_tcpStream.DataAvailable, cancellationToken);
-            await taskTimer;
-        }
+            await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+            if (!_tcpStream.DataAvailable)
+            {
+                await Task.Delay(delay).ConfigureAwait(false);
+            }
 
-        /// <summary>
-        /// Processes packets until there are no incoming packets left.
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        internal async Task ProcessAdditionalAsync(CancellationToken cancellationToken)
-        {
-            await ReadUntilAsync(() => !_tcpStream.DataAvailable, cancellationToken);
+            while (_tcpStream.DataAvailable)
+            {
+                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+                if (!_tcpStream.DataAvailable)
+                {
+                    await Task.Delay(delay).ConfigureAwait(false);
+                }
+            }
         }
 
         /// <summary>
