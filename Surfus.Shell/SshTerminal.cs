@@ -76,6 +76,7 @@ namespace Surfus.Shell
         /// <returns></returns>
         private void OnDataReceived(byte[] buffer)
         {
+            Console.WriteLine(Encoding.UTF8.GetString(buffer));
             _readBuffer.Append(Encoding.UTF8.GetString(buffer));
         }
 
