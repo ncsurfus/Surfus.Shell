@@ -17,7 +17,6 @@ namespace Surfus.Shell.Cisco
         /// <returns></returns>
         public static async Task<Match> GetFullPromptAsync(this SshTerminal terminal, CancellationToken cancellationToken)
         {
-            await terminal.GetInitialDelimiter(cancellationToken).ConfigureAwait(false);
             var hostname = await terminal.ExpectRegexMatchAsync(@"^\s?(?<fullPrompt>(?<hostname>[^>\#\s]+)((?<privilegedPrompt>>)|(?<userPrompt>\#)))\s*$", RegexOptions.Multiline, cancellationToken).ConfigureAwait(false);
             await terminal.WriteLineAsync("", cancellationToken).ConfigureAwait(false);
             return hostname;
