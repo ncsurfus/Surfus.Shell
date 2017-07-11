@@ -227,26 +227,18 @@ namespace Surfus.Shell
         /// <returns>The matching text.</returns>
         public async Task<string> ExpectAsync(string plainText, CancellationToken cancellationToken)
         {
-            var buffer = new StringBuilder();
-            try
+            var index = -1;
+            var lastBufferSize = _readBuffer.Length;
+            while ((index = _readBuffer.IndexOf(plainText)) == -1)
             {
-                var index = -1;
-                while ((index = buffer.IndexOf(plainText)) == -1)
-                {
-                    await _client.ProcessAdditionalAsync(100, cancellationToken);
-                    buffer.Append(await ReadAsync(cancellationToken).ConfigureAwait(false));
-                }
-                index = index + plainText.Length;
-                var builderString = buffer.ToString();
-                var fixedBuffer = builderString.Substring(0, index);
-                var overflow = builderString.Substring(index, buffer.Length - index);
-                _readBuffer.Insert(0, overflow);
-                return fixedBuffer;
+                await _client.ReadUntilAsync(() => _readBuffer.Length > lastBufferSize, cancellationToken).ConfigureAwait(false);
+                await _client.ProcessAdditionalAsync(100, cancellationToken).ConfigureAwait(false);
+                lastBufferSize = _readBuffer.Length;
             }
-            catch
-            {
-                throw;
-            }
+            index = index + plainText.Length;
+            var result = _readBuffer.ToString().Substring(0, index);
+            _readBuffer.Remove(0, _readBuffer.Length - index);
+            return result;
         }
 
         /// <summary>
@@ -269,18 +261,16 @@ namespace Surfus.Shell
         /// <returns>The regex match.</returns>
         public async Task<Match> ExpectRegexMatchAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
         {
-            var buffer = new StringBuilder();
-
             Match regexMatch = null;
-            while (!(regexMatch = Regex.Match(buffer.ToString(), regexText, regexOptions)).Success)
+            var lastBufferSize = _readBuffer.Length;
+            while (!(regexMatch = Regex.Match(_readBuffer.ToString(), regexText, regexOptions)).Success)
             {
-                await _client.ProcessAdditionalAsync(100, cancellationToken);
-                buffer.Append(await ReadAsync(cancellationToken).ConfigureAwait(false));
+                await _client.ReadUntilAsync(() => _readBuffer.Length > lastBufferSize, cancellationToken).ConfigureAwait(false);
+                await _client.ProcessAdditionalAsync(100, cancellationToken).ConfigureAwait(false);
+                lastBufferSize = _readBuffer.Length;
             }
             var index = regexMatch.Index + regexMatch.Length;
-            var fixedBuffer = buffer.ToString(0, index);
-            var overflow = buffer.ToString(index, buffer.Length - index);
-            _readBuffer.Insert(0, overflow);
+            _readBuffer.Remove(0, _readBuffer.Length - index);
             return regexMatch;
         }
 
