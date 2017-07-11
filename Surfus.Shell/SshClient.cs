@@ -21,11 +21,6 @@ namespace Surfus.Shell
     public class SshClient : IDisposable
     {
         /// <summary>
-        /// _readSemaphore controls access to the read loop.
-        /// </summary>
-        private SemaphoreSlimSingle _readSemaphore = new SemaphoreSlimSingle();
-
-        /// <summary>
         /// _sshClientState holds the state of the SshClient.
         /// </summary>
         private State _sshClientState = State.Intitial;
@@ -371,12 +366,9 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ReadUntilAsync(Func<bool> method, CancellationToken cancellationToken)
         {
-            using (await _readSemaphore.WaitAsync(cancellationToken))
+            while (!method())
             {
-                while (!method())
-                {
-                    await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
-                }
+                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -386,14 +378,11 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ReadUntilAsync(Task task, CancellationToken cancellationToken)
         {
-            using (await _readSemaphore.WaitAsync(cancellationToken))
+            while (!task.IsCompleted)
             {
-                while (!task.IsCompleted)
-                {
-                    await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
-                }
-                await task.ConfigureAwait(false);
+                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
             }
+            await task.ConfigureAwait(false);
         }
 
         /// <summary>
@@ -402,13 +391,11 @@ namespace Surfus.Shell
         /// <returns>The result of the task.</returns>
         internal async Task<T> ReadUntilAsync<T>(Task<T> task, CancellationToken cancellationToken)
         {
-            using (await _readSemaphore.WaitAsync(cancellationToken))
+            while (!task.IsCompleted)
             {
-                while (!task.IsCompleted)
-                {
-                    await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
-                }
+                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
             }
+
             return await task.ConfigureAwait(false);
         }
 
@@ -639,7 +626,6 @@ namespace Surfus.Shell
                 ConnectionInfo.Dispose();
                 _tcpStream?.Dispose();
                 _tcpConnection?.Dispose();
-                _readSemaphore.Dispose();
             }
         }
 
