@@ -46,6 +46,11 @@ namespace Surfus.Shell
         private bool _isDisposed = false;
 
         /// <summary>
+        /// Holds the value of us getting a disconnected message or not.
+        /// </summary>
+        private bool _disconnectReceived = false;
+
+        /// <summary>
         /// _tcpConnection holds the underlying TCP Connection of the SshClient.
         /// </summary>
         private TcpClient _tcpConnection = new TcpClient();
@@ -58,12 +63,12 @@ namespace Surfus.Shell
         /// <summary>
         /// IsConnected determines if the SshClient is connected to the remote SSH server.
         /// </summary>
-        public bool IsConnected => _tcpConnection?.Connected == true && !_isDisposed && _sshClientState == State.Authenticated;
+        public bool IsConnected => _tcpConnection?.Connected == true && !_disconnectReceived && !_isDisposed && _sshClientState == State.Authenticated;
 
         /// <summary>
         /// IsConnecting determines if the SshClient is connecting to the remote SSH server.
         /// </summary>
-        private bool _isConnecting => _tcpConnection?.Connected == true && !_isDisposed && (_sshClientState == State.Connecting || _sshClientState == State.Connected || _sshClientState == State.Authenticating);
+        private bool _isConnecting => _tcpConnection?.Connected == true && !_disconnectReceived && !_isDisposed && (_sshClientState == State.Connecting || _sshClientState == State.Connected || _sshClientState == State.Authenticating);
 
         /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
@@ -405,6 +410,9 @@ namespace Surfus.Shell
                 // Key Exchange Messages
                 switch (messageEvent.Type)
                 {
+                    case MessageType.SSH_MSG_DISCONNECT:
+                        _disconnectReceived = true;
+                        break;
                     case MessageType.SSH_MSG_KEXINIT:
                     case MessageType.SSH_MSG_NEWKEYS:
                     case MessageType.SSH_MSG_KEX_Exchange_30:
