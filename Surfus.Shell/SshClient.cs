@@ -358,6 +358,18 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Reads packets from the server until the callback method returns true.
+        /// </summary>
+        /// <returns></returns>
+        internal async Task ReadUntilAsync(Func<Task<bool>> method, CancellationToken cancellationToken)
+        {
+            while (!await method())
+            {
+                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
         /// Reads a message from the server
         /// </summary>
         /// <param name="cancellationToken">The cancellation token is used to cancel the ReadMessage request</param>
@@ -575,6 +587,17 @@ namespace Surfus.Shell
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         public async Task ProcessPacketsAsync(Func<bool> untilCondition, CancellationToken cancellationToken)
+        {
+            await ReadUntilAsync(untilCondition, cancellationToken);
+        }
+
+        /// <summary>
+        /// Processes packets in the background until the condition has been met.
+        /// </summary>
+        /// <param name="condition">The condition that must be true to exit the method.</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task ProcessPacketsAsync(Func<Task<bool>> untilCondition, CancellationToken cancellationToken)
         {
             await ReadUntilAsync(untilCondition, cancellationToken);
         }
