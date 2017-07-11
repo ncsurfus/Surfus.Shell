@@ -237,7 +237,7 @@ namespace Surfus.Shell
             }
             index = index + plainText.Length;
             var result = _readBuffer.ToString().Substring(0, index);
-            _readBuffer.Remove(0, _readBuffer.Length - index);
+            _readBuffer.Remove(0, index);
             return result;
         }
 
@@ -270,7 +270,7 @@ namespace Surfus.Shell
                 lastBufferSize = _readBuffer.Length;
             }
             var index = regexMatch.Index + regexMatch.Length;
-            _readBuffer.Remove(0, _readBuffer.Length - index);
+            _readBuffer.Remove(0, index);
             return regexMatch;
         }
 
