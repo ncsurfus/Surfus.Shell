@@ -44,7 +44,7 @@ internal class SemaphoreSlimSingle : IDisposable
         if(!_disposed)
         {
             _disposed = true;
-            _semaphoreSlim.Release();
+            _semaphoreSlim.Dispose();
         }
     }
 }
