@@ -637,13 +637,12 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Processes at least 1 packet and conintues to process packets until there are no incoming packets left.
+        /// Continues to process packets until there are no incoming packets left.
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         internal async Task ProcessAdditionalAsync(int delay, CancellationToken cancellationToken)
         {
-            await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
             if (!_tcpStream.DataAvailable)
             {
                 await Task.Delay(delay).ConfigureAwait(false);
