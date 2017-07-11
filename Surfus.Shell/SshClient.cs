@@ -399,20 +399,6 @@ namespace Surfus.Shell
         /// Adds read pressure
         /// </summary>
         /// <returns></returns>
-        internal async Task ReadUntilAsync(Func<Task<bool>> method, CancellationToken cancellationToken)
-        {
-            await _readSemaphore.WaitAsync(cancellationToken);
-            while (!(await method().ConfigureAwait(false)))
-            {
-                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
-            }
-            _readSemaphore.Release();
-        }
-
-        /// <summary>
-        /// Adds read pressure
-        /// </summary>
-        /// <returns></returns>
         internal async Task ReadUntilAsync(Task task, CancellationToken cancellationToken)
         {
             await _readSemaphore.WaitAsync(cancellationToken);
