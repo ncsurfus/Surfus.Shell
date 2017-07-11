@@ -364,33 +364,6 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Reads packets from the server until the task is complete.
-        /// </summary>
-        /// <returns></returns>
-        internal async Task ReadUntilAsync(Task task, CancellationToken cancellationToken)
-        {
-            while (!task.IsCompleted)
-            {
-                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
-            }
-            await task.ConfigureAwait(false);
-        }
-
-        /// <summary>
-        /// Reads packets from the server until the task is complete.
-        /// </summary>
-        /// <returns>The result of the task.</returns>
-        internal async Task<T> ReadUntilAsync<T>(Task<T> task, CancellationToken cancellationToken)
-        {
-            while (!task.IsCompleted)
-            {
-                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            return await task.ConfigureAwait(false);
-        }
-
-        /// <summary>
         /// Reads a message from the server
         /// </summary>
         /// <param name="cancellationToken">The cancellation token is used to cancel the ReadMessage request</param>
