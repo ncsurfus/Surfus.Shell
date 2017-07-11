@@ -219,6 +219,7 @@ namespace Surfus.Shell
                 var index = -1;
                 while ((index = buffer.IndexOf(plainText)) == -1)
                 {
+                    await _client.ProcessAdditionalAsync(cancellationToken);
                     buffer.Append(await ReadAsync(cancellationToken).ConfigureAwait(false));
                 }
                 index = index + plainText.Length;
@@ -259,6 +260,7 @@ namespace Surfus.Shell
             Match regexMatch = null;
             while (!(regexMatch = Regex.Match(buffer.ToString(), regexText, regexOptions)).Success)
             {
+                await _client.ProcessAdditionalAsync(cancellationToken);
                 buffer.Append(await ReadAsync(cancellationToken).ConfigureAwait(false));
             }
             var index = regexMatch.Index + regexMatch.Length;
