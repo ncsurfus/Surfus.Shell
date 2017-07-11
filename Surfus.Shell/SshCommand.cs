@@ -171,7 +171,6 @@ namespace Surfus.Shell
 				using (linkedCancellation.Token.Register(() => executeCloseTaskSource?.TrySetCanceled()))
 				using (linkedCancellation.Token.Register(() => executeEofTaskSource?.TrySetCanceled()))
 				{
-
 					_channel.OnChannelEofReceived = async (message, token) =>
 					{
 						await _commandSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
@@ -190,12 +189,12 @@ namespace Surfus.Shell
 						_commandSemaphore.Release();
 					};
 
-					await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), _client.InternalCancellation.Token).ConfigureAwait(false);
+					await _client.ReadUntilAsync(_channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), _client.InternalCancellation.Token), cancellationToken).ConfigureAwait(false);
 					_commandSemaphore.Release();
 
 
-					await executeEofTaskSource.Task.ConfigureAwait(false);
-					await executeCloseTaskSource.Task.ConfigureAwait(false);
+					await _client.ReadUntilAsync(executeEofTaskSource.Task, cancellationToken).ConfigureAwait(false);
+					await _client.ReadUntilAsync(executeCloseTaskSource.Task, cancellationToken).ConfigureAwait(false);
 				}
 
                 _channel.OnChannelEofReceived = null;

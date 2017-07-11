@@ -22,11 +22,6 @@ namespace Surfus.Shell
     public class SshClient : IDisposable
     {
         /// <summary>
-        /// _readLoopTask holds the task of the read loop.
-        /// </summary>
-        private Task _readLoopTask;
-
-        /// <summary>
         /// _clientSemaphore forces single access to objects of the SshClient.
         /// </summary>
         private SemaphoreSlim _clientSemaphore = new SemaphoreSlim(1,1);
@@ -170,8 +165,8 @@ namespace Surfus.Shell
 					_initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
 					ConnectionInfo.ServerVersion = await ExchangeVersionAsync(linkedCancellation.Token).ConfigureAwait(false);
 					Logger.LogInformation("Server Version: " + ConnectionInfo.ServerVersion);
-					_readLoopTask = ReadLoop();
-					await _initialKeyExchangeCompleted.Task.ConfigureAwait(false);
+                    await ReadUntilAsync(() => _initialKeyExchangeCompleted.Task.IsCompleted, cancellationToken);
+                    await _initialKeyExchangeCompleted.Task.ConfigureAwait(false);
 				}
 
                 // Perform login
@@ -179,7 +174,8 @@ namespace Surfus.Shell
 				using (linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled()))
 				{
 					await ConnectionInfo.Authentication.LoginAsync(username, password, linkedCancellation.Token).ConfigureAwait(false);
-					await _loginCompleted.Task.ConfigureAwait(false);
+                    await ReadUntilAsync(() => _loginCompleted.Task.IsCompleted, cancellationToken);
+                    await _loginCompleted.Task.ConfigureAwait(false);
 				}
                 // Set new state
                 _sshClientState = State.Connected;
@@ -231,7 +227,8 @@ namespace Surfus.Shell
 					_initialKeyExchangeCompleted = new TaskCompletionSource<bool>();
 					ConnectionInfo.ServerVersion = await ExchangeVersionAsync(linkedCancellation.Token).ConfigureAwait(false);
 					Logger.LogInformation("Server Version: " + ConnectionInfo.ServerVersion);
-					_readLoopTask = ReadLoop();
+
+                    await ReadUntilAsync(() => _initialKeyExchangeCompleted.Task.IsCompleted, cancellationToken);
 					await _initialKeyExchangeCompleted.Task.ConfigureAwait(false);
 				}
 
@@ -240,7 +237,8 @@ namespace Surfus.Shell
 				using (linkedCancellation.Token.Register(() => _loginCompleted?.TrySetCanceled()))
 				{
 					await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, linkedCancellation.Token).ConfigureAwait(false);
-					await _loginCompleted.Task.ConfigureAwait(false);
+                    await ReadUntilAsync(() => _loginCompleted.Task.IsCompleted, cancellationToken);
+                    await _loginCompleted.Task.ConfigureAwait(false);
 				}
                 // Set new state
                 _sshClientState = State.Connected;
@@ -286,7 +284,7 @@ namespace Surfus.Shell
                 _channelCounter++;
 
                 _clientSemaphore.Release();
-                await terminal.OpenAsync(cancellationToken);
+                await ReadUntilAsync(terminal.OpenAsync(cancellationToken), cancellationToken);
                 return terminal;
             }
         }
@@ -328,7 +326,7 @@ namespace Surfus.Shell
                 _channelCounter++;
 
                 _clientSemaphore.Release();
-                await command.OpenAsync(cancellationToken);
+                await ReadUntilAsync(command.OpenAsync(cancellationToken), cancellationToken);
                 return command;
             }
         }
@@ -420,34 +418,61 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// ReadLoop continually checks for messages from the server. Long running Synchronous operations may block this method and cause a timeout.
+        /// Adds read pressure
         /// </summary>
         /// <returns></returns>
-        private async Task ReadLoop()
+        internal async Task ReadUntilAsync(Func<bool> method, CancellationToken cancellationToken)
         {
-            try
+            await _readSemaphore.WaitAsync(cancellationToken);
+            while(!method())
             {
-                Logger.LogInformation("Starting Message Read Loop...");
-                while ((IsConnected || _isConnecting) && !InternalCancellation.IsCancellationRequested)
-                {
-                    await ReadMessageAsync(InternalCancellation.Token).ConfigureAwait(false);
-                }
+                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex)
+            _readSemaphore.Release();
+        }
+
+        /// <summary>
+        /// Adds read pressure
+        /// </summary>
+        /// <returns></returns>
+        internal async Task ReadUntilAsync(Func<Task<bool>> method, CancellationToken cancellationToken)
+        {
+            await _readSemaphore.WaitAsync(cancellationToken);
+            while (!(await method().ConfigureAwait(false)))
             {
-                if (!_isDisposed)
-                {
-                    if(!InternalCancellation.IsCancellationRequested)
-                    {
-                        InternalCancellation.Cancel(true);
-                    }
-                    Logger.LogCritical("Caught Exception in Read Loop: " + ex.ToString());
-                }
+                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
             }
-            finally
+            _readSemaphore.Release();
+        }
+
+        /// <summary>
+        /// Adds read pressure
+        /// </summary>
+        /// <returns></returns>
+        internal async Task ReadUntilAsync(Task task, CancellationToken cancellationToken)
+        {
+            await _readSemaphore.WaitAsync(cancellationToken);
+            while (!task.IsCompleted)
             {
-                Logger.LogInformation("Ending Message Read Loop...");
+                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
             }
+            await task.ConfigureAwait(false);
+            _readSemaphore.Release();
+        }
+
+        /// <summary>
+        /// Adds read pressure
+        /// </summary>
+        /// <returns></returns>
+        internal async Task<T> ReadUntilAsync<T>(Task<T> task, CancellationToken cancellationToken)
+        {
+            await _readSemaphore.WaitAsync(cancellationToken);
+            while (!task.IsCompleted)
+            {
+                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+            }
+            _readSemaphore.Release();
+            return await task.ConfigureAwait(false);
         }
 
         /// <summary>
