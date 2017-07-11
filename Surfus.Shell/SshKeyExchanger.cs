@@ -55,20 +55,17 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Attempts to send a client KexInit packet. Will return false if we've already sent a client Kexinit process.
+        /// Awaits for the current key exchange to be completed.
         /// </summary>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>If we sent the KexInit or not.</returns>
-        internal async Task<bool> TrySendClientKexInitAsync(CancellationToken cancellationToken)
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        internal async Task AwaitKeyExchangeAsync(CancellationToken cancellationToken)
         {
             if(_keyExchangeState == State.Initial)
             {
-                _clientKexInit = new KexInit();
-                await _client.WriteMessageAsync(_clientKexInit, cancellationToken).ConfigureAwait(false);
-                _keyExchangeState = State.SentKexNeedKex;
-                return true;
+                await _client.ReadUntilAsync(() => _keyExchangeState != State.Initial, cancellationToken);
             }
-            return false;
+            await _client.ReadUntilAsync(() => _keyExchangeState == State.Initial, cancellationToken);
         }
 
         /// <summary>
@@ -120,7 +117,6 @@ namespace Surfus.Shell
                     if (_keyExchangeState != State.WaitingOnNewKeys)
                     {
                         throw new SshException("Received unexpected key exchange message.");
-
                     }
                     await _client.WriteMessageAsync(new NewKeys(), cancellationToken).ConfigureAwait(false);
                     ApplyKeyExchange();

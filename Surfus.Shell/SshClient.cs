@@ -116,9 +116,6 @@ namespace Surfus.Shell
             // Perform version exchange and key exchange
             ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
             await ReadUntilAsync(() => _sshClientState != State.Connecting, cancellationToken).ConfigureAwait(false);
-
-            // Perform login
-            _sshClientState = State.Authenticating;
             await ConnectionInfo.Authentication.LoginAsync(username, password, cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
@@ -147,10 +144,7 @@ namespace Surfus.Shell
 
             // Perform version exchange and key exchange
             ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
-            await ReadUntilAsync(() => _sshClientState != State.Connecting, cancellationToken).ConfigureAwait(false);
-
-            // Perform login
-            _sshClientState = State.Authenticating;
+            await ConnectionInfo.KeyExchanger.AwaitKeyExchangeAsync(cancellationToken).ConfigureAwait(false);
             await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
@@ -447,9 +441,6 @@ namespace Surfus.Shell
                     break;
                 case MessageType.SSH_MSG_NEWKEYS:
                     await ConnectionInfo.KeyExchanger.ProcessMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
-
-                    // If we make it to this point without an exception we've successfully completed our key exchange
-                    _sshClientState = State.Connected;
                     break;
                 case MessageType.SSH_MSG_KEX_Exchange_30:
                 case MessageType.SSH_MSG_KEX_Exchange_31:
