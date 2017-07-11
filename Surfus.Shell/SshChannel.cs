@@ -9,17 +9,12 @@ namespace Surfus.Shell
     /// <summary>
     /// Repesents an SSH Channel. Once the SSH connections is setup channels are created and data can be passed.
     /// </summary>
-    internal class SshChannel : IDisposable
+    internal class SshChannel
     {
         /// <summary>
         /// The state of the channel.
         /// </summary>
         private State _channelState = State.Initial;
-
-        /// <summary>
-        /// The disposed state of the channel.
-        /// </summary>
-        private bool _isDisposed;
 
         /// <summary>
         /// The SshClient that owns the channel.
@@ -171,7 +166,6 @@ namespace Surfus.Shell
             {
                 await _client.WriteMessageAsync(new ChannelClose(ServerId), cancellationToken).ConfigureAwait(false);
                 _channelState = State.Closed;
-                Close();
             }
         }
 
@@ -181,7 +175,7 @@ namespace Surfus.Shell
         /// <param name="message">The open confirmation message that was sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelOpenConfirmation message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelOpenConfirmation message)
         {
             if (_channelState != State.WaitingOnOpenConfirmation)
             {
@@ -202,7 +196,7 @@ namespace Surfus.Shell
         /// <param name="message">The open failure message that was sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelOpenFailure message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelOpenFailure message)
         {
             if (_channelState != State.WaitingOnOpenConfirmation)
             {
@@ -222,7 +216,7 @@ namespace Surfus.Shell
         /// <param name="message">The channel success message that was sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelSuccess message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelSuccess message)
         {
             if (_channelState != State.WaitingOnRequestResponse)
             {
@@ -241,7 +235,7 @@ namespace Surfus.Shell
         /// <param name="message">The channel failure message that was sent by the server.</param>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelFailure message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelFailure message)
         {
             if (_channelState != State.WaitingOnRequestResponse)
             {
@@ -261,7 +255,7 @@ namespace Surfus.Shell
         /// <param name="message">The channel window adjust sent by the server. Once this is sent to us we can send more data.</param>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelWindowAdjust message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelWindowAdjust message)
         {
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
@@ -313,7 +307,7 @@ namespace Surfus.Shell
         /// <param name="message">The channel end of file sent by the server. We could still send data, but the server has stopped.</param>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelEof message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelEof message)
         {
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
@@ -330,7 +324,7 @@ namespace Surfus.Shell
         /// <param name="message">The channel close message sent by the server.</param>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelClose message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelClose message)
         {
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
@@ -339,25 +333,6 @@ namespace Surfus.Shell
             }
 
             OnChannelCloseReceived?.Invoke(message);
-        }
-
-        /// <summary>
-        /// Closes the channel.
-        /// </summary>
-        public void Close()
-        {
-            if(!_isDisposed)
-            {
-                _isDisposed = true;
-            }
-        }
-
-        /// <summary>
-        /// Disposes the channel.
-        /// </summary>
-        public void Dispose()
-        {
-            Close();
         }
 
         /// <summary>
