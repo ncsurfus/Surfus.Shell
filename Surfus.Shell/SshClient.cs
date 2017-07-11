@@ -559,6 +559,53 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Processes packets in the background until the connection has been disconnected.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task ProcessPacketsAsync(CancellationToken cancellationToken)
+        {
+            await ReadUntilAsync(() => !IsConnected, cancellationToken);
+        }
+
+        /// <summary>
+        /// Processes packets in the background until the condition has been met.
+        /// </summary>
+        /// <param name="condition">The condition that must be true to exit the method.</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task ProcessPacketsAsync(Func<bool> untilCondition, CancellationToken cancellationToken)
+        {
+            await ReadUntilAsync(untilCondition, cancellationToken);
+        }
+
+        /// <summary>
+        /// Processes packets in the background for the specified amount of time.
+        /// </summary>
+        /// <param name="timeSpan">The amount of time to wait.</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task ProcessPacketsAsync(TimeSpan timeSpan, CancellationToken cancellationToken)
+        {
+            var taskTimer = Task.Delay(timeSpan, cancellationToken);
+            await ReadUntilAsync(() => taskTimer.IsCompleted, cancellationToken);
+            await taskTimer;
+        }
+
+        /// <summary>
+        /// Processes packets in the background for the specified amount of milliseconds..
+        /// </summary>
+        /// <param name="milliseconds">The amount of milliseconds to wait for.</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task ProcessPacketsAsync(int milliseconds, CancellationToken cancellationToken)
+        {
+            var taskTimer = Task.Delay(milliseconds, cancellationToken);
+            await ReadUntilAsync(() => taskTimer.IsCompleted, cancellationToken);
+            await taskTimer;
+        }
+
+        /// <summary>
         /// Closes the SshClient
         /// </summary>
         public void Close()
