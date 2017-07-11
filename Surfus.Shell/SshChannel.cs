@@ -124,9 +124,9 @@ namespace Surfus.Shell
                         await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), linkedCancellation.Token).ConfigureAwait(false);
                         totalBytesLeft -= SendWindow;
                         SendWindow = 0;
+                        await _client.ReadUntilAsync(() => SendWindow > 0, cancellationToken);
                     }
                     _channelSemaphore.Release();
-                    await Task.Delay(100, linkedCancellation.Token).ConfigureAwait(false);
                 }
             }
         }

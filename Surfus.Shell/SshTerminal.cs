@@ -240,7 +240,7 @@ namespace Surfus.Shell
                 using (linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled()))
                 {
                     _terminalSemaphore.Release();
-                    return await _terminalReadComplete.Task.ConfigureAwait(false);
+                    return await _client.ReadUntilAsync(_terminalReadComplete.Task, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -273,7 +273,7 @@ namespace Surfus.Shell
 
                 using (linkedCancellation.Token.Register(() => _terminalReadComplete?.TrySetCanceled()))
                 {
-                    var text = await _terminalReadComplete.Task.ConfigureAwait(false);
+                    var text = await _client.ReadUntilAsync(_terminalReadComplete.Task, cancellationToken).ConfigureAwait(false);
                     await _terminalSemaphore.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
                     _readBuffer.Insert(0, text.Substring(1, text.Length - 1));
                     _terminalSemaphore.Release();
