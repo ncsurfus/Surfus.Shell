@@ -263,7 +263,7 @@ namespace Surfus.Shell
             _disposables.Add(command);
             _channelCounter++;
 
-            await command.OpenAsync(cancellationToken);
+            await command.OpenAsync(cancellationToken).ConfigureAwait(false);
             return command;
         }
 
@@ -406,6 +406,7 @@ namespace Surfus.Shell
                 if(readPacket == cancelRead.Task)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    throw new SshException("CancellationToken was triggered, but did not throw a cancel exception. This should not happen.");
                 }
 
                 var sshPacket = await sshPacketTask.ConfigureAwait(false);
