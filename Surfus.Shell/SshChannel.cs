@@ -64,17 +64,17 @@ namespace Surfus.Shell
         /// <summary>
         /// A callback once data is received.
         /// </summary>
-        internal Func<byte[], CancellationToken, Task> OnDataReceived;
+        internal Action<byte[]> OnDataReceived;
 
         /// <summary>
         /// A callback when a channel end of file is received.
         /// </summary>
-        internal Func<ChannelEof, CancellationToken, Task> OnChannelEofReceived;
+        internal Action<ChannelEof> OnChannelEofReceived;
 
         /// <summary>
         /// A callback when a channel close is received.
         /// </summary>
-        internal Func<ChannelClose, CancellationToken, Task> OnChannelCloseReceived;
+        internal Action<ChannelClose> OnChannelCloseReceived;
 
         /// <summary>
         /// Returns the open/close state of the channel.
@@ -304,10 +304,7 @@ namespace Surfus.Shell
                 ReceiveWindow += WindowRefill;
             }
 
-            if (OnDataReceived != null)
-            {
-                await OnDataReceived(message.Data, cancellationToken).ConfigureAwait(false);
-            }
+            OnDataReceived?.Invoke(message.Data);
         }
 
         /// <summary>
@@ -316,7 +313,7 @@ namespace Surfus.Shell
         /// <param name="message">The channel end of file sent by the server. We could still send data, but the server has stopped.</param>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task ProcessMessageAsync(ChannelEof message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelEof message, CancellationToken cancellationToken)
         {
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
@@ -324,10 +321,7 @@ namespace Surfus.Shell
                 throw new SshException("Received unexpected channel message.");
             }
 
-            if (OnChannelEofReceived != null)
-            {
-                await OnChannelEofReceived(message, cancellationToken).ConfigureAwait(false);
-            }
+            OnChannelEofReceived?.Invoke(message);
         }
 
         /// <summary>
@@ -336,7 +330,7 @@ namespace Surfus.Shell
         /// <param name="message">The channel close message sent by the server.</param>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task ProcessMessageAsync(ChannelClose message, CancellationToken cancellationToken)
+        internal void ProcessMessageAsync(ChannelClose message, CancellationToken cancellationToken)
         {
             if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
             {
@@ -344,10 +338,7 @@ namespace Surfus.Shell
                 throw new SshException("Received unexpected channel message.");
             }
 
-            if (OnChannelCloseReceived != null)
-            {
-                await OnChannelCloseReceived(message, cancellationToken).ConfigureAwait(false);
-            }
+            OnChannelCloseReceived?.Invoke(message);
         }
 
         /// <summary>
