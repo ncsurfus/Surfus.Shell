@@ -96,6 +96,11 @@ namespace Surfus.Shell
         public string Banner { get; private set; } = null;
 
         /// <summary>
+        /// When set, calls this callback function to determine if the host key is valid and if the connection should continue.
+        /// </summary>
+        public Func<byte[], bool> HostKeyCallback = null;
+
+        /// <summary>
         /// An SshClient that can connect designated hostname and port.
         /// </summary>
         /// <param name="hostname">The remote SSH Server.</param>
