@@ -145,8 +145,7 @@ namespace Surfus.Shell
                     executeCloseTaskSource.SetResult(true);
                 };
 
-                await _client.ReadUntilAsync(_channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken), cancellationToken).ConfigureAwait(false);
-
+                await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken).ConfigureAwait(false);
                 await _client.ReadUntilAsync(executeEofTaskSource.Task, cancellationToken).ConfigureAwait(false);
                 await _client.ReadUntilAsync(executeCloseTaskSource.Task, cancellationToken).ConfigureAwait(false);
             }
