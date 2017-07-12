@@ -1,8 +1,14 @@
 ﻿namespace Surfus.Shell.Exceptions
 {
-    public class SshInvalidCredentials : SshException
+    /// <summary>
+    /// An exception thrown when the server rejects the supplied credentials.
+    /// </summary>
+    public class SshInvalidCredentials : SshAuthenticationException
     {
-        internal SshInvalidCredentials(string username) : base($"Failed to login to host with {username}")
+        /// <summary>
+        /// An exception thrown when the server rejects the supplied credentials.
+        /// </summary>
+        public SshInvalidCredentials() : base("The credentials were rejected.")
         {
 
         }

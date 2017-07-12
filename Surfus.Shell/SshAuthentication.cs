@@ -67,7 +67,7 @@ namespace Surfus.Shell
         {
             if(_loginState != State.Initial)
             {
-                throw new SshException("Cannot Login Twice...");
+                throw new SshAuthenticationException("An authentication request was already attempted.");
             }
 
             _username = username;
@@ -91,7 +91,7 @@ namespace Surfus.Shell
         {
             if (_loginState != State.Initial)
             {
-                throw new Exception("Cannot Login Twice...");
+                throw new SshAuthenticationException("An authentication request was already attempted.");
             }
 
             _username = username;
@@ -114,7 +114,7 @@ namespace Surfus.Shell
             if(_loginState != State.WaitingOnServiceAccept)
             {
                 _loginState = State.Failed;
-                throw new SshException("Received unexpected login message.");
+                throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
             }
 
             if(_loginType == LoginType.Password)
@@ -142,9 +142,9 @@ namespace Surfus.Shell
             _loginState = State.Failed;
             if (_loginState != State.WaitingOnServiceAccept)
             {
-                throw new SshException("Received unexpected login message."); ;
+                throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
             }
-            throw new SshException("Server does not accept authentication.");
+            throw new SshAuthenticationException("The server does not support authentication.");
         }
 
         /// <summary>
@@ -158,7 +158,7 @@ namespace Surfus.Shell
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
-                throw new SshException("Received unexpected login message.");
+                throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
             }
 
             _loginState = State.Completed;
@@ -175,9 +175,9 @@ namespace Surfus.Shell
             if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
-                throw new SshException("Received unexpected login message.");
+                throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
             }
-            throw new SshInvalidCredentials(_username);
+            throw new SshInvalidCredentials();
         }
 
         /// <summary>
@@ -191,7 +191,7 @@ namespace Surfus.Shell
             if (_loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
-                throw new SshException("Received unexpected login message."); ;
+                throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
             }
 
             var responses = new string[message.PromptNumber];
