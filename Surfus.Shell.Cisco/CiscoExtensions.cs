@@ -10,9 +10,6 @@ namespace Surfus.Shell.Cisco
     {
         public static async Task<CiscoTerminal> CiscoInitializeAndEnable(this SshTerminal terminal, string enablePassword, CancellationToken cancellationToken)
         {
-            // Create a starting point.
-            await terminal.WriteLineAsync(cancellationToken);
-
             // Get the prompt
             var prompt = await terminal.GetPromptAsync(cancellationToken);
 
@@ -43,7 +40,8 @@ namespace Surfus.Shell.Cisco
             Match prompt;
             try
             {
-                await terminal.WriteLineAsync(cancellationToken);
+                await terminal.WriteLineAsync("ab cdef", cancellationToken);
+                await terminal.ExpectAsync("ab cdef", cancellationToken);
                 await terminal.WriteAsync("a bcdef", cancellationToken);
                 prompt = await terminal.ExpectRegexMatchAsync(@"^\s?(?<fullPrompt>(?<hostname>[^>\#\s]+)((?<user>>)|(?<privileged>\#)))\s*(?=a bcdef)", RegexOptions.Multiline, cancellationToken).ConfigureAwait(false);
             }
