@@ -1,4 +1,5 @@
-﻿using Surfus.Shell.Exceptions;
+﻿using Surfus.Shell.Cisco.Exceptions;
+using Surfus.Shell.Exceptions;
 using System;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -79,13 +80,13 @@ namespace Surfus.Shell.Cisco
             // Server gave user prompt with no password.
             if (enablePrompt.Groups["user"].Success)
             {
-                throw new SshException("Server refused to provide enable password prompt");
+                throw new SshRejectedEnable("Server refused to provide enable password prompt");
             }
 
             // Server gave us something else.
             if (!enablePrompt.Groups["passwordPrompt"].Success)
             {
-                throw new SshException("Unknown Password Prompt");
+                throw new SshRejectedEnable("Unknown Password Prompt");
             }
 
             // Write enable password
@@ -100,12 +101,12 @@ namespace Surfus.Shell.Cisco
 
             if (enableResult.Groups["user"].Success)
             {
-                throw new SshException("Server rejected enable request and returned to user prompt");
+                throw new SshRejectedEnable("Server rejected enable request and returned to user prompt");
             }
 
             if (enableResult.Groups["passwordPrompt"].Success)
             {
-                throw new SshException("Server rejected enable request and returned to password prompt");
+                throw new SshRejectedEnable("Server rejected enable request and returned to password prompt");
             }
         }
 
