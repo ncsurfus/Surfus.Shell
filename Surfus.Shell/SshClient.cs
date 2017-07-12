@@ -282,7 +282,7 @@ namespace Surfus.Shell
 
                 if (connectResult == timeout.Task)
                 {
-                    throw new SshException("Cancellation exception thrown during TCP Connect.", new TaskCanceledException());
+                    throw new SshException("Cancellation exception thrown during TCP Connect.", new OperationCanceledException());
                 }
 
                 await connectTask.ConfigureAwait(false);
@@ -307,7 +307,7 @@ namespace Surfus.Shell
 
                     if (readResult == timeout.Task)
                     {
-                        throw new SshException("Failed to exchange SSH version. Cancellation exception thrown during TCP Read.", new TaskCanceledException());
+                        throw new SshException("Failed to exchange SSH version. Cancellation exception thrown during TCP Read.", new OperationCanceledException());
                     }
 
                     var readAmount = await readTask.ConfigureAwait(false);
@@ -381,8 +381,7 @@ namespace Surfus.Shell
 
                 if(readPacket == cancelRead.Task)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    throw new SshException("CancellationToken was triggered, but did not throw a cancel exception. This should not happen.");
+                    throw new OperationCanceledException("The operation was cancelled when waiting for a message from the server.");
                 }
 
                 var sshPacket = await sshPacketTask.ConfigureAwait(false);
@@ -392,7 +391,7 @@ namespace Surfus.Shell
                     var messageAuthenticationHash = await _tcpStream.ReadBytesAsync((uint)ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
                     if (!ConnectionInfo.ReadMacAlgorithm.VerifyMac(messageAuthenticationHash, ConnectionInfo.InboundPacketSequence, sshPacket))
                     {
-                        throw new InvalidDataException("Received a malformed packet from host.");
+                        throw new SshException("The server sent a malformed message.");
                     }
                 }
 
