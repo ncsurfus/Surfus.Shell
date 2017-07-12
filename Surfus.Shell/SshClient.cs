@@ -299,10 +299,11 @@ namespace Surfus.Shell
                 {
                     if (bufferPosition == ushort.MaxValue)
                     {
-                        throw new SshException("Failed to exchange SSH version. Invalid version size.");
+                        throw new SshException($"Failed to exchange SSH version. Version size is greater than {ushort.MaxValue}.");
                     }
 
-                    // Reading one character a time. Could this be improved?
+                    // Reading one character a time. Could this be improved? I don't think the server will send us any data until we send our version.
+                    // We're already sending our version after we get theres, so it makes sense to just ready *everything*.
                     var readAmount = await _tcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken).ConfigureAwait(false);
 
                     if (readAmount <= 0)
@@ -329,7 +330,6 @@ namespace Surfus.Shell
                         {
                             if (serverVersionMatch.Groups["ProtoVersion"].Value == "2.0" || serverVersionMatch.Groups["ProtoVersion"].Value == "1.99")
                             {
-
                                 // Send our version after. Seems to be a bug with some IOS versions if we're to fast and send this first.
                                 var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
                                 await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken).ConfigureAwait(false);
@@ -338,7 +338,7 @@ namespace Surfus.Shell
                             }
                             else if (serverVersionMatch.Groups["ProtoVersion"].Value.StartsWith("1."))
                             {
-                                throw new SshException("SSH Version " + serverVersionMatch.Groups["ProtoVersion"].Value + " is not supported");
+                                throw new SshException("Failed to exchange SSH Version. Version " + serverVersionMatch.Groups["ProtoVersion"].Value + " is not supported");
                             }
                         }
 
