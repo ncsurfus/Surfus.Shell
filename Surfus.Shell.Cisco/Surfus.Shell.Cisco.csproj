@@ -12,6 +12,6 @@
     <Version Condition="'$(Configuration)' == 'Debug'">$(Version)-Debug</Version>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Surfus.Shell" Version="1.0.73" />
+    <PackageReference Include="Surfus.Shell" Version="1.0.94" />
   </ItemGroup>
 </Project>
