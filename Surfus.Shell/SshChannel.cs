@@ -101,7 +101,7 @@ namespace Surfus.Shell
                     await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), cancellationToken).ConfigureAwait(false);
                     totalBytesLeft -= SendWindow;
                     SendWindow = 0;
-                    await _client.ReadUntilAsync(() => SendWindow > 0, cancellationToken);
+                    await _client.ReadUntilAsync(() => SendWindow > 0, cancellationToken).ConfigureAwait(false);
                 }
             }
         }

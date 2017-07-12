@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <TargetFramework>netstandard1.4</TargetFramework>
-    <Version>1.0.5</Version>
+    <Version>1.0.6</Version>
     <Authors>Nathan Surfus</Authors>
     <Description>Surfus.Shell.Cisco provides Cisco Router/Switch/Firewall extensions to Surfus.Shell.</Description>
     <PackageId>Surfus.Shell.Cisco</PackageId>
