@@ -282,7 +282,7 @@ namespace Surfus.Shell
 
                 if (connectResult == timeout.Task)
                 {
-                    throw new SshException("Cancellation exception thrown during TCP Connect.", new OperationCanceledException());
+                    throw new OperationCanceledException("The operation was cancelled during the TCP connect.", cancellationToken);
                 }
 
                 await connectTask.ConfigureAwait(false);
@@ -307,7 +307,7 @@ namespace Surfus.Shell
 
                     if (readResult == timeout.Task)
                     {
-                        throw new SshException("Failed to exchange SSH version. Cancellation exception thrown during TCP Read.", new OperationCanceledException());
+                        throw new OperationCanceledException("The operation was cancelled when reading the server version.", cancellationToken);
                     }
 
                     var readAmount = await readTask.ConfigureAwait(false);
@@ -335,10 +335,10 @@ namespace Surfus.Shell
                 }
                 else if(versionMatch.Success)
                 {
-                    throw new SshException($"Failed to exchange SSH Version. Version {versionMatch.Value} is not supported.");
+                    throw new SshException($"Failed to exchange SSH version. Version {versionMatch.Value} is not supported.");
                 }
 
-                throw new SshException($"Failed to exchange SSH Version. The server sent the version in an invalid format.");
+                throw new SshException($"Failed to exchange SSH version. The server sent the version in an invalid format.");
             }
         }
 
@@ -381,7 +381,7 @@ namespace Surfus.Shell
 
                 if(readPacket == cancelRead.Task)
                 {
-                    throw new OperationCanceledException("The operation was cancelled when waiting for a message from the server.");
+                    throw new OperationCanceledException("The operation was cancelled when waiting for a message from the server.", cancellationToken);
                 }
 
                 var sshPacket = await sshPacketTask.ConfigureAwait(false);
