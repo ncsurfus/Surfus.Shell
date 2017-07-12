@@ -273,39 +273,50 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the version exchange</returns>
         private async Task<string> ExchangeVersionAsync(CancellationToken cancellationToken)
         {
-            await _tcpConnection.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port).ConfigureAwait(false);
-
-            // Attempt to get version..
-            _tcpStream = _tcpConnection.GetStream();
-            var serverVersionFilter = new Regex(@"^SSH-(?<ProtoVersion>\d\.\d+)-(?<SoftwareVersion>\S+)(?<Comments>\s[^\r\n]+)?", RegexOptions.Compiled);
-
-            // Buffer to receive their version.
-            var buffer = new byte[ushort.MaxValue];
-            var bufferPosition = 0;
-
-            while (_tcpStream.CanRead && !cancellationToken.IsCancellationRequested)
+            // A cancellation token cannot be pased to the TcpClient.ConnectAsync, you *must* rely on the timeout. This is a work-around.
+            var connectTcs = new TaskCompletionSource<bool>();
+            using (cancellationToken.Register(() => connectTcs.SetResult(true)))
             {
-                if (bufferPosition == ushort.MaxValue)
+                var connectTask = _tcpConnection.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port);
+                var connectResult = await Task.WhenAny(connectTcs.Task, connectTask).ConfigureAwait(false);
+
+                if (connectResult == connectTcs.Task)
                 {
-                    throw new ArgumentOutOfRangeException();
+                    throw new SshException("Cancellation exception thrown during TCP Connect.", new TaskCanceledException());
                 }
 
-                if (_tcpStream.DataAvailable)
+                await connectTask.ConfigureAwait(false);
+
+                // Attempt to get version..
+                _tcpStream = _tcpConnection.GetStream();
+                var serverVersionFilter = new Regex(@"^SSH-(?<ProtoVersion>\d\.\d+)-(?<SoftwareVersion>\S+)(?<Comments>\s[^\r\n]+)?", RegexOptions.Compiled);
+
+                // Buffer to receive their version.
+                var buffer = new byte[ushort.MaxValue];
+                var bufferPosition = 0;
+
+                while (_tcpStream.CanRead)
                 {
+                    if (bufferPosition == ushort.MaxValue)
+                    {
+                        throw new SshException("Failed to exchange SSH version. Invalid version size.");
+                    }
+
+                    // Reading one character a time. Could this be improved?
                     var readAmount = await _tcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken).ConfigureAwait(false);
 
                     if (readAmount <= 0)
                     {
                         if (bufferPosition == 0)
                         {
-                            throw new EndOfStreamException($"Buffer Position is 0, no data sent. Possibly too many connections");
+                            throw new SshException($"Failed to exchange SSH version. No data sent.");
                         }
-                        throw new EndOfStreamException($"Read Amount: {readAmount}, BufferPosition: {bufferPosition}");
+                        throw new SshException($"Failed to exchange SSH version. Connection was closed.");
                     }
 
                     if (buffer[bufferPosition] == '\0')
                     {
-                        throw new SshException("Server sent an invalid SSH version");
+                        throw new SshException("Failed to exchange SSH version. Server sent an illegal character.");
                     }
 
                     if (bufferPosition > 1 && buffer[bufferPosition] == '\n')
@@ -325,7 +336,7 @@ namespace Surfus.Shell
                                 await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
                                 return serverVersion;
                             }
-                            else if(serverVersionMatch.Groups["ProtoVersion"].Value.StartsWith("1."))
+                            else if (serverVersionMatch.Groups["ProtoVersion"].Value.StartsWith("1."))
                             {
                                 throw new SshException("SSH Version " + serverVersionMatch.Groups["ProtoVersion"].Value + " is not supported");
                             }
@@ -336,18 +347,9 @@ namespace Surfus.Shell
                     }
                     bufferPosition += readAmount;
                 }
-                else
-                {
-                    await Task.Delay(100).ConfigureAwait(false);
-                }
-            }
 
-            if (cancellationToken.IsCancellationRequested)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
+                throw new SshException("Invalid version from server");
             }
-
-            throw new SshException("Invalid version from server");
         }
 
         /// <summary>
