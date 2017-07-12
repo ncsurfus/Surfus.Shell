@@ -274,13 +274,13 @@ namespace Surfus.Shell
         private async Task<string> ExchangeVersionAsync(CancellationToken cancellationToken)
         {
             // A cancellation token cannot be pased to the TcpClient.ConnectAsync, you *must* rely on the timeout. This is a work-around.
-            var connectTcs = new TaskCompletionSource<bool>();
-            using (cancellationToken.Register(() => connectTcs.SetResult(true)))
+            var timeout = new TaskCompletionSource<bool>();
+            using (cancellationToken.Register(() => timeout.SetResult(true)))
             {
                 var connectTask = _tcpConnection.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port);
-                var connectResult = await Task.WhenAny(connectTcs.Task, connectTask).ConfigureAwait(false);
+                var connectResult = await Task.WhenAny(timeout.Task, connectTask).ConfigureAwait(false);
 
-                if (connectResult == connectTcs.Task)
+                if (connectResult == timeout.Task)
                 {
                     throw new SshException("Cancellation exception thrown during TCP Connect.", new TaskCanceledException());
                 }
@@ -289,66 +289,56 @@ namespace Surfus.Shell
 
                 // Attempt to get version..
                 _tcpStream = _tcpConnection.GetStream();
-                var serverVersionFilter = new Regex(@"^SSH-(?<ProtoVersion>\d\.\d+)-(?<SoftwareVersion>\S+)(?<Comments>\s[^\r\n]+)?", RegexOptions.Compiled);
 
                 // Buffer to receive their version.
                 var buffer = new byte[ushort.MaxValue];
                 var bufferPosition = 0;
 
-                while (_tcpStream.CanRead)
+                while (bufferPosition == 0 || buffer[bufferPosition - 1] != '\n')
                 {
                     if (bufferPosition == ushort.MaxValue)
                     {
                         throw new SshException($"Failed to exchange SSH version. Version size is greater than {ushort.MaxValue}.");
                     }
 
-                    // Reading one character a time. Could this be improved? I don't think the server will send us any data until we send our version.
-                    // We're already sending our version after we get theres, so it makes sense to just ready *everything*.
-                    var readAmount = await _tcpStream.ReadAsync(buffer, bufferPosition, 1, cancellationToken).ConfigureAwait(false);
+                    // It appears in some cases ReadAsync can get hung and not properly respond to the CancellationToken.
+                    var readTask = _tcpStream.ReadAsync(buffer, bufferPosition, ushort.MaxValue - bufferPosition, cancellationToken);
+                    var readResult = await Task.WhenAny(timeout.Task, readTask).ConfigureAwait(false);
+
+                    if (readResult == timeout.Task)
+                    {
+                        throw new SshException("Failed to exchange SSH version. Cancellation exception thrown during TCP Read.", new TaskCanceledException());
+                    }
+
+                    var readAmount = await readTask.ConfigureAwait(false);
 
                     if (readAmount <= 0)
                     {
                         if (bufferPosition == 0)
                         {
-                            throw new SshException($"Failed to exchange SSH version. No data sent.");
+                            throw new SshException($"Failed to exchange SSH version. No data was sent.");
                         }
                         throw new SshException($"Failed to exchange SSH version. Connection was closed.");
                     }
 
-                    if (buffer[bufferPosition] == '\0')
-                    {
-                        throw new SshException("Failed to exchange SSH version. Server sent an illegal character.");
-                    }
-
-                    if (bufferPosition > 1 && buffer[bufferPosition] == '\n')
-                    {
-                        var serverVersion = buffer[bufferPosition - 1] == '\r'
-                                                ? Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 2)
-                                                : Encoding.UTF8.GetString(buffer, 0, bufferPosition + readAmount - 1);
-                        var serverVersionMatch = serverVersionFilter.Match(serverVersion);
-                        if (serverVersionMatch.Success)
-                        {
-                            if (serverVersionMatch.Groups["ProtoVersion"].Value == "2.0" || serverVersionMatch.Groups["ProtoVersion"].Value == "1.99")
-                            {
-                                // Send our version after. Seems to be a bug with some IOS versions if we're to fast and send this first.
-                                var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
-                                await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken).ConfigureAwait(false);
-                                await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
-                                return serverVersion;
-                            }
-                            else if (serverVersionMatch.Groups["ProtoVersion"].Value.StartsWith("1."))
-                            {
-                                throw new SshException("Failed to exchange SSH Version. Version " + serverVersionMatch.Groups["ProtoVersion"].Value + " is not supported");
-                            }
-                        }
-
-                        buffer = new byte[ushort.MaxValue];
-                        bufferPosition = 0;
-                    }
                     bufferPosition += readAmount;
                 }
 
-                throw new SshException("Invalid version from server");
+                var versionMatch = Regex.Match(Encoding.UTF8.GetString(buffer, 0, bufferPosition), @"^SSH-(?<ProtoVersion>\d\.\d+)-(?<SoftwareVersion>\S+)(?<Comments>\s[^\r\n]+)?((?=\r\n$)|(?=\n$))");
+
+                if (versionMatch.Success && (versionMatch.Groups["ProtoVersion"].Value == "2.0" || versionMatch.Groups["ProtoVersion"].Value == "1.99"))
+                {
+                    var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
+                    await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken).ConfigureAwait(false);
+                    await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                    return versionMatch.Value;
+                }
+                else if(versionMatch.Success)
+                {
+                    throw new SshException($"Failed to exchange SSH Version. Version {versionMatch.Value} is not supported.");
+                }
+
+                throw new SshException($"Failed to exchange SSH Version. The server sent the version in an invalid format.");
             }
         }
 
