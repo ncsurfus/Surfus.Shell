@@ -199,6 +199,28 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Reads as much text from the server until there are no more incoming messages..
+        /// </summary>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Text from the server.</returns>
+        public async Task<string> ReadGreedyAsync(CancellationToken cancellationToken)
+        {
+            if (_terminalState != State.Opened)
+            {
+                throw new Exception("Terminal not opened.");
+            }
+
+            if (_readBuffer.Length == 0)
+            {
+                await _client.ReadUntilAsync(() => _readBuffer.Length > 0, cancellationToken).ConfigureAwait(false);
+            }
+            await _client.ProcessAdditionalAsync(100, cancellationToken).ConfigureAwait(false);
+            var text = _readBuffer.ToString();
+            _readBuffer.Clear();
+            return text;
+        }
+
+        /// <summary>
         /// Reads a single character from the server.
         /// </summary>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
