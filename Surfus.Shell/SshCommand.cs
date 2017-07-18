@@ -136,7 +136,7 @@ namespace Surfus.Shell
             _channel.OnChannelCloseReceived = (message) => { closed = true; };
 
             await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken).ConfigureAwait(false);
-            await _client.ReadUntilAsync(() => eof && closed, cancellationToken).ConfigureAwait(false);
+            await _client.ReadWhileAsync(() => !eof && !closed, cancellationToken).ConfigureAwait(false);
 
             _commandState = State.Completed;
 

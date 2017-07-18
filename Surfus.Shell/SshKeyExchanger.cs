@@ -61,11 +61,14 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task AwaitKeyExchangeAsync(CancellationToken cancellationToken)
         {
+            // If the key exchange is already State.Initial it means it hasn't started yet.
             if(_keyExchangeState == State.Initial)
             {
-                await _client.ReadUntilAsync(() => _keyExchangeState != State.Initial, cancellationToken);
+                // Wait until we get started.
+                await _client.ReadWhileAsync(() => _keyExchangeState == State.Initial, cancellationToken);
             }
-            await _client.ReadUntilAsync(() => _keyExchangeState == State.Initial, cancellationToken);
+            // The key exchange is complete once it returns back to State.Initial.
+            await _client.ReadWhileAsync(() => _keyExchangeState != State.Initial, cancellationToken);
         }
 
         /// <summary>
