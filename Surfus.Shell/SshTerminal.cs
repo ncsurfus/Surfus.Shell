@@ -191,7 +191,7 @@ namespace Surfus.Shell
 
             if (_readBuffer.Length == 0)
             {
-                await _client.ReadUntilAsync(() => _readBuffer.Length > 0, cancellationToken).ConfigureAwait(false);
+                await _client.ReadWhileAsync(() => _readBuffer.Length == 0, cancellationToken).ConfigureAwait(false);
             }
             var text = _readBuffer.ToString();
             _readBuffer.Clear();
@@ -212,7 +212,7 @@ namespace Surfus.Shell
 
             if (_readBuffer.Length == 0)
             {
-                await _client.ReadUntilAsync(() => _readBuffer.Length > 0, cancellationToken).ConfigureAwait(false);
+                await _client.ReadWhileAsync(() => _readBuffer.Length == 0, cancellationToken).ConfigureAwait(false);
             }
             await _client.ProcessAdditionalAsync(100, cancellationToken).ConfigureAwait(false);
             var text = _readBuffer.ToString();
@@ -234,7 +234,7 @@ namespace Surfus.Shell
 
             if (_readBuffer.Length == 0)
             {
-                await _client.ReadUntilAsync(() => _readBuffer.Length > 0, cancellationToken).ConfigureAwait(false);
+                await _client.ReadWhileAsync(() => _readBuffer.Length == 0, cancellationToken).ConfigureAwait(false);
             }
             var text = _readBuffer[0];
             _readBuffer.Remove(0, 1);
@@ -253,7 +253,7 @@ namespace Surfus.Shell
             var lastBufferSize = _readBuffer.Length;
             while ((index = _readBuffer.IndexOf(plainText)) == -1)
             {
-                await _client.ReadUntilAsync(() => _readBuffer.Length > lastBufferSize, cancellationToken).ConfigureAwait(false);
+                await _client.ReadWhileAsync(() => _readBuffer.Length == lastBufferSize, cancellationToken).ConfigureAwait(false);
                 await _client.ProcessAdditionalAsync(100, cancellationToken).ConfigureAwait(false);
                 lastBufferSize = _readBuffer.Length;
             }
@@ -287,7 +287,7 @@ namespace Surfus.Shell
             var lastBufferSize = _readBuffer.Length;
             while (!(regexMatch = Regex.Match(_readBuffer.ToString(), regexText, regexOptions)).Success)
             {
-                await _client.ReadUntilAsync(() => _readBuffer.Length > lastBufferSize, cancellationToken).ConfigureAwait(false);
+                await _client.ReadWhileAsync(() => _readBuffer.Length == lastBufferSize, cancellationToken).ConfigureAwait(false);
                 await _client.ProcessAdditionalAsync(100, cancellationToken).ConfigureAwait(false);
                 lastBufferSize = _readBuffer.Length;
             }

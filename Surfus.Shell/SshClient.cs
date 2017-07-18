@@ -343,26 +343,55 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Reads packets from the server until the callback method returns true.
+        /// Reads packets one-by-one from the server until the callback method returns false.
         /// </summary>
         /// <returns></returns>
-        internal async Task ReadUntilAsync(Func<bool> method, CancellationToken cancellationToken)
+        internal async Task ReadWhileAsync(Func<bool> condition, CancellationToken cancellationToken)
         {
-            while (!method())
+            while (condition())
             {
                 await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
             }
         }
 
         /// <summary>
-        /// Reads packets from the server until the callback method returns true.
+        /// Reads packets one-by-one from the server until the callback method returns false.
         /// </summary>
         /// <returns></returns>
-        internal async Task ReadUntilAsync(Func<Task<bool>> method, CancellationToken cancellationToken)
+        internal async Task ReadWhileAsync(Func<Task<bool>> condition, CancellationToken cancellationToken)
         {
-            while (!await method())
+            while (await condition())
             {
                 await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Reads as many packets as possible from the server until the callback method returns false.
+        /// Since this is an internal method, cancellationToken wont be last so millisecondDelay can be 100.
+        /// </summary>
+        /// <returns></returns>
+        internal async Task GreedyReadWhileAsync(Func<bool> condition, CancellationToken cancellationToken, int millisecondDelay = 100)
+        {
+            while (condition())
+            {
+                // Read first packet
+                await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+
+                // Wait if no data is available
+                if (!_tcpStream.DataAvailable)
+                {
+                    await Task.Delay(millisecondDelay).ConfigureAwait(false);
+                }
+
+                while (_tcpStream.DataAvailable)
+                {
+                    await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
+                    if (!_tcpStream.DataAvailable)
+                    {
+                        await Task.Delay(millisecondDelay).ConfigureAwait(false);
+                    }
+                }
             }
         }
 
@@ -576,7 +605,7 @@ namespace Surfus.Shell
         /// <returns></returns>
         public async Task ProcessPacketsAsync(CancellationToken cancellationToken)
         {
-            await ReadUntilAsync(() => !IsConnected, cancellationToken);
+            await ReadWhileAsync(() => IsConnected, cancellationToken);
         }
 
         /// <summary>
@@ -585,9 +614,9 @@ namespace Surfus.Shell
         /// <param name="condition">The condition that must be true to exit the method.</param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task ProcessPacketsAsync(Func<bool> untilCondition, CancellationToken cancellationToken)
+        public async Task ProcessPacketsWhileAsync(Func<bool> condition, CancellationToken cancellationToken)
         {
-            await ReadUntilAsync(untilCondition, cancellationToken);
+            await ReadWhileAsync(condition, cancellationToken);
         }
 
         /// <summary>
@@ -596,9 +625,9 @@ namespace Surfus.Shell
         /// <param name="condition">The condition that must be true to exit the method.</param>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task ProcessPacketsAsync(Func<Task<bool>> untilCondition, CancellationToken cancellationToken)
+        public async Task ProcessPacketsWhileAsync(Func<Task<bool>> condition, CancellationToken cancellationToken)
         {
-            await ReadUntilAsync(untilCondition, cancellationToken);
+            await ReadWhileAsync(condition, cancellationToken);
         }
 
         /// <summary>
@@ -610,7 +639,7 @@ namespace Surfus.Shell
         public async Task ProcessPacketsAsync(TimeSpan timeSpan, CancellationToken cancellationToken)
         {
             var taskTimer = Task.Delay(timeSpan, cancellationToken);
-            await ReadUntilAsync(() => taskTimer.IsCompleted, cancellationToken);
+            await ReadWhileAsync(() => !taskTimer.IsCompleted, cancellationToken);
             await taskTimer;
         }
 
@@ -623,7 +652,7 @@ namespace Surfus.Shell
         public async Task ProcessPacketsAsync(int milliseconds, CancellationToken cancellationToken)
         {
             var taskTimer = Task.Delay(milliseconds, cancellationToken);
-            await ReadUntilAsync(() => taskTimer.IsCompleted, cancellationToken);
+            await ReadWhileAsync(() => !taskTimer.IsCompleted, cancellationToken);
             await taskTimer;
         }
 

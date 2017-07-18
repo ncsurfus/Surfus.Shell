@@ -101,7 +101,7 @@ namespace Surfus.Shell
                     await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), cancellationToken).ConfigureAwait(false);
                     totalBytesLeft -= SendWindow;
                     SendWindow = 0;
-                    await _client.ReadUntilAsync(() => SendWindow > 0, cancellationToken).ConfigureAwait(false);
+                    await _client.ReadWhileAsync(() => SendWindow == 0, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -121,7 +121,7 @@ namespace Surfus.Shell
 
             await _client.WriteMessageAsync(requestMessage, cancellationToken).ConfigureAwait(false);
             _channelState = State.WaitingOnRequestResponse;
-            await _client.ReadUntilAsync(() => _channelState != State.WaitingOnRequestResponse, cancellationToken).ConfigureAwait(false);
+            await _client.ReadWhileAsync(() => _channelState == State.WaitingOnRequestResponse, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -140,7 +140,7 @@ namespace Surfus.Shell
             ReceiveWindow = (int)openMessage.InitialWindowSize;
             await _client.WriteMessageAsync(openMessage, cancellationToken).ConfigureAwait(false);
             _channelState = State.WaitingOnOpenConfirmation;
-            await _client.ReadUntilAsync(() => _channelState != State.WaitingOnOpenConfirmation, cancellationToken).ConfigureAwait(false);
+            await _client.ReadWhileAsync(() => _channelState == State.WaitingOnOpenConfirmation, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
