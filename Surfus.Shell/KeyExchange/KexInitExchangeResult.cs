@@ -104,7 +104,7 @@ namespace Surfus.Shell.KeyExchange
 
             if (algorithm == null)
             {
-                throw new SshException($"No common cipher was found. Key exchange failed.\r\nClient Supports: {client?.AsString}.\r\nServer Supports: {server?.AsString}");
+                throw new SshException($"No common cipher was found. Key exchange failed.\r\nClient Supports: {client.AsString}.\r\nServer Supports: {server?.AsString}");
             }
 
             return algorithm;

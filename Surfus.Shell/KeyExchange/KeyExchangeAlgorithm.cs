@@ -20,7 +20,7 @@ namespace Surfus.Shell.KeyExchange
     /// </summary>
     internal abstract class KeyExchangeAlgorithm
     {
-        private static readonly RandomNumberGenerator _randomGenerator = RandomNumberGenerator.Create();
+        private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
 
         /// <summary>
         /// Supported key exchange algorithms.
@@ -122,13 +122,11 @@ namespace Surfus.Shell.KeyExchange
         {
             BigInteger randomValue;
             var randomBytes = new byte[maxValue.ToByteArray().Length + 1];
-            int i = 0;
             do
             {
-                _randomGenerator.GetBytes(randomBytes);
+                RandomGenerator.GetBytes(randomBytes);
                 randomBytes[randomBytes.Length - 1] = 0;
                 randomValue = new BigInteger(randomBytes);
-                i++;
             }
             while (randomValue < minValue || randomValue > maxValue);
             return randomValue;

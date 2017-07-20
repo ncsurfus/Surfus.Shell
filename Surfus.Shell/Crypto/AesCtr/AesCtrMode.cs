@@ -1,8 +1,9 @@
 ﻿// Credit to hanswolff https://gist.github.com/hanswolff/8809275
+
 using System;
 using System.Security.Cryptography;
 
-namespace Surfus.SecureShellCore.Crypto.AesCtr
+namespace Surfus.Shell.Crypto.AesCtr
 {
 	public class AesCtrMode : SymmetricAlgorithm
 	{

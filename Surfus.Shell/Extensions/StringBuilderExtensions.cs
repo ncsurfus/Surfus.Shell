@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Text;
 // See https://www.codeproject.com/Tips/129369/StringBuilder-Extensions
 // Phi Nguyen
 
@@ -13,7 +11,7 @@ namespace Surfus.Shell.Extensions
         /// Get index of a string
         /// </summary>
         /// <param name="sb"></param>
-        /// <param name="text"></param>
+        /// <param name="value"></param>
         /// <returns></returns>
         public static int IndexOf(this StringBuilder sb, string value)
         {
@@ -24,7 +22,7 @@ namespace Surfus.Shell.Extensions
         /// Get index of a string from a given index
         /// </summary>
         /// <param name="sb"></param>
-        /// <param name="text"></param>
+        /// <param name="value"></param>
         /// <param name="startIndex"></param>
         /// <returns></returns>
         public static int IndexOf(this StringBuilder sb, string value, int startIndex)
@@ -36,7 +34,7 @@ namespace Surfus.Shell.Extensions
         /// Get index of a string with case option
         /// </summary>
         /// <param name="sb"></param>
-        /// <param name="text"></param>
+        /// <param name="value"></param>
         /// <param name="ignoreCase"></param>
         /// <returns></returns>
         public static int IndexOf(this StringBuilder sb, string value, bool ignoreCase)
@@ -48,7 +46,7 @@ namespace Surfus.Shell.Extensions
         /// Get index of a string from a given index with case option
         /// </summary>
         /// <param name="sb"></param>
-        /// <param name="text"></param>
+        /// <param name="value"></param>
         /// <param name="startIndex"></param>
         /// <param name="ignoreCase"></param>
         /// <returns></returns>
@@ -82,7 +80,7 @@ namespace Surfus.Shell.Extensions
                     if (char.ToLower(sb[j]) == char.ToLower(value[0]))
                     {
                         num3 = 1;
-                        while ((num3 < length) && (char.ToLower(sb[j + num3]) == char.ToLower(value[num3])))
+                        while (num3 < length && char.ToLower(sb[j + num3]) == char.ToLower(value[num3]))
                         {
                             num3++;
                         }

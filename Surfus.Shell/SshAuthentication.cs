@@ -15,7 +15,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The SshClient that owns the channel.
         /// </summary>
-        private SshClient _client { get; }
+        private SshClient Client { get; }
 
         /// <summary>
         /// The current state of authentication.
@@ -53,7 +53,7 @@ namespace Surfus.Shell
         /// <param name="sshClient"></param>
         internal SshAuthentication(SshClient sshClient)
         {
-            _client = sshClient;
+            Client = sshClient;
         }
 
         /// <summary>
@@ -74,20 +74,20 @@ namespace Surfus.Shell
             _password = password;
             _loginType = LoginType.Password;
 
-            await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
+            await Client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
             _loginState = State.WaitingOnServiceAccept;
 
-            await _client.ReadWhileAsync(() => _loginState != State.Completed || _loginState != State.Failed, cancellationToken).ConfigureAwait(false);
+            await Client.ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
         /// Logs in a user.
         /// </summary>
         /// <param name="username">The username to login with.</param>
-        /// <param name="ResponseTask">The interactive callback.</param>
+        /// <param name="responseTask">The interactive callback.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task LoginAsync(string username, Func<string, CancellationToken, Task<string>> ResponseTask, CancellationToken cancellationToken)
+        internal async Task LoginAsync(string username, Func<string, CancellationToken, Task<string>> responseTask, CancellationToken cancellationToken)
         {
             if (_loginState != State.Initial)
             {
@@ -95,12 +95,12 @@ namespace Surfus.Shell
             }
 
             _username = username;
-            _interactiveResponse = ResponseTask;
+            _interactiveResponse = responseTask;
             _loginType = LoginType.Interactive;
-            await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
+            await Client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
             _loginState = State.WaitingOnServiceAccept;
 
-            await _client.ReadWhileAsync(() => _loginState != State.Completed || _loginState != State.Failed, cancellationToken).ConfigureAwait(false);
+            await Client.ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -119,14 +119,14 @@ namespace Surfus.Shell
 
             if(_loginType == LoginType.Password)
             {
-                await _client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "password", _password), cancellationToken).ConfigureAwait(false);
+                await Client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "password", _password), cancellationToken).ConfigureAwait(false);
                 _password = null;
                 _loginState = State.WaitingOnCredentialSuccess;
             }
 
             if (_loginType == LoginType.Interactive)
             {
-                await _client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken).ConfigureAwait(false);
+                await Client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken).ConfigureAwait(false);
                 _loginState = State.WaitingOnCredentialSuccessOrInteractive;
             }
         }
@@ -134,8 +134,6 @@ namespace Surfus.Shell
         /// <summary>
         /// Processes an authentication message sent by the server.
         /// </summary>
-        /// <param name="message">The message sent by the server.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
         internal void ProcessRequestFailureMessage()
         {
@@ -151,7 +149,6 @@ namespace Surfus.Shell
         /// Processes an authentication message sent by the server.
         /// </summary>
         /// <param name="message">The message sent by the server.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
         internal void ProcessMessageAsync(UaSuccess message)
         {
@@ -168,7 +165,6 @@ namespace Surfus.Shell
         /// Processes an authentication message sent by the server.
         /// </summary>
         /// <param name="message">The message sent by the server.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
         internal void ProcessMessageAsync(UaFailure message)
         {
@@ -200,7 +196,7 @@ namespace Surfus.Shell
                 responses[i] = await _interactiveResponse(message.Prompt[i], cancellationToken).ConfigureAwait(false);
             }
 
-            await _client.WriteMessageAsync(new UaInfoResponse((uint)responses.Length, responses), cancellationToken).ConfigureAwait(false);
+            await Client.WriteMessageAsync(new UaInfoResponse((uint)responses.Length, responses), cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>

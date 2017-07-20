@@ -14,9 +14,11 @@ namespace Surfus.Shell.MessageAuthentication
 
         public override void Initialize(byte[] key)
         {
-			_macProvider = new HMACSHA256();
-			_macProvider.Key = key.Take(32).ToArray();
-			_macProvider.Initialize();
+            _macProvider = new HMACSHA256
+            {
+                Key = key.Take(32).ToArray()
+            };
+            _macProvider.Initialize();
         }
 
         public override byte[] ComputeHash(uint sequenceNumber, SshPacket sshPacket)

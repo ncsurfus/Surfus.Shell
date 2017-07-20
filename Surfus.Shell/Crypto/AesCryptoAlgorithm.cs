@@ -10,7 +10,7 @@ namespace Surfus.Shell.Crypto
         /// <param name="keySize">The AES key size.</param>
         /// <param name="cipherMode">The AES cipher mode.</param>
         /// <returns></returns>
-		private static Aes CreateAesCBCZeroPadding(int keySize, CipherMode cipherMode)
+		private static Aes CreateAesCbcZeroPadding(int keySize, CipherMode cipherMode)
 		{
 			var aes = Aes.Create();
 			aes.KeySize = keySize;
@@ -24,7 +24,7 @@ namespace Surfus.Shell.Crypto
         /// </summary>
         /// <param name="keySizeBits">The AES key size.</param>
         /// <param name="cipherMode">The AES cipher mode.</param>
-        internal AesCryptoAlgorithm(int keySizeBits, CipherMode cipherMode) : base (CreateAesCBCZeroPadding(keySizeBits, cipherMode))
+        internal AesCryptoAlgorithm(int keySizeBits, CipherMode cipherMode) : base (CreateAesCbcZeroPadding(keySizeBits, cipherMode))
         {
             KeySize = keySizeBits / 8;
         }
