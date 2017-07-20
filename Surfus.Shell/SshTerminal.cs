@@ -23,12 +23,12 @@ namespace Surfus.Shell
         /// <summary>
         /// The SshChannel the terminal was opened over.
         /// </summary>
-        private SshChannel _channel;
+        private readonly SshChannel _channel;
 
         /// <summary>
         /// The SshClient the terminal was opened to.
         /// </summary>
-        private SshClient _client;
+        private readonly SshClient _client;
 
         /// <summary>
         /// The disposed state of the terminal.
@@ -77,7 +77,6 @@ namespace Surfus.Shell
         /// The channel callback for when data can be read.
         /// </summary>
         /// <param name="buffer">The data sent through the channel.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
         private void OnDataReceived(byte[] buffer)
         {
@@ -97,7 +96,6 @@ namespace Surfus.Shell
         /// The channel callback for when the channel is closed.
         /// </summary>
         /// <param name="close">The channel close message.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
         private void OnChannelCloseReceived(ChannelClose close)
         {
@@ -249,13 +247,12 @@ namespace Surfus.Shell
         /// <returns>The matching text.</returns>
         public async Task<string> ExpectAsync(string plainText, CancellationToken cancellationToken)
         {
-            var index = -1;
-            var lastBufferSize = _readBuffer.Length;
+            int index;
             while ((index = _readBuffer.IndexOf(plainText)) == -1)
             {
-                await _client.ReadWhileAsync(() => _readBuffer.Length == lastBufferSize, cancellationToken).ConfigureAwait(false);
+                var currentBufferSize = _readBuffer.Length;
+                await _client.ReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
                 await _client.ProcessAdditionalAsync(100, cancellationToken).ConfigureAwait(false);
-                lastBufferSize = _readBuffer.Length;
             }
             index = index + plainText.Length;
             var result = _readBuffer.ToString().Substring(0, index);
@@ -283,13 +280,12 @@ namespace Surfus.Shell
         /// <returns>The regex match.</returns>
         public async Task<Match> ExpectRegexMatchAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
         {
-            Match regexMatch = null;
-            var lastBufferSize = _readBuffer.Length;
+            Match regexMatch;
             while (!(regexMatch = Regex.Match(_readBuffer.ToString(), regexText, regexOptions)).Success)
             {
-                await _client.ReadWhileAsync(() => _readBuffer.Length == lastBufferSize, cancellationToken).ConfigureAwait(false);
+                var currentBufferSize = _readBuffer.Length;
+                await _client.ReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
                 await _client.ProcessAdditionalAsync(100, cancellationToken).ConfigureAwait(false);
-                lastBufferSize = _readBuffer.Length;
             }
             var index = regexMatch.Index + regexMatch.Length;
             _readBuffer.Remove(0, index);

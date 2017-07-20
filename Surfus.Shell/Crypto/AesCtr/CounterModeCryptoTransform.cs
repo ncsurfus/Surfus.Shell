@@ -1,9 +1,10 @@
 ﻿// Credit to hanswolff https://gist.github.com/hanswolff/8809275
+
 using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 
-namespace Surfus.SecureShellCore.Crypto.AesCtr
+namespace Surfus.Shell.Crypto.AesCtr
 {
 	public class CounterModeCryptoTransform : ICryptoTransform
 	{
@@ -86,12 +87,12 @@ namespace Surfus.SecureShellCore.Crypto.AesCtr
 			}
 		}
 
-		public int InputBlockSize { get { return _symmetricAlgorithm.BlockSize / 8; } }
-		public int OutputBlockSize { get { return _symmetricAlgorithm.BlockSize / 8; } }
-		public bool CanTransformMultipleBlocks { get { return true; } }
-		public bool CanReuseTransform { get { return false; } }
+		public int InputBlockSize => _symmetricAlgorithm.BlockSize / 8;
+	    public int OutputBlockSize => _symmetricAlgorithm.BlockSize / 8;
+	    public bool CanTransformMultipleBlocks => true;
+	    public bool CanReuseTransform => false;
 
-		public void Dispose()
+	    public void Dispose()
 		{
 		}
 	}

@@ -1,5 +1,5 @@
 ﻿using System.Security.Cryptography;
-using Surfus.SecureShellCore.Crypto.AesCtr;
+using Surfus.Shell.Crypto.AesCtr;
 
 namespace Surfus.Shell.Crypto
 {

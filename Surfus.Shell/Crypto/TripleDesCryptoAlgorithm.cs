@@ -11,7 +11,7 @@ namespace Surfus.Shell.Crypto
         /// Creates a triple des CBC with zero padding.
         /// </summary>
         /// <returns></returns>
-		private static TripleDES CreateTripleDesCBCZeroPadding()
+		private static TripleDES CreateTripleDesCbcZeroPadding()
 		{
 			var tripleDes = TripleDES.Create();
 			tripleDes.Mode = CipherMode.CBC;
@@ -22,7 +22,7 @@ namespace Surfus.Shell.Crypto
         /// <summary>
         /// Creates a triple DES algorithm.
         /// </summary>
-		public TripleDesCryptoAlgorithm() : base (CreateTripleDesCBCZeroPadding())
+		public TripleDesCryptoAlgorithm() : base (CreateTripleDesCbcZeroPadding())
         {
 			
         }

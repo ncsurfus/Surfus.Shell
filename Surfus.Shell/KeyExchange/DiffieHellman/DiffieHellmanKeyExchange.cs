@@ -85,7 +85,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         {
             if(_keyExchangeAlgorithmState != State.Initial)
             {
-                throw new SshException("Unexpected key exchange algorithm state"); ;
+                throw new SshException("Unexpected key exchange algorithm state");
             }
 
             await _client.WriteMessageAsync(new DhInit(E), cancellationToken).ConfigureAwait(false);
@@ -148,11 +148,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             }
 
             var reply = new DhReply(message.Buffer);
-
-            if(reply == null)
-            {
-                throw new SshException("Invalid key exchange algorithm message"); ;
-            }
 
             // Verify 'F' is in the range of [1, p-1]
             if (reply.F < 1 || reply.F > P - 1)

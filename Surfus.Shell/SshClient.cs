@@ -5,8 +5,6 @@ using Surfus.Shell.Messages.Channel;
 using Surfus.Shell.Messages.UserAuth;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -28,32 +26,32 @@ namespace Surfus.Shell
         /// <summary>
         /// _channelCounter holds the current channel index used to derive new channel IDs.
         /// </summary>
-        private uint _channelCounter = 0;
+        private uint _channelCounter;
 
         /// <summary>
         /// _channels holds a list of the channels associated to this SshClient.
         /// </summary>
-        private Dictionary<uint, SshChannel> _channels = new Dictionary<uint, SshChannel>();
+        private readonly Dictionary<uint, SshChannel> _channels = new Dictionary<uint, SshChannel>();
 
         /// <summary>
         /// _disposables holds a list of the disposable objects.
         /// </summary>
-        private List<IDisposable> _disposables = new List<IDisposable>();
+        private readonly List<IDisposable> _disposables = new List<IDisposable>();
 
         /// <summary>
         /// _isDisposed holds the disposed state of the SshClient.
         /// </summary>
-        private bool _isDisposed = false;
+        private bool _isDisposed;
 
         /// <summary>
         /// Holds the value of us getting a disconnected message or not.
         /// </summary>
-        private bool _disconnectReceived = false;
+        private bool _disconnectReceived;
 
         /// <summary>
         /// _tcpConnection holds the underlying TCP Connection of the SshClient.
         /// </summary>
-        private TcpClient _tcpConnection = new TcpClient();
+        private readonly TcpClient _tcpConnection = new TcpClient();
 
         /// <summary>
         /// _tcpStream holds the underlying NetworkStream of the TCP Connection.
@@ -66,11 +64,6 @@ namespace Surfus.Shell
         public bool IsConnected => _tcpConnection?.Connected == true && !_disconnectReceived && !_isDisposed && _sshClientState == State.Authenticated;
 
         /// <summary>
-        /// IsConnecting determines if the SshClient is connecting to the remote SSH server.
-        /// </summary>
-        private bool _isConnecting => _tcpConnection?.Connected == true && !_disconnectReceived && !_isDisposed && (_sshClientState == State.Connecting || _sshClientState == State.Connected || _sshClientState == State.Authenticating);
-
-        /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
         /// </summary>
         public SshConnectionInfo ConnectionInfo = new SshConnectionInfo();
@@ -78,7 +71,7 @@ namespace Surfus.Shell
         /// <summary>
         /// Banner holds the banner message sent by the SSH server after login. If null, no banner was sent.
         /// </summary>
-        public string Banner { get; private set; } = null;
+        public string Banner { get; private set; }
 
         /// <summary>
         /// When set, calls this callback function to determine if the host key is valid and if the connection should continue.
@@ -316,9 +309,9 @@ namespace Surfus.Shell
                     {
                         if (bufferPosition == 0)
                         {
-                            throw new SshException($"Failed to exchange SSH version. No data was sent.");
+                            throw new SshException("Failed to exchange SSH version. No data was sent.");
                         }
-                        throw new SshException($"Failed to exchange SSH version. Connection was closed.");
+                        throw new SshException("Failed to exchange SSH version. Connection was closed.");
                     }
 
                     bufferPosition += readAmount;
@@ -338,7 +331,7 @@ namespace Surfus.Shell
                     throw new SshException($"Failed to exchange SSH version. Version {versionMatch.Value} is not supported.");
                 }
 
-                throw new SshException($"Failed to exchange SSH version. The server sent the version in an invalid format.");
+                throw new SshException("Failed to exchange SSH version. The server sent the version in an invalid format.");
             }
         }
 
@@ -375,21 +368,22 @@ namespace Surfus.Shell
         {
             while (condition())
             {
-                // Read first packet
+                // Read first packet. Unless the condition is already true, we're going to read at least one packet.
                 await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
 
-                // Wait if no data is available
+                // Wait if no data is yet available
                 if (!_tcpStream.DataAvailable)
                 {
-                    await Task.Delay(millisecondDelay).ConfigureAwait(false);
+                    await Task.Delay(millisecondDelay, cancellationToken).ConfigureAwait(false);
                 }
 
+                // If data is available process those packets
                 while (_tcpStream.DataAvailable)
                 {
                     await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
                     if (!_tcpStream.DataAvailable)
                     {
-                        await Task.Delay(millisecondDelay).ConfigureAwait(false);
+                        await Task.Delay(millisecondDelay, cancellationToken).ConfigureAwait(false);
                     }
                 }
             }
@@ -459,8 +453,6 @@ namespace Surfus.Shell
                     case MessageType.SSH_MSG_CHANNEL_CLOSE:
                     case MessageType.SSH_MSG_CHANNEL_EOF:
                         await ProcessChannelMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
-                        break;
-                    default:
                         break;
                 }
             }
@@ -660,12 +652,13 @@ namespace Surfus.Shell
         /// Continues to process packets until there are no incoming packets left.
         /// </summary>
         /// <param name="cancellationToken"></param>
+        /// <param name="delay">The amount of time to wait before declare no more data is available.</param>
         /// <returns></returns>
         internal async Task ProcessAdditionalAsync(int delay, CancellationToken cancellationToken)
         {
             if (!_tcpStream.DataAvailable)
             {
-                await Task.Delay(delay).ConfigureAwait(false);
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
             }
 
             while (_tcpStream.DataAvailable)
@@ -673,7 +666,7 @@ namespace Surfus.Shell
                 await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
                 if (!_tcpStream.DataAvailable)
                 {
-                    await Task.Delay(delay).ConfigureAwait(false);
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -718,14 +711,15 @@ namespace Surfus.Shell
                 case State.Connecting:
                 case State.Connected:
                 case State.Authenticating:
-                    throw new SshException($"The Connection is already in progress. Did you try to connect twice?");
+                    throw new SshException($"The {nameof(SshClient)} is already attempting a connection.");
                 case State.Authenticated:
-                    throw new SshException($"The Connection is already connected. Did you try to connect twice?");
+                    throw new SshException($"The {nameof(SshClient)} is already connected.");
                 case State.Error:
+                    throw new SshException($"The {nameof(SshClient)} had a fatal error.");
                 case State.Closed:
-                    throw new SshException($"The Connection had an error and could not continue.");
+                    throw new SshException($"The {nameof(SshClient)} has disconnected.");
                 default:
-                    throw new SshException($"The connection had an unknown error and could not continue.");
+                    throw new SshException($"The {nameof(SshClient)} had an unknown error.");
             }
         }
 

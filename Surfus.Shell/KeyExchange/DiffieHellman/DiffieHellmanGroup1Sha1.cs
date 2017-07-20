@@ -1,5 +1,4 @@
-﻿using System;
-using System.Globalization;
+﻿using System.Globalization;
 using System.Numerics;
 
 namespace Surfus.Shell.KeyExchange.DiffieHellman

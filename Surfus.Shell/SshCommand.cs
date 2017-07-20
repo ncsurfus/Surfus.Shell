@@ -16,12 +16,12 @@ namespace Surfus.Shell
         /// <summary>
         /// The channel the command will be sent over.
         /// </summary>
-        private SshChannel _channel;
+        private readonly SshChannel _channel;
 
         /// <summary>
         /// The client the command will be sent to.
         /// </summary>
-        private SshClient _client;
+        private readonly SshClient _client;
 
         /// <summary>
         /// The disposed state of the command.
@@ -54,7 +54,6 @@ namespace Surfus.Shell
         /// Receives data from the channel and places it into the buffer.
         /// </summary>
         /// <param name="buffer">The received data.</param>
-        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
         /// <returns></returns>
         internal void OnDataReceived(byte[] buffer)
         {

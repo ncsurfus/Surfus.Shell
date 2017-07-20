@@ -1,5 +1,4 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Threading;
@@ -104,7 +103,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         {
             if (_keyExchangeAlgorithmState != State.Initial)
             {
-                throw new SshException("Unexpected key exchange algorithm state"); ;
+                throw new SshException("Unexpected key exchange algorithm state");
             }
 
             // Send the request message to begin the Diffie-Hellman Group Key Exchange.
@@ -173,13 +172,13 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         {
             if (_keyExchangeAlgorithmState != State.WaitingonDhgGroup)
             {
-                throw new SshException("Unexpected key exchange algorithm message"); ;
+                throw new SshException("Unexpected key exchange algorithm message");
             }
 
             _dhgGroupMessage = new DhgGroup(message.Buffer);
             if (_dhgGroupMessage == null)
             {
-                throw new SshException("Invalid key exchange algorithm message"); ;
+                throw new SshException("Invalid key exchange algorithm message");
             }
 
             // Generate random number 'x'.

@@ -28,7 +28,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The SshClient we're performing the key exchange for.
         /// </summary>
-        private SshClient _client;
+        private readonly SshClient _client;
 
         /// <summary>
         /// The key exchange algorithm.
@@ -96,7 +96,7 @@ namespace Surfus.Shell
                     }
                     else
                     {
-                        throw new SshException("Received unexpected key exchange message."); ;
+                        throw new SshException("Received unexpected key exchange message.");
                     }
                     KeyExchangeResult = new KexInitExchangeResult(_clientKexInit, message.Message as KexInit);
                     KeyExchangeAlgorithm = KeyExchangeAlgorithm.Create(_client, KeyExchangeResult);
@@ -110,7 +110,7 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_KEX_Exchange_34:
                     if (_keyExchangeState != State.WaitingOnKeyExchangeProtocol)
                     {
-                        throw new SshException("Received unexpected key exchange message."); ;
+                        throw new SshException("Received unexpected key exchange message.");
 
                     }
                     await ApplyKeyExchangeAlgorithmMessageAsync(message, cancellationToken).ConfigureAwait(false);
