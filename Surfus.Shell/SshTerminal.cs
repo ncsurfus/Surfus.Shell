@@ -251,8 +251,7 @@ namespace Surfus.Shell
             while ((index = _readBuffer.IndexOf(plainText)) == -1)
             {
                 var currentBufferSize = _readBuffer.Length;
-                await _client.ReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
-                await _client.ProcessAdditionalAsync(100, cancellationToken).ConfigureAwait(false);
+                await _client.GreedyReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
             }
             index = index + plainText.Length;
             var result = _readBuffer.ToString().Substring(0, index);
@@ -284,8 +283,7 @@ namespace Surfus.Shell
             while (!(regexMatch = Regex.Match(_readBuffer.ToString(), regexText, regexOptions)).Success)
             {
                 var currentBufferSize = _readBuffer.Length;
-                await _client.ReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
-                await _client.ProcessAdditionalAsync(100, cancellationToken).ConfigureAwait(false);
+                await _client.GreedyReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
             }
             var index = regexMatch.Index + regexMatch.Length;
             _readBuffer.Remove(0, index);
