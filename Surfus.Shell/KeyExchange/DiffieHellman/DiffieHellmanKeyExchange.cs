@@ -147,7 +147,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
                 throw new SshException("Unexpected key exchange algorithm message");
             }
 
-            var reply = new DhReply(message.Buffer);
+            var reply = new DhReply(message.Packet);
 
             // Verify 'F' is in the range of [1, p-1]
             if (reply.F < 1 || reply.F > P - 1)

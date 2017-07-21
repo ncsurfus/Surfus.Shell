@@ -11,33 +11,23 @@ namespace Surfus.Shell.Signing
     {
         public SshRsa(byte[] publicCertificate)
         {
-            Raw = publicCertificate;
-			using (var memoryStream = new MemoryStream(publicCertificate))
-			{
-                if (Name != memoryStream.ReadString())
-                {
-                    throw new Exception($"Expected {Name} signature type");
-                }
+            var reader = new ByteReader(publicCertificate);
+            if (Name != reader.ReadString())
+            {
+                throw new Exception($"Expected {Name} signature type");
+            }
 
-				var exponent = memoryStream.ReadBinaryString();
-				var modulus = memoryStream.ReadBinaryString();
-
-				RsaParameters = new RSAParameters
-				{
-					Exponent = exponent[0] != 0 ? exponent : exponent.Skip(1).ToArray(),
-					Modulus = modulus[0] != 0 ? modulus : modulus.Skip(1).ToArray()
-				};
-
-				E = CreateBigInteger.FromUnsignedBigEndian(RsaParameters.Exponent);
-				N = CreateBigInteger.FromUnsignedBigEndian(RsaParameters.Modulus);
-			}
+            var exponent = reader.ReadBinaryString();
+            var modulus = reader.ReadBinaryString();
+            RsaParameters = new RSAParameters
+            {
+                Exponent = exponent[0] != 0 ? exponent : exponent.Skip(1).ToArray(),
+                Modulus = modulus[0] != 0 ? modulus : modulus.Skip(1).ToArray()
+            };
         }
 
-        public BigInteger E { get; }
-        public BigInteger N { get; }
         public RSAParameters RsaParameters { get; }
         public override string Name { get; } = "ssh-rsa";
-        public override byte[] Raw { get; }
 
         public override int GetKeySize()
         {
@@ -60,7 +50,6 @@ namespace Surfus.Shell.Signing
                 }
 
 				return rsaService.VerifyData(data, memoryStream.ReadBinaryString(), HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
-
             }
         }
     }

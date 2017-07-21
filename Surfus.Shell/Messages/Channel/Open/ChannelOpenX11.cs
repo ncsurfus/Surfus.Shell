@@ -5,14 +5,10 @@ namespace Surfus.Shell.Messages.Channel.Open
 {
     public class ChannelOpenX11 : ChannelOpen
     {
-        public ChannelOpenX11(byte[] buffer) : base(buffer)
+        public ChannelOpenX11(SshPacket packet) : base(packet, "x11")
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                stream.Position = BaseMemoryStreamPosition;
-                OriginatorAddress = stream.ReadString();
-                OriginatorPort = stream.ReadUInt32();
-            }
+            OriginatorAddress = packet.Reader.ReadString();
+            OriginatorPort = packet.Reader.ReadUInt32();
         }
 
         public ChannelOpenX11(string originatorAddress, uint originatorPort, uint senderChannel) : base("x11", senderChannel)

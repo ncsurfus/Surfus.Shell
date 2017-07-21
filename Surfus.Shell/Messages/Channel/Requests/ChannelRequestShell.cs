@@ -2,7 +2,7 @@
 {
     public class ChannelRequestShell : ChannelRequest
     {
-        public ChannelRequestShell(byte[] buffer) : base(buffer)
+        public ChannelRequestShell(SshPacket packet, uint recipientChannel) : base(packet, "shell", recipientChannel)
         {
 
         }

@@ -31,30 +31,20 @@ namespace Surfus.Shell.Messages.KeyExchange
             LanguagesServerToClient = new NameList();
         }
 
-        internal KexInit(byte[] buffer)
+        internal KexInit(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                RandomBytes = stream.ReadBytes(16);
-                KexAlgorithms = stream.ReadNameList();
-                ServerHostKeyAlgorithms = stream.ReadNameList();
-                EncryptionClientToServer = stream.ReadNameList();
-                EncryptionServerToClient = stream.ReadNameList();
-                MacClientToServer = stream.ReadNameList();
-                MacServerToClient = stream.ReadNameList();
-                CompressionClientToServer = stream.ReadNameList();
-                CompressionServerToClient = stream.ReadNameList();
-                LanguagesClientToServer = stream.ReadNameList();
-                LanguagesServerToClient = stream.ReadNameList();
-                FirstKexPacketFollows = stream.ReadBoolean();
-                stream.ReadUInt32();
-            }
+            RandomBytes = packet.Reader.Read(16);
+            KexAlgorithms = packet.Reader.ReadNameList();
+            ServerHostKeyAlgorithms = packet.Reader.ReadNameList();
+            EncryptionClientToServer = packet.Reader.ReadNameList();
+            EncryptionServerToClient = packet.Reader.ReadNameList();
+            MacClientToServer = packet.Reader.ReadNameList();
+            MacServerToClient = packet.Reader.ReadNameList();
+            CompressionClientToServer = packet.Reader.ReadNameList();
+            CompressionServerToClient = packet.Reader.ReadNameList();
+            LanguagesClientToServer = packet.Reader.ReadNameList();
+            LanguagesServerToClient = packet.Reader.ReadNameList();
+            FirstKexPacketFollows = packet.Reader.ReadBoolean();
         }
 
         public NameList CompressionClientToServer { get; }

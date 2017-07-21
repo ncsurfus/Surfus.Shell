@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 
@@ -6,29 +6,19 @@ namespace Surfus.Shell.Messages.UserAuth
 {
     public class UaRequest : IMessage
     {
-        public UaRequest(byte[] buffer)
+        public UaRequest(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
+            Username = packet.Reader.ReadString();
+            ServiceName = packet.Reader.ReadAsciiString();
+            MethodName = packet.Reader.ReadAsciiString();
+            if (MethodName == "password")
             {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                Username = stream.ReadString();
-                ServiceName = stream.ReadAsciiString();
-                MethodName = stream.ReadAsciiString();
-                if (MethodName == "password")
-                {
-                    Password = Password;
-                }
-
-                if (MethodName == "keyboard-interactive")
-                {
-                    Language = stream.ReadString();
-                    Submethods = stream.ReadString();
-                }
+                Password = Password;
+            }
+            if (MethodName == "keyboard-interactive")
+            {
+                Language = packet.Reader.ReadString();
+                Submethods = packet.Reader.ReadString();
             }
         }
 

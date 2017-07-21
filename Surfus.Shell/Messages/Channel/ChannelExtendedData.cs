@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using Surfus.Shell.Extensions;
@@ -13,20 +13,11 @@ namespace Surfus.Shell.Messages.Channel
             SSH_EXTENDED_DATA_STDERR = 1
         }
 
-        public ChannelExtendedData(byte[] buffer)
+        public ChannelExtendedData(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                RecipientChannel = stream.ReadUInt32();
-                DataTypeCode = (DataType)stream.ReadUInt32();
-                Data = stream.ReadBinaryString();
-            }
+            RecipientChannel = packet.Reader.ReadUInt32();
+            DataTypeCode = (DataType)packet.Reader.ReadUInt32();
+            Data = packet.Reader.ReadBinaryString();
         }
 
         public ChannelExtendedData(uint recipientChannel, uint dataTypeCode, byte[] data)

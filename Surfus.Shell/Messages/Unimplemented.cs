@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 
@@ -6,18 +6,9 @@ namespace Surfus.Shell.Messages
 {
     public class Unimplemented : IMessage
     {
-        public Unimplemented(byte[] buffer)
+        public Unimplemented(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                PacketSequenceNumber = stream.ReadUInt32();
-            }
+            PacketSequenceNumber = packet.Reader.ReadUInt32();
         }
 
         public Unimplemented(uint packetSequenceNumber)

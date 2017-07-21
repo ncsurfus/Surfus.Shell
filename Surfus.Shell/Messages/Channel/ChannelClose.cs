@@ -6,18 +6,9 @@ namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelClose : IMessage, IChannelRecipient
     {
-        public ChannelClose(byte[] buffer)
+        public ChannelClose(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                RecipientChannel = stream.ReadUInt32();
-            }
+            RecipientChannel = packet.Reader.ReadUInt32();
         }
 
         public ChannelClose(uint recipientChannel)

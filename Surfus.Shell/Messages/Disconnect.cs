@@ -5,10 +5,10 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages
 {
-    public class Disconnect : IMessage
+    internal class Disconnect : IMessage
     {
         [SuppressMessage("ReSharper", "InconsistentNaming")]
-        public enum DisconnectReason : uint
+        internal enum DisconnectReason : uint
         {
             SSH_DISCONNECT_HOST_NOT_ALLOWED_TO_CONNECT = 1, 
             SSH_DISCONNECT_PROTOCOL_ERROR = 2, 
@@ -27,37 +27,39 @@ namespace Surfus.Shell.Messages
             SSH_DISCONNECT_ILLEGAL_USER_NAME = 15
         }
 
-        public Disconnect(byte[] buffer)
+        internal Disconnect(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                Reason = (DisconnectReason) stream.ReadUInt32();
-                Description = stream.ReadString();
-                LanguageTag = stream.ReadString();
-            }
+            Reason = (DisconnectReason)packet.Reader.ReadUInt32();
+            Description = packet.Reader.ReadString();
+            LanguageTag = packet.Reader.ReadString();
         }
 
-        public Disconnect(DisconnectReason disconnectReason, string description, string languageTag = null)
+        internal Disconnect(DisconnectReason disconnectReason, string description, string languageTag = null)
         {
             Reason = disconnectReason;
             Description = description;
             LanguageTag = languageTag;
         }
 
-        public uint ReasonId => (uint)Reason;
-        public DisconnectReason Reason { get; }
-        public string Description { get; }
-        public string LanguageTag { get; }
+        internal uint ReasonId => (uint)Reason;
+        internal DisconnectReason Reason { get; }
+        internal string Description { get; }
+        internal string LanguageTag { get; }
 
+        /// <summary>
+        /// The type of SSH message this class represents.
+        /// </summary>
         public MessageType Type { get; } = MessageType.SSH_MSG_DISCONNECT;
+
+        /// <summary>
+        /// The byte identified of the SSH message type.
+        /// </summary>
         public byte MessageId => (byte)Type;
 
+        /// <summary>
+        /// Gets the unencrypted SSH packet bytes.
+        /// </summary>
+        /// <returns></returns>
         public byte[] GetBytes()
         {
             using (var memoryStream = new MemoryStream())

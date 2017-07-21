@@ -5,13 +5,9 @@ namespace Surfus.Shell.Messages.Channel.Requests
 {
     public class ChannelRequestExitStatus : ChannelRequest
     {
-        public ChannelRequestExitStatus(byte[] buffer) : base(buffer)
+        public ChannelRequestExitStatus(SshPacket packet, uint recipientChannel) : base(packet, "exec", recipientChannel)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                stream.Position = BaseMemoryStreamPosition;
-                ExitStatus = stream.ReadUInt32();
-            }
+            ExitStatus = packet.Reader.ReadUInt32();
         }
 
         public ChannelRequestExitStatus(uint recipientChannel, bool wantReply, uint exitStatus) : base(recipientChannel, "exec", wantReply)

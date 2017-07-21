@@ -12,18 +12,10 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
             E = e;
         }
 
-        internal DhgInit(byte[] buffer)
+        internal DhgInit(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
+            E = packet.Reader.ReadBigInteger();
 
-                E = stream.ReadBigInteger();
-            }
         }
 
         public BigInteger E { get; }

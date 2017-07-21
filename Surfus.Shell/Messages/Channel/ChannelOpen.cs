@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages.Channel.Open;
@@ -7,22 +7,12 @@ namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelOpen : IMessage
     {
-        protected ChannelOpen(byte[] buffer)
+        protected ChannelOpen(SshPacket packet, string channelType)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                ChannelType = stream.ReadAsciiString();
-                SenderChannel = stream.ReadUInt32();
-                InitialWindowSize = stream.ReadUInt32();
-                MaximumPacketSize = stream.ReadUInt32();
-                BaseMemoryStreamPosition = stream.Position;
-            }
+            ChannelType = channelType;
+            SenderChannel = packet.Reader.ReadUInt32();
+            InitialWindowSize = packet.Reader.ReadUInt32();
+            MaximumPacketSize = packet.Reader.ReadUInt32();
         }
 
         public ChannelOpen(string channelType, uint senderChannel, uint initialWindowSize = 35000)
@@ -31,8 +21,6 @@ namespace Surfus.Shell.Messages.Channel
             SenderChannel = senderChannel;
             InitialWindowSize = initialWindowSize;
         }
-
-        protected long BaseMemoryStreamPosition { get; }
 
         public string ChannelType { get; }
         public uint SenderChannel { get; }
@@ -55,31 +43,22 @@ namespace Surfus.Shell.Messages.Channel
             }
         }
 
-        public static ChannelOpen FromBuffer(byte[] buffer)
+        public static ChannelOpen FromBuffer(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
+            var channelType = packet.Reader.ReadAsciiString();
+
+            switch (channelType)
             {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != (byte)MessageType.SSH_MSG_CHANNEL_OPEN)
-                {
-                    throw new Exception($"Expected Type: {MessageType.SSH_MSG_CHANNEL_OPEN}");
-                }
-
-                var channelType = stream.ReadAsciiString();
-
-                switch (channelType)
-                {
-                    case "session":
-                        return new ChannelOpenSession(buffer);
-                    case "x11":
-                        return new ChannelOpenX11(buffer);
-                    case "forwarded-tcpip":
-                        return new ChannelOpenForwardedTcpIp(buffer);
-                    case "direct-tcpip":
-                        return new ChannelOpenDirectTcpIp(buffer);
-                    default:
-                        return new ChannelOpen(buffer);
-                }
+                case "session":
+                    return new ChannelOpenSession(packet);
+                case "x11":
+                    return new ChannelOpenX11(packet);
+                case "forwarded-tcpip":
+                    return new ChannelOpenForwardedTcpIp(packet);
+                case "direct-tcpip":
+                    return new ChannelOpenDirectTcpIp(packet);
+                default:
+                    return new ChannelOpen(packet, channelType);
             }
         }
 

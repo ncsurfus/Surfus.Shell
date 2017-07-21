@@ -419,7 +419,7 @@ namespace Surfus.Shell
                 }
 
                 ConnectionInfo.InboundPacketSequence = ConnectionInfo.InboundPacketSequence != uint.MaxValue ? ConnectionInfo.InboundPacketSequence + 1 : 0;
-                var messageEvent = new MessageEvent(sshPacket.Payload);
+                var messageEvent = new MessageEvent(sshPacket);
 
                 // Key Exchange Messages
                 switch (messageEvent.Type)

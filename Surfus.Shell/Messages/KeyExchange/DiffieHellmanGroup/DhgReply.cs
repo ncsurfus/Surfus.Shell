@@ -14,20 +14,12 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
             HSignature = hSignature;
         }
 
-        internal DhgReply(byte[] buffer)
+        internal DhgReply(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
+            ServerPublicHostKeyAndCertificates = packet.Reader.ReadBinaryString();
+            F = packet.Reader.ReadBigInteger();
+            HSignature = packet.Reader.ReadBinaryString();
 
-                ServerPublicHostKeyAndCertificates = stream.ReadBinaryString();
-                F = stream.ReadBigInteger();
-                HSignature = stream.ReadBinaryString();
-            }
         }
 
         public BigInteger F { get; }

@@ -7,7 +7,7 @@ namespace Surfus.Shell
     /// <summary>
     /// Represents an SSH Packet.
     /// </summary>
-    internal class SshPacket
+    public class SshPacket
     {
         /// <summary>
         /// A random number generator used to generate padding.
@@ -15,19 +15,14 @@ namespace Surfus.Shell
         private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
 
         /// <summary>
-        /// The length of the SSH Packet.
-        /// </summary>
-        internal readonly uint Length;
-
-        /// <summary>
-        /// The padding of the SSH Packet.
-        /// </summary>
-        internal readonly byte[] Padding;
-
-        /// <summary>
         /// The payload of the SSH Packet.
         /// </summary>
-        internal readonly byte[] Payload;
+        internal readonly ArraySegment<byte> Payload;
+
+        /// <summary>
+        /// A ByteReader for the SSH Packet.
+        /// </summary>
+        internal readonly ByteReader Reader;
 
         /// <summary>
         /// The raw data of the entire SSH Packet.
@@ -51,19 +46,20 @@ namespace Surfus.Shell
             Raw = new byte[5 + compressedPayload.Length + padding.Length];
 
             // Write Packet Length into 'Raw'
-            Length = (uint)(compressedPayload.Length + padding.Length + 1);
-            Array.Copy(Length.GetBigEndianBytes(), 0, Raw, 0, 4);
+            var length = (uint)(compressedPayload.Length + padding.Length + 1);
+            Array.Copy(length.GetBigEndianBytes(), 0, Raw, 0, 4);
 
             // Write Padding Length into 'Raw'
             Raw[4] = (byte)padding.Length;
 
             // Write Payload into 'Raw'
-            Payload = compressedPayload;
-            Array.Copy(Payload, 0, Raw, 5, Payload.Length);
+            Array.Copy(compressedPayload, 0, Raw, 5, compressedPayload.Length);
 
             // Write Padding into 'Raw'
-            Padding = padding;
-            Array.Copy(Padding, 0, Raw, 5 + Payload.Length, Padding.Length);
+            Array.Copy(padding, 0, Raw, 5 + compressedPayload.Length, padding.Length);
+
+            Payload = new ArraySegment<byte>(Raw, 5, Raw.Length - 5 - Raw[4]);
+            Reader = new ByteReader(Raw, 5);
         }
 
         /// <summary>
@@ -73,48 +69,30 @@ namespace Surfus.Shell
         /// <param name="secondBlock"></param>
         internal SshPacket(byte[] firstBlock, byte[] secondBlock)
         {
+            // First 4 bytes of buffer is the size.
+            // The 5th byte (index 4) is the amount of padding.
+            // The 6th byte (index 5) is the start of the payload.
+            // The total size of the payload is BufferSize - 4 (Packet Length Bytes) - 1 (Padding Size Byte) - Padding Size
             Raw = new byte[firstBlock.Length + secondBlock.Length];
             Array.Copy(firstBlock, 0, Raw, 0, firstBlock.Length);
             Array.Copy(secondBlock, 0, Raw, firstBlock.Length, secondBlock.Length);
-
-            Length = GetLength();
-            Padding = new byte[GetPaddingLength()];
-            Payload = new byte[GetPayloadLength()];
-
-            // Payload starts at index 5
-            Array.Copy(Raw, 5, Payload, 0, Payload.Length);
-
-            // Padding starts at index 5 + payload.Length
-            Array.Copy(Raw, 5 + Payload.Length, Padding, 0, Padding.Length);
+            Reader = new ByteReader(Raw, 5);
+            Payload = new ArraySegment<byte>(Raw, 5, Raw.Length - 5 - Raw[4]);
         }
 
         /// <summary>
-        /// The length of the packet.
+        /// Constructs an SSH Packet from incoming data.
         /// </summary>
-        /// <returns></returns>
-        private uint GetLength()
+        /// <param name="buffer"></param>
+        internal SshPacket(byte[] buffer)
         {
-            // Raw index: [0, 1, 2, 3]
-            return Raw.FromBigEndianToUint();
-        }
-
-        /// <summary>
-        /// The padding length of the packet.
-        /// </summary>
-        /// <returns></returns>
-        private byte GetPaddingLength()
-        {
-            // Raw index: [4]
-            return Raw[4];
-        }
-
-        /// <summary>
-        /// The payload length of the packet.
-        /// </summary>
-        /// <returns></returns>
-        private uint GetPayloadLength()
-        {
-            return (uint) (Length - Padding.Length - 1);
+            // First 4 bytes of buffer is the size.
+            // The 5th byte (index 4) is the amount of padding.
+            // The 6th byte (index 5) is the start of the payload.
+            // The total size of the payload is BufferSize - 4 (Packet Length Bytes) - 1 (Padding Size Byte) - Padding Size
+            Raw = buffer;
+            Reader = new ByteReader(Raw, 5);
+            Payload = new ArraySegment<byte>(Raw, 5, Raw.Length - 5 - Raw[4]);
         }
     }
 }

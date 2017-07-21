@@ -13,20 +13,12 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
             Max = max;
         }
 
-        internal DhgRequest(byte[] buffer)
+        internal DhgRequest(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new SshInvalidMessageException(Type);
-                }
+            Min = packet.Reader.ReadUInt32();
+            N = packet.Reader.ReadUInt32();
+            Max = packet.Reader.ReadUInt32();
 
-                Min = stream.ReadUInt32();
-                N = stream.ReadUInt32();
-                Max = stream.ReadUInt32();
-            }
         }
 
         public uint Min { get; }

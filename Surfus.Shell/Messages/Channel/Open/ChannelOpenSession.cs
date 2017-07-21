@@ -2,7 +2,7 @@
 {
     public class ChannelOpenSession : ChannelOpen
     {
-        public ChannelOpenSession(byte[] buffer) : base(buffer)
+        public ChannelOpenSession(SshPacket packet) : base(packet, "session")
         {
 
         }

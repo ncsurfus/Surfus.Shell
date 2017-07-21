@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 
@@ -6,19 +6,10 @@ namespace Surfus.Shell.Messages.UserAuth
 {
     public class UaBanner : IMessage
     {
-        public UaBanner(byte[] buffer)
+        public UaBanner(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                Message = stream.ReadString();
-                LanguageTag = stream.ReadString();
-            }
+            Message = packet.Reader.ReadString();
+            LanguageTag = packet.Reader.ReadString();
         }
 
         public UaBanner(string message, string languageTag)

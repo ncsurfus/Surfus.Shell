@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 
@@ -6,18 +6,9 @@ namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelSuccess : IMessage, IChannelRecipient
     {
-        public ChannelSuccess(byte[] buffer)
+        public ChannelSuccess(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                RecipientChannel = stream.ReadUInt32();
-            }
+            RecipientChannel = packet.Reader.ReadUInt32();
         }
 
         public ChannelSuccess(uint recipientChannel)

@@ -105,7 +105,7 @@ namespace Surfus.Shell.Crypto
             CancellationToken cancellationToken)
         {
             var initialOutput = await ReadBlocks(networkStream, 1, cancellationToken).ConfigureAwait(false);
-            var packetLength = initialOutput.FromBigEndianToUint();
+            var packetLength = ByteReader.ReadUInt32Safe(initialOutput, 0);
             if (packetLength > 35000)
             {
                 throw new InvalidOperationException("Packet length is too large");
@@ -113,7 +113,7 @@ namespace Surfus.Shell.Crypto
 
             if (packetLength + 4 <= initialOutput.Length)
             {
-                return new SshPacket(initialOutput, new byte[] { });
+                return new SshPacket(initialOutput);
             }
 
             var totalEncryptedBlocks =
@@ -138,8 +138,7 @@ namespace Surfus.Shell.Crypto
             uint blocks, 
             CancellationToken cancellationToken)
         {
-            var encryptedInput =
-                await networkStream.ReadBytesAsync((uint)(_decryptor.InputBlockSize * blocks), cancellationToken).ConfigureAwait(false);
+            var encryptedInput = await networkStream.ReadBytesAsync((uint)(_decryptor.InputBlockSize * blocks), cancellationToken).ConfigureAwait(false);
             var decryptedOutput = new byte[_decryptor.OutputBlockSize * blocks];
             var initialOutput = _decryptor.TransformBlock(
                 encryptedInput, 

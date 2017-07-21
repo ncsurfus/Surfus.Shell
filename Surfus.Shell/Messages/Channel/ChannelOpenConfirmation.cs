@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 
@@ -6,21 +6,12 @@ namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelOpenConfirmation : IMessage, IChannelRecipient
     {
-        public ChannelOpenConfirmation(byte[] buffer)
+        public ChannelOpenConfirmation(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                RecipientChannel = stream.ReadUInt32();
-                SenderChannel = stream.ReadUInt32();
-                InitialWindowSize = stream.ReadUInt32();
-                MaximumWindowSize = stream.ReadUInt32();
-            }
+            RecipientChannel = packet.Reader.ReadUInt32();
+            SenderChannel = packet.Reader.ReadUInt32();
+            InitialWindowSize = packet.Reader.ReadUInt32();
+            MaximumWindowSize = packet.Reader.ReadUInt32();
         }
 
         public ChannelOpenConfirmation(uint senderChannel, uint recipentChannel)

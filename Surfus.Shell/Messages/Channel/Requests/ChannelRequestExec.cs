@@ -5,13 +5,9 @@ namespace Surfus.Shell.Messages.Channel.Requests
 {
     public class ChannelRequestExec : ChannelRequest
     {
-        public ChannelRequestExec(byte[] buffer) : base(buffer)
+        public ChannelRequestExec(SshPacket packet, uint recipientChannel) : base(packet, "exec", recipientChannel)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                stream.Position = BaseMemoryStreamPosition;
-                Command = stream.ReadString();
-            }
+            Command = packet.Reader.ReadString();
         }
 
         public ChannelRequestExec(uint recipientChannel, bool wantReply, string command) : base(recipientChannel, "exec", wantReply)

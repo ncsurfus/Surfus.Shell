@@ -5,16 +5,12 @@ namespace Surfus.Shell.Messages.Channel.Open
 {
     public class ChannelOpenForwardedTcpIp : ChannelOpen
     {
-        public ChannelOpenForwardedTcpIp(byte[] buffer) : base(buffer)
+        public ChannelOpenForwardedTcpIp(SshPacket packet) : base(packet, "forwarded-tcpip")
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                stream.Position = BaseMemoryStreamPosition;
-                AddressConnected = stream.ReadString();
-                PortConnected = stream.ReadUInt32();
-                OriginatorAddress = stream.ReadString();
-                OriginatorPort = stream.ReadUInt32();
-            }
+            AddressConnected = packet.Reader.ReadString();
+            PortConnected = packet.Reader.ReadUInt32();
+            OriginatorAddress = packet.Reader.ReadString();
+            OriginatorPort = packet.Reader.ReadUInt32();
         }
 
         public ChannelOpenForwardedTcpIp(string addressConnected, uint portConnected, string originatorAddress, uint originatorPort, uint senderChannel) : base("forwarded-tcpip", senderChannel)
