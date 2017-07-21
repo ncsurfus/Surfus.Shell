@@ -26,7 +26,7 @@ namespace Surfus.Shell.MessageAuthentication
             using (var memoryStream = new MemoryStream())
             {
                 memoryStream.WriteUInt(sequenceNumber);
-                memoryStream.Write(sshPacket.Raw);
+                memoryStream.Write(sshPacket.Buffer);
                 return _macProvider.ComputeHash(memoryStream.ToArray()).Take(12).ToArray();
             }
         }

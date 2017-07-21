@@ -6,11 +6,13 @@ using Surfus.Shell.Messages.UserAuth;
 using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
+[assembly: InternalsVisibleTo("Surfus.Shell.Tests")]
 namespace Surfus.Shell
 {
     /// <summary>
@@ -576,7 +578,7 @@ namespace Surfus.Shell
                     ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize > 8
                     ? ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize : 8);
 
-            await _tcpStream.WriteAsync(ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Raw), cancellationToken).ConfigureAwait(false);
+            await _tcpStream.WriteAsync(ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer), cancellationToken).ConfigureAwait(false);
 
             if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
             {

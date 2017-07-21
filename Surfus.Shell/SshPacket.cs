@@ -22,7 +22,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The raw data of the entire SSH Packet.
         /// </summary>
-        internal readonly byte[] Raw;
+        internal readonly byte[] Buffer;
 
         /// <summary>
         /// Constructs an SSH Packet from the compressed payload and padding multiplier. Used to write a packet.
@@ -38,22 +38,22 @@ namespace Surfus.Shell
 
             if (padding.Length > byte.MaxValue) throw new ArgumentException($"{nameof(padding)} cannot be greater than {byte.MaxValue}");
 
-            Raw = new byte[5 + compressedPayload.Length + padding.Length];
+            Buffer = new byte[5 + compressedPayload.Length + padding.Length];
 
             // Write Packet Length into 'Raw'
             var length = (uint)(compressedPayload.Length + padding.Length + 1);
-            Array.Copy(length.GetBigEndianBytes(), 0, Raw, 0, 4);
+            Array.Copy(length.GetBigEndianBytes(), 0, Buffer, 0, 4);
 
             // Write Padding Length into 'Raw'
-            Raw[4] = (byte)padding.Length;
+            Buffer[4] = (byte)padding.Length;
 
             // Write Payload into 'Raw'
-            Array.Copy(compressedPayload, 0, Raw, 5, compressedPayload.Length);
+            Array.Copy(compressedPayload, 0, Buffer, 5, compressedPayload.Length);
 
             // Write Padding into 'Raw'
-            Array.Copy(padding, 0, Raw, 5 + compressedPayload.Length, padding.Length);
+            Array.Copy(padding, 0, Buffer, 5 + compressedPayload.Length, padding.Length);
 
-            Reader = new ByteReader(Raw, 5);
+            Reader = new ByteReader(Buffer, 5);
         }
 
         /// <summary>
@@ -67,10 +67,10 @@ namespace Surfus.Shell
             // The 5th byte (index 4) is the amount of padding.
             // The 6th byte (index 5) is the start of the payload.
             // The total size of the payload is BufferSize - 4 (Packet Length Bytes) - 1 (Padding Size Byte) - Padding Size
-            Raw = new byte[firstBlock.Length + secondBlock.Length];
-            Array.Copy(firstBlock, 0, Raw, 0, firstBlock.Length);
-            Array.Copy(secondBlock, 0, Raw, firstBlock.Length, secondBlock.Length);
-            Reader = new ByteReader(Raw, 5);
+            Buffer = new byte[firstBlock.Length + secondBlock.Length];
+            Array.Copy(firstBlock, 0, Buffer, 0, firstBlock.Length);
+            Array.Copy(secondBlock, 0, Buffer, firstBlock.Length, secondBlock.Length);
+            Reader = new ByteReader(Buffer, 5);
         }
 
         /// <summary>
@@ -83,8 +83,8 @@ namespace Surfus.Shell
             // The 5th byte (index 4) is the amount of padding.
             // The 6th byte (index 5) is the start of the payload.
             // The total size of the payload is BufferSize - 4 (Packet Length Bytes) - 1 (Padding Size Byte) - Padding Size
-            Raw = buffer;
-            Reader = new ByteReader(Raw, 5);
+            Buffer = buffer;
+            Reader = new ByteReader(Buffer, 5);
         }
     }
 }

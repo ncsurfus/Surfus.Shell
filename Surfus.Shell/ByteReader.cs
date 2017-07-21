@@ -206,5 +206,23 @@ namespace Surfus.Shell
             _position += length;
             return binaryString;
         }
+
+        /// <summary>
+        /// Reads an RSAParameter byte array. Very similiar to ReadBinaryString(), but skips the first item if it's a 0.
+        /// </summary>
+        /// <returns></returns>
+        internal byte[] ReadRsaParameter()
+        {
+            var length = (int)ReadUInt32();
+            var offset = 0;
+            if (_bytes[_position] == 0)
+            {
+                offset = 1;
+            }
+            var binaryString = new byte[length - offset];
+            Array.Copy(_bytes, _position + offset, binaryString, 0, length - offset);
+            _position += length;
+            return binaryString;
+        }
     }
 }

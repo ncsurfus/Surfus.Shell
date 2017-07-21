@@ -23,7 +23,8 @@ namespace Surfus.Shell.Signing
 		    Q = reader.ReadBigInteger();
 		    G = reader.ReadBigInteger();
 		    Y = reader.ReadBigInteger();
-        }
+            KeySize = Y.ToByteArray().Length * 8;
+		}
 
         public BigInteger P { get; }
         public BigInteger Q { get; }
@@ -31,11 +32,7 @@ namespace Surfus.Shell.Signing
         public BigInteger Y { get; }
 
         public override string Name { get; } = "ssh-dss";
-
-        public override int GetKeySize()
-        {
-            return Y.ToByteArray().Length * 8;
-        }
+        public override int KeySize { get; }
 
         public override bool VerifySignature(byte[] data, byte[] signature)
         {

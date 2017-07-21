@@ -239,7 +239,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             _signingAlgorithm = Signer.CreateSigner(_kexInitExchangeResult.ServerHostKeyAlgorithm, replyMessage.ServerPublicHostKeyAndCertificates);
 
             _client.ConnectionInfo.ServerCertificate = replyMessage.ServerPublicHostKeyAndCertificates;
-            _client.ConnectionInfo.ServerCertificateSize = _signingAlgorithm.GetKeySize();
+            _client.ConnectionInfo.ServerCertificateSize = _signingAlgorithm.KeySize;
 
             // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.
             using (var memoryStream = new MemoryStream(65535))

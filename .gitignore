@@ -8,3 +8,5 @@ PublishProfiles
 Surfus.Shell/Properties/
 publish/
 *.user
+Surfus.Shell.Tests/
+Surfus.Shell.Console/
