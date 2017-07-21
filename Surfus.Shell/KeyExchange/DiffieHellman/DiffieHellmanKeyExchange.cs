@@ -164,7 +164,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
                 reply.ServerPublicHostKeyAndCertificates);
 
             _client.ConnectionInfo.ServerCertificate = reply.ServerPublicHostKeyAndCertificates;
-            _client.ConnectionInfo.ServerCertificateSize = _signingAlgorithm.GetKeySize();
+            _client.ConnectionInfo.ServerCertificateSize = _signingAlgorithm.KeySize;
 
             if(_client.HostKeyCallback != null && !_client.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates))
             {

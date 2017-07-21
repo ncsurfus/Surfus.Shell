@@ -17,26 +17,21 @@ namespace Surfus.Shell.Signing
                 throw new Exception($"Expected {Name} signature type");
             }
 
-            var exponent = reader.ReadBinaryString();
-            var modulus = reader.ReadBinaryString();
+            var exponent = reader.ReadRsaParameter();
+            var modulus = reader.ReadRsaParameter();
+
             RsaParameters = new RSAParameters
             {
-                Exponent = exponent[0] != 0 ? exponent : exponent.Skip(1).ToArray(),
-                Modulus = modulus[0] != 0 ? modulus : modulus.Skip(1).ToArray()
+                Exponent = exponent,
+                Modulus = modulus
             };
+
+            KeySize = modulus.Length * 8;
         }
 
         public RSAParameters RsaParameters { get; }
         public override string Name { get; } = "ssh-rsa";
-
-        public override int GetKeySize()
-        {
-            using (var rsaService = RSA.Create())
-            {
-                rsaService.ImportParameters(RsaParameters);
-                return rsaService.KeySize;
-            }
-        }
+        public override int KeySize { get; }
 
         public override bool VerifySignature(byte[] data, byte[] signature)
         {

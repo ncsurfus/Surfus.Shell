@@ -12,28 +12,6 @@ namespace Surfus.Shell.Extensions
             await stream.WriteAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
         }
 
-        internal static async Task WriteAsync(this NetworkStream stream, byte buffer, CancellationToken cancellationToken)
-        {
-            await stream.WriteAsync(new[] { buffer }, 0, 1, cancellationToken).ConfigureAwait(false);
-        }
-
-        internal static async Task WriteAsync(this NetworkStream stream, uint value, CancellationToken cancellationToken)
-        {
-            await stream.WriteAsync(value.GetBigEndianBytes(), cancellationToken).ConfigureAwait(false);
-        }
-
-        internal static async Task<byte> ReadByteAsync(this NetworkStream stream, CancellationToken cancellationToken)
-        {
-            var buffer = new byte[1];
-            var result = await stream.ReadAsync(buffer, 0, 1, cancellationToken).ConfigureAwait(false);
-            if (result != 0)
-            {
-                return buffer[0];
-            }
-
-            throw new EndOfStreamException();
-        }
-
         internal static async Task<byte[]> ReadBytesAsync(this NetworkStream stream, uint length, CancellationToken cancellationToken)
         {
             var buffer = new byte[length];

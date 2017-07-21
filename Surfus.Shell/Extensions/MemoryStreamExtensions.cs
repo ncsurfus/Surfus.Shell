@@ -60,12 +60,5 @@ namespace Surfus.Shell.Extensions
             var bigIntegerBytes = bigInteger.ToByteArray().Reverse().ToArray();
             stream.WriteBinaryString(bigIntegerBytes);
         }
-
-        internal static byte[] ReadBytes(this MemoryStream stream, int length)
-        {
-            var buffer = new byte[length];
-            var totalBytesread = stream.Read(buffer, 0, length);
-            return totalBytesread == length ? buffer : throw new SshException("Not enough data in message!");
-        }
     }
 }
