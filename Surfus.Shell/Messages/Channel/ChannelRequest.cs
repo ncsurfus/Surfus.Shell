@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages.Channel.Requests;
@@ -7,21 +7,11 @@ namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelRequest : IMessage, IChannelRecipient
     {
-        protected ChannelRequest(byte[] buffer)
+        protected ChannelRequest(SshPacket packet, string requestType, uint recipientChannel)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                RecipientChannel = stream.ReadUInt32();
-                RequestType = stream.ReadAsciiString();
-                WantReply = stream.ReadBoolean();
-                BaseMemoryStreamPosition = stream.Position;
-            }
+            RecipientChannel = recipientChannel;
+            RequestType = requestType;
+            WantReply = packet.Reader.ReadBoolean();
         }
 
         public ChannelRequest(uint recipientChannel, string requestType, bool wantReply)
@@ -31,7 +21,6 @@ namespace Surfus.Shell.Messages.Channel
             WantReply = wantReply;
         }
 
-        protected long BaseMemoryStreamPosition { get; }
         public string RequestType { get; }
         public bool WantReply { get; }
 
@@ -52,30 +41,21 @@ namespace Surfus.Shell.Messages.Channel
             }
         }
 
-        public static ChannelRequest FromBuffer(byte[] buffer)
+        public static ChannelRequest FromBuffer(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
+            var recipientChannel = packet.Reader.ReadUInt32();
+            var requestType = packet.Reader.ReadAsciiString();
+
+            switch (requestType)
             {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != (byte)MessageType.SSH_MSG_CHANNEL_REQUEST)
-                {
-                    throw new Exception($"Expected Type: {MessageType.SSH_MSG_CHANNEL_REQUEST}");
-                }
-
-                stream.ReadUInt32();
-                var requestType = stream.ReadAsciiString();
-
-                switch (requestType)
-                {
-                    case "exec":
-                        return new ChannelRequestExec(buffer);
-                    case "shell":
-                        return new ChannelRequestShell(buffer);
-                    case "subsystem":
-                        return new ChannelRequestSubsystem(buffer);
-                    default:
-                        return new ChannelRequest(buffer);
-                }
+                case "exec":
+                    return new ChannelRequestExec(packet, recipientChannel);
+                case "shell":
+                    return new ChannelRequestShell(packet, recipientChannel);
+                case "subsystem":
+                    return new ChannelRequestSubsystem(packet, recipientChannel);
+                default:
+                    return new ChannelRequest(packet, requestType, recipientChannel);
             }
         }
 

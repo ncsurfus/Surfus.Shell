@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -6,7 +7,8 @@ using Surfus.Shell.Exceptions;
 
 namespace Surfus.Shell.Extensions
 {
-    public static class MemoryStreamExtensions
+
+    internal static class MemoryStreamExtensions
     {
         internal static void Write(this MemoryStream stream, byte[] buffer)
         {
@@ -59,22 +61,11 @@ namespace Surfus.Shell.Extensions
             stream.WriteBinaryString(bigIntegerBytes);
         }
 
-        internal static byte[] ReadBytes(this MemoryStream stream, uint length)
+        internal static byte[] ReadBytes(this MemoryStream stream, int length)
         {
             var buffer = new byte[length];
-            var index = 0;
-            while (index < buffer.Length)
-            {
-                var result = stream.Read(buffer, index, buffer.Length - index);
-                if (result == 0)
-                {
-                    throw new SshException("The remote party sent a malformed message.");
-                }
-
-                index += result;
-            }
-
-            return buffer;
+            var totalBytesread = stream.Read(buffer, 0, length);
+            return totalBytesread == length ? buffer : throw new SshException("Not enough data in message!");
         }
 
         internal static bool ReadBoolean(this MemoryStream stream)
@@ -84,14 +75,18 @@ namespace Surfus.Shell.Extensions
 
         internal static ushort ReadUInt16(this MemoryStream stream)
         {
-            var data = stream.ReadBytes(2);
+                var data = stream.ReadBytes(2);
             return (ushort) (data[0] << 8 | data[1]);
         }
 
         internal static uint ReadUInt32(this MemoryStream stream)
         {
             var data = stream.ReadBytes(4);
-            return (uint) (data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3]);
+            if (BitConverter.IsLittleEndian)
+            {
+                Array.Reverse(data);
+            }
+            return BitConverter.ToUInt32(data, 0);
         }
 
         internal static ulong ReadUInt64(this MemoryStream stream)
@@ -106,16 +101,6 @@ namespace Surfus.Shell.Extensions
             var data = stream.ReadBytes(8);
             return data[0] << 56 | data[1] << 48 | data[2] << 40 | data[3] << 32 | data[4] << 24 | data[5] << 16 |
                    data[6] << 8 | data[7];
-        }
-
-        internal static NameList ReadNameList(this MemoryStream stream)
-        {
-            return new NameList(stream.ReadString()?.Split(','));
-        }
-
-        internal static BigInteger ReadBigInteger(this MemoryStream stream)
-        {
-            return CreateBigInteger.FromUnsignedBigEndian(stream.ReadBinaryString());
         }
 
         internal static string ReadString(this MemoryStream stream)
@@ -133,7 +118,7 @@ namespace Surfus.Shell.Extensions
         internal static byte[] ReadBinaryString(this MemoryStream stream)
         {
             var length = stream.ReadUInt32();
-            return length != 0 ? stream.ReadBytes(length) : new byte[] {};
+            return length != 0 ? stream.ReadBytes((int)length) : new byte[] {};
         }
     }
 }

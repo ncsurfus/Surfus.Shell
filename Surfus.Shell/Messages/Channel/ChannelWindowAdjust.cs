@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 
@@ -6,19 +6,10 @@ namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelWindowAdjust : IMessage, IChannelRecipient
     {
-        public ChannelWindowAdjust(byte[] buffer)
+        public ChannelWindowAdjust(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                RecipientChannel = stream.ReadUInt32();
-                BytesToAdd = stream.ReadUInt32();
-            }
+            RecipientChannel = packet.Reader.ReadUInt32();
+            BytesToAdd = packet.Reader.ReadUInt32();
         }
 
         public ChannelWindowAdjust(uint recipientChannel, uint bytesToAdd)

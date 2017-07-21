@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 
@@ -6,18 +6,9 @@ namespace Surfus.Shell.Messages
 {
     public class Ignore : IMessage
     {
-        public Ignore(byte[] buffer)
+        public Ignore(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                Data = stream.ReadString();
-            }
+            Data = packet.Reader.ReadString();
         }
 
         public Ignore(string data)

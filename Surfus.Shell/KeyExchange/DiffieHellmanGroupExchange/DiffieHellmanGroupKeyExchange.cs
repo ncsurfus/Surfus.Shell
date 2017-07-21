@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Threading;
@@ -175,7 +176,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
                 throw new SshException("Unexpected key exchange algorithm message");
             }
 
-            _dhgGroupMessage = new DhgGroup(message.Buffer);
+            _dhgGroupMessage = new DhgGroup(message.Packet);
             if (_dhgGroupMessage == null)
             {
                 throw new SshException("Invalid key exchange algorithm message");
@@ -218,7 +219,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
                 throw new SshException("Unexpected key exchange algorithm message");
             }
 
-            var replyMessage = new DhgReply(message.Buffer);
+            var replyMessage = new DhgReply(message.Packet);
             if (replyMessage == null)
             {
                 throw new SshException("Invalid key exchange algorithm message");
@@ -260,6 +261,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
                 H = Hash(memoryStream.ToArray());
 
                 // Use the signing algorithm to verify the data sent by the server is correct.
+
                 if (!_signingAlgorithm.VerifySignature(H, replyMessage.HSignature))
                 {
                     throw new SshException("Invalid Host Signature.");

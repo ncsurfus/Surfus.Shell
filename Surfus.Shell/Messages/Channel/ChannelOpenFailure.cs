@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 
@@ -6,21 +6,12 @@ namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelOpenFailure : IMessage, IChannelRecipient
     {
-        public ChannelOpenFailure(byte[] buffer)
+        public ChannelOpenFailure(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                RecipientChannel = stream.ReadUInt32();
-                ReasonCode = stream.ReadUInt32();
-                Description = stream.ReadString();
-                Language = stream.ReadString();
-            }
+            RecipientChannel = packet.Reader.ReadUInt32();
+            ReasonCode = packet.Reader.ReadUInt32();
+            Description = packet.Reader.ReadString();
+            Language = packet.Reader.ReadString();
         }
 
         public ChannelOpenFailure(uint recipentChannel, uint reasonCode, string description, string language = null)

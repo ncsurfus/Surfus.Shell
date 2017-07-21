@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 
@@ -6,18 +6,9 @@ namespace Surfus.Shell.Messages
 {
     public class ServiceRequest : IMessage
     {
-        public ServiceRequest(byte[] buffer)
+        public ServiceRequest(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                ServiceName = stream.ReadString();
-            }
+            ServiceName = packet.Reader.ReadString();
         }
 
         public ServiceRequest(string serviceName)

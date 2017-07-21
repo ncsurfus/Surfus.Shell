@@ -13,19 +13,16 @@ namespace Surfus.Shell.Signing
     {
         public SshDss(byte[] signature)
 		{
-            Raw = signature;
-            using(var memoryStream = new MemoryStream(signature))
-            {
-                if (Name != memoryStream.ReadString())
-                {
-                    throw new Exception($"Expected {Name} signature type");
-                }
-
-                P = memoryStream.ReadBigInteger();
-                Q = memoryStream.ReadBigInteger();
-                G = memoryStream.ReadBigInteger();
-                Y = memoryStream.ReadBigInteger();
+            var reader = new ByteReader(signature);
+		    if (Name != reader.ReadString())
+		    {
+		        throw new Exception($"Expected {Name} signature type");
             }
+
+		    P = reader.ReadBigInteger();
+		    Q = reader.ReadBigInteger();
+		    G = reader.ReadBigInteger();
+		    Y = reader.ReadBigInteger();
         }
 
         public BigInteger P { get; }
@@ -34,7 +31,6 @@ namespace Surfus.Shell.Signing
         public BigInteger Y { get; }
 
         public override string Name { get; } = "ssh-dss";
-        public override byte[] Raw { get; }
 
         public override int GetKeySize()
         {
@@ -43,19 +39,19 @@ namespace Surfus.Shell.Signing
 
         public override bool VerifySignature(byte[] data, byte[] signature)
         {
-            using(var hashAlgorithm = SHA1.Create())
-            using (var memoryStream = new MemoryStream(signature))
+            using (var hashAlgorithm = SHA1.Create())
             {
-                var hash = CreateBigInteger.FromUnsignedBigEndian(hashAlgorithm.ComputeHash(data));
+                var reader = new ByteReader(signature);
+                var hash = ByteReader.ReadBigInteger(hashAlgorithm.ComputeHash(data));
 
-                var header = memoryStream.ReadString();
+                var header = reader.ReadString();
                 if (Name != header)
                 {
                     throw new SshException("Invalid DSS Header.");
                 }
-                var blob = memoryStream.ReadBinaryString();
-                var r = CreateBigInteger.FromUnsignedBigEndian(blob.Take(20).ToArray());
-                var s = CreateBigInteger.FromUnsignedBigEndian(blob.Skip(20).Take(20).ToArray());
+                var blob = reader.ReadBinaryString();
+                var r = ByteReader.ReadBigInteger(blob, 0, 20);
+                var s = ByteReader.ReadBigInteger(blob, 20, 20);
 
                 if (r <= 0 || r >= Q)
                 {
@@ -74,7 +70,7 @@ namespace Surfus.Shell.Signing
                 u2 = BigInteger.ModPow(Y, u2, P);
 
                 var v = ((u1 * u2) % P) % Q;
-               
+
                 return v == r;
             }
         }

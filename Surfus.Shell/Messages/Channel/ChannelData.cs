@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 
@@ -8,19 +8,10 @@ namespace Surfus.Shell.Messages.Channel
     {
         private byte[] _data;
 
-        public ChannelData(byte[] buffer)
+        public ChannelData(SshPacket packet)
         {
-            using (var stream = new MemoryStream(buffer))
-            {
-                var awaitedByte = stream.ReadByte();
-                if (awaitedByte != MessageId)
-                {
-                    throw new Exception($"Expected Type: {Type}");
-                }
-
-                RecipientChannel = stream.ReadUInt32();
-                _data = stream.ReadBinaryString();
-            }
+            RecipientChannel = packet.Reader.ReadUInt32();
+            _data = packet.Reader.ReadBinaryString();
         }
 
         public ChannelData(uint recipientChannel, byte[] data)
