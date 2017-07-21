@@ -286,18 +286,20 @@ namespace Surfus.Shell
                 _tcpStream = _tcpConnection.GetStream();
 
                 // Buffer to receive their version.
-                var buffer = new byte[ushort.MaxValue];
+                var buffer = new byte[255];
                 var bufferPosition = 0;
+                var ignoreText = false;
+                var readingVersion = false;
 
                 while (bufferPosition == 0 || buffer[bufferPosition - 1] != '\n')
                 {
-                    if (bufferPosition == ushort.MaxValue)
+                    if (bufferPosition == buffer.Length)
                     {
-                        throw new SshException($"Failed to exchange SSH version. Version size is greater than {ushort.MaxValue}.");
+                        throw new SshException($"Failed to exchange SSH version. Version size is greater than {buffer.Length}.");
                     }
 
                     // It appears in some cases ReadAsync can get hung and not properly respond to the CancellationToken.
-                    var readTask = _tcpStream.ReadAsync(buffer, bufferPosition, ushort.MaxValue - bufferPosition, cancellationToken);
+                    var readTask = _tcpStream.ReadAsync(buffer, bufferPosition, buffer.Length - bufferPosition, cancellationToken);
                     var readResult = await Task.WhenAny(timeout.Task, readTask).ConfigureAwait(false);
 
                     if (readResult == timeout.Task)
@@ -316,24 +318,59 @@ namespace Surfus.Shell
                         throw new SshException("Failed to exchange SSH version. Connection was closed.");
                     }
 
-                    bufferPosition += readAmount;
+                    if (readingVersion || bufferPosition + readAmount < 4)
+                    {
+                        // We either already found the version or we don't have enough data to do any processing. Either way read the data and loop.
+                        bufferPosition += readAmount;
+                    }
+                    else if (!ignoreText && buffer[0] == 'S' && buffer[1] == 'S' && buffer[2] == 'H' && buffer[3] == '-')
+                    {
+                        // We found the SSH version! Hooray.
+                        bufferPosition += readAmount;
+                        readingVersion = true;
+                    }
+                    else
+                    {
+                        ignoreText = true;
+                        for (var i = 0; i != bufferPosition + readAmount; i++)
+                        {
+                            if (buffer[i] == '\n')
+                            {
+                                // Realign the buffer
+                                for (var j = 0; j != bufferPosition + readAmount - i - 1; j++)
+                                {
+                                    buffer[j] = buffer[i + j + 1];
+                                }
+                                bufferPosition = bufferPosition - i + readAmount - 1;
+                                readAmount = 0;
+
+                                // Check for version
+                                if (bufferPosition > 4 && buffer[0] == 'S' && buffer[1] == 'S' && buffer[2] == 'H' && buffer[3] == '-')
+                                {
+                                    readingVersion = true;
+                                    i = bufferPosition + readAmount - 1;
+                                }
+                                else
+                                {
+                                    i = -1;
+                                }
+                            }
+                        }
+
+                        // We never matched on any data. Reset buffer.
+                        if (!readingVersion)
+                        {
+                            bufferPosition = 0;
+                        }
+                    }
                 }
 
-                var versionMatch = Regex.Match(Encoding.UTF8.GetString(buffer, 0, bufferPosition), @"^SSH-(?<ProtoVersion>\d\.\d+)-(?<SoftwareVersion>\S+)(?<Comments>\s[^\r\n]+)?((?=\r\n$)|(?=\n$))");
-
-                if (versionMatch.Success && (versionMatch.Groups["ProtoVersion"].Value == "2.0" || versionMatch.Groups["ProtoVersion"].Value == "1.99"))
+                var version = buffer[bufferPosition - 2] == '\r' ? Encoding.ASCII.GetString(buffer, 0, bufferPosition - 2) : Encoding.ASCII.GetString(buffer, 0, bufferPosition - 1);
+                if (!version.StartsWith("SSH-1.99-") && !version.StartsWith("SSH-2.0-"))
                 {
-                    var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
-                    await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken).ConfigureAwait(false);
-                    await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
-                    return versionMatch.Value;
+                    throw new SshException("Server version is not supported.");
                 }
-                else if(versionMatch.Success)
-                {
-                    throw new SshException($"Failed to exchange SSH version. Version {versionMatch.Value} is not supported.");
-                }
-
-                throw new SshException("Failed to exchange SSH version. The server sent the version in an invalid format.");
+                return version;
             }
         }
 

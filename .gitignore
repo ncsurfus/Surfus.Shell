@@ -10,3 +10,5 @@ publish/
 *.user
 Surfus.Shell.Tests/
 Surfus.Shell.Console/
+*.psess
+*.vsp
