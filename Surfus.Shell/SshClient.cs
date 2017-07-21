@@ -370,6 +370,9 @@ namespace Surfus.Shell
                 {
                     throw new SshException("Server version is not supported.");
                 }
+                var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
+                await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken).ConfigureAwait(false);
+                await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
                 return version;
             }
         }
