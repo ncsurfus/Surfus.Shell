@@ -5,9 +5,9 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
 {
-    public class DhInit : IMessage
+    internal class DhInit : IMessage
     {
-        public DhInit(BigInteger e)
+        internal DhInit(BigInt e)
         {
             E = e;
         }
@@ -18,7 +18,7 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
 
         }
 
-        public BigInteger E { get; }
+        internal BigInt E { get; }
 
         public MessageType Type => MessageType.SSH_MSG_KEX_Exchange_30;
         public byte MessageId => (byte)Type;

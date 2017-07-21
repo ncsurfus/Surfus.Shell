@@ -183,13 +183,13 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             }
 
             // Generate random number 'x'.
-            _x = GenerateRandomBigInteger(1, (_dhgGroupMessage.P - 1) / 2);
+            _x = GenerateRandomBigInteger(1, (_dhgGroupMessage.P.BigInteger - 1) / 2);
 
             // Generate 'e'.
-            _e = BigInteger.ModPow(_dhgGroupMessage.G, _x, _dhgGroupMessage.P);
+            _e = BigInteger.ModPow(_dhgGroupMessage.G.BigInteger, _x, _dhgGroupMessage.P.BigInteger);
 
             // Send 'e' to the server with the 'Init' message.
-            await _client.WriteMessageAsync(new DhgInit(_e), cancellationToken).ConfigureAwait(false);
+            await _client.WriteMessageAsync(new DhgInit(new BigInt(_e)), cancellationToken).ConfigureAwait(false);
 
             _keyExchangeAlgorithmState = State.WaitingOnDhgReply;
             return false;
@@ -226,14 +226,14 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             }
 
             // Verify 'F' is in the range of [1, p-1]
-            if (replyMessage.F < 1 || replyMessage.F > _dhgGroupMessage.P - 1)
+            if (replyMessage.F.BigInteger < 1 || replyMessage.F.BigInteger > _dhgGroupMessage.P.BigInteger - 1)
             {
                 // await _sshClient.Log("Invalid 'F' from server!");
                 throw new SshException("Invalid 'F' from server!");
             }
 
             // Generate the shared secret 'K'
-            K = BigInteger.ModPow(replyMessage.F, _x, _dhgGroupMessage.P);
+            K = BigInteger.ModPow(replyMessage.F.BigInteger, _x, _dhgGroupMessage.P.BigInteger);
 
             // Prepare the signing algorithm from the servers public key.
             _signingAlgorithm = Signer.CreateSigner(_kexInitExchangeResult.ServerHostKeyAlgorithm, replyMessage.ServerPublicHostKeyAndCertificates);
@@ -242,6 +242,48 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             _client.ConnectionInfo.ServerCertificateSize = _signingAlgorithm.KeySize;
 
             // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.
+            var pBytes = _dhgGroupMessage.P.Buffer;
+            var gBytes = _dhgGroupMessage.G.Buffer;
+            var eBytes = _e.ToByteArray();
+            var fBytes = replyMessage.F.Buffer;
+            var kBytes = K.ToByteArray();
+            var cSize = _kexInitExchangeResult.Client.GetSize();
+            var sSize = _kexInitExchangeResult.Server.GetSize();
+
+            var totalBytes = _client.ConnectionInfo.ClientVersion.GetStringSize() +
+                             _client.ConnectionInfo.ServerVersion.GetStringSize() +
+                             4 + cSize + 4 + sSize +
+                             replyMessage.ServerPublicHostKeyAndCertificates.GetBinaryStringSize() +
+                             12 + // Min/Desired/Max Sizes
+                             pBytes.GetBigIntegerSize() +
+                             gBytes.GetBigIntegerSize() +
+                             eBytes.GetBigIntegerSize() +
+                             fBytes.GetBigIntegerSize() +
+                             kBytes.GetBigIntegerSize();
+
+            var byteWriter = new ByteWriter(totalBytes);
+            byteWriter.WriteString(_client.ConnectionInfo.ClientVersion);
+            byteWriter.WriteString(_client.ConnectionInfo.ServerVersion);
+            byteWriter.WriteKexInit(_kexInitExchangeResult.Client, cSize);
+            byteWriter.WriteKexInit(_kexInitExchangeResult.Server, sSize);
+            byteWriter.WriteBinaryString(replyMessage.ServerPublicHostKeyAndCertificates);
+            byteWriter.WriteUint(1024);
+            byteWriter.WriteUint(2048);
+            byteWriter.WriteUint(8192);
+            byteWriter.WriteBigInteger(pBytes);
+            byteWriter.WriteBigInteger(gBytes);
+            byteWriter.WriteBigInteger(eBytes);
+            byteWriter.WriteBigInteger(fBytes);
+            byteWriter.WriteBigInteger(kBytes);
+
+            H = Hash(byteWriter.Bytes);
+
+            // Use the signing algorithm to verify the data sent by the server is correct.
+            if (!_signingAlgorithm.VerifySignature(H, replyMessage.HSignature))
+            {
+                throw new SshException("Invalid Host Signature.");
+            }
+
             using (var memoryStream = new MemoryStream(65535))
             {
                 memoryStream.WriteString(_client.ConnectionInfo.ClientVersion);

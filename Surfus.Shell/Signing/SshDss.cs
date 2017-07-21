@@ -9,7 +9,7 @@ using System.Numerics;
 
 namespace Surfus.Shell.Signing
 {
-    public sealed class SshDss : Signer
+    internal sealed class SshDss : Signer
     {
         public SshDss(byte[] signature)
 		{
@@ -23,13 +23,13 @@ namespace Surfus.Shell.Signing
 		    Q = reader.ReadBigInteger();
 		    G = reader.ReadBigInteger();
 		    Y = reader.ReadBigInteger();
-            KeySize = Y.ToByteArray().Length * 8;
+            KeySize = Y.Buffer.Length * 8;
 		}
 
-        public BigInteger P { get; }
-        public BigInteger Q { get; }
-        public BigInteger G { get; }
-        public BigInteger Y { get; }
+        public BigInt P { get; }
+        public BigInt Q { get; }
+        public BigInt G { get; }
+        public BigInt Y { get; }
 
         public override string Name { get; } = "ssh-dss";
         public override int KeySize { get; }
@@ -50,23 +50,23 @@ namespace Surfus.Shell.Signing
                 var r = ByteReader.ReadBigInteger(blob, 0, 20);
                 var s = ByteReader.ReadBigInteger(blob, 20, 20);
 
-                if (r <= 0 || r >= Q)
+                if (r <= 0 || r >= Q.BigInteger)
                 {
                     throw new SshException("Invalid DSS 'R'.");
                 }
 
-                if (s <= 0 || s >= Q)
+                if (s <= 0 || s >= Q.BigInteger)
                 {
                     throw new SshException("Invalid DSS 'S'.");
                 }
 
-                var w = ModInverse(s, Q);
-                var u1 = hash * w % Q;
-                var u2 = r * w % Q;
-                u1 = BigInteger.ModPow(G, u1, P);
-                u2 = BigInteger.ModPow(Y, u2, P);
+                var w = ModInverse(s, Q.BigInteger);
+                var u1 = hash * w % Q.BigInteger;
+                var u2 = r * w % Q.BigInteger;
+                u1 = BigInteger.ModPow(G.BigInteger, u1, P.BigInteger);
+                u2 = BigInteger.ModPow(Y.BigInteger, u2, P.BigInteger);
 
-                var v = ((u1 * u2) % P) % Q;
+                var v = ((u1 * u2) % P.BigInteger) % Q.BigInteger;
 
                 return v == r;
             }
