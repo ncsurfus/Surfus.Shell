@@ -14,6 +14,7 @@ namespace Surfus.Shell.Messages.KeyExchange
     public class KexInit : IMessage
     {
         private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
+
         public KexInit()
         {
             RandomBytes = new byte[16];
@@ -77,25 +78,45 @@ namespace Surfus.Shell.Messages.KeyExchange
 
         public byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-                memoryStream.Write(RandomBytes);
-                memoryStream.WriteNameList(KexAlgorithms);
-                memoryStream.WriteNameList(ServerHostKeyAlgorithms);
-                memoryStream.WriteNameList(EncryptionClientToServer);
-                memoryStream.WriteNameList(EncryptionServerToClient);
-                memoryStream.WriteNameList(MacClientToServer);
-                memoryStream.WriteNameList(MacServerToClient);
-                memoryStream.WriteNameList(CompressionClientToServer);
-                memoryStream.WriteNameList(CompressionServerToClient);
-                memoryStream.WriteNameList(LanguagesClientToServer);
-                memoryStream.WriteNameList(LanguagesServerToClient);
-                memoryStream.WriteByte(FirstKexPacketFollows ? (byte)1 : (byte)0);
-                memoryStream.WriteUInt(0);
+            var byteWriter = new ByteWriter(GetSize());
+            WriteBytes(byteWriter);
+            return byteWriter.Bytes;
+        }
 
-                return memoryStream.ToArray();
-            }
+        public int GetSize()
+        {
+            return ByteSizer.GetByteSize() +
+                   RandomBytes.GetByteBlobSize() +
+                   KexAlgorithms.GetNameListSize() +
+                   ServerHostKeyAlgorithms.GetNameListSize() +
+                   EncryptionClientToServer.GetNameListSize() +
+                   EncryptionServerToClient.GetNameListSize() +
+                   MacClientToServer.GetNameListSize() +
+                   MacServerToClient.GetNameListSize() +
+                   CompressionClientToServer.GetNameListSize() +
+                   CompressionServerToClient.GetNameListSize() +
+                   LanguagesClientToServer.GetNameListSize() +
+                   LanguagesServerToClient.GetNameListSize() +
+                   ByteSizer.GetByteSize() + 
+                   ByteSizer.GetIntSize();
+        }
+
+        public void WriteBytes(ByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+            writer.WriteByteBlob(RandomBytes);
+            writer.WriteNameList(KexAlgorithms);
+            writer.WriteNameList(ServerHostKeyAlgorithms);
+            writer.WriteNameList(EncryptionClientToServer);
+            writer.WriteNameList(EncryptionServerToClient);
+            writer.WriteNameList(MacClientToServer);
+            writer.WriteNameList(MacServerToClient);
+            writer.WriteNameList(CompressionClientToServer);
+            writer.WriteNameList(CompressionServerToClient);
+            writer.WriteNameList(LanguagesClientToServer);
+            writer.WriteNameList(LanguagesServerToClient);
+            writer.WriteByte(FirstKexPacketFollows ? (byte)1 : (byte)0);
+            writer.WriteUint(0);
         }
     }
 }

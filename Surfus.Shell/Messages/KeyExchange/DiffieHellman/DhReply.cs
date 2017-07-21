@@ -5,9 +5,9 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
 {
-    public class DhReply : IMessage
+    internal class DhReply : IMessage
     {
-        public DhReply(byte[] serverPublicHostKeyAndCertificates, BigInteger f, byte[] hSignature)
+        internal DhReply(byte[] serverPublicHostKeyAndCertificates, BigInt f, byte[] hSignature)
         {
             ServerPublicHostKeyAndCertificates = serverPublicHostKeyAndCertificates;
             F = f;
@@ -21,7 +21,7 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
             HSignature = packet.Reader.ReadBinaryString();
         }
 
-        public BigInteger F { get; }
+        public BigInt F { get; }
 
         public byte[] HSignature { get; }
 

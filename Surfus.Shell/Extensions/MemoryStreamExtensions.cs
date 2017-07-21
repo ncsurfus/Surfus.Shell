@@ -60,5 +60,11 @@ namespace Surfus.Shell.Extensions
             var bigIntegerBytes = bigInteger.ToByteArray().Reverse().ToArray();
             stream.WriteBinaryString(bigIntegerBytes);
         }
+
+        internal static void WriteBigInteger(this MemoryStream stream, BigInt bigInteger)
+        {
+            var bigIntegerBytes = bigInteger.Buffer.Reverse().ToArray();
+            stream.WriteBinaryString(bigIntegerBytes);
+        }
     }
 }

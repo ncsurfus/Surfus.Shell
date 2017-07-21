@@ -55,22 +55,22 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// <summary>
         /// E = g^x mod p
         /// </summary>
-        protected abstract BigInteger E { get; }
+        protected abstract BigInt E { get; }
 
         /// <summary>
         /// Gets the generator for the subgroup.
         /// </summary>
-        protected virtual BigInteger G { get; } = new BigInteger(new byte[] { 2 });
+        protected virtual BigInt G { get; } = new BigInt(new byte[] { 2 });
 
         /// <summary>
         /// A large predefined safe prime number.
         /// </summary>
-        protected abstract BigInteger P { get; }
+        protected abstract BigInt P { get; }
 
         /// <summary>
         /// A random number between [1, q]
         /// </summary>
-        protected abstract BigInteger X { get; }
+        protected abstract BigInt X { get; }
 
         /// <summary>
         /// This method conducts the Diffie-Hellman Key Exchange with the remote party.
@@ -150,13 +150,13 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             var reply = new DhReply(message.Packet);
 
             // Verify 'F' is in the range of [1, p-1]
-            if (reply.F < 1 || reply.F > P - 1)
+            if (reply.F.BigInteger < 1 || reply.F.BigInteger > P.BigInteger - 1)
             {
                 throw new SshException("Invalid 'F' from server!");
             }
 
             // Generate the shared secret 'K'
-            K = BigInteger.ModPow(reply.F, X, P);
+            K = BigInteger.ModPow(reply.F.BigInteger, X.BigInteger, P.BigInteger);
 
             // Prepare the signing algorithm from the servers public key.
             _signingAlgorithm = Signer.CreateSigner(
@@ -171,25 +171,36 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
                 throw new SshException("Rejected Host Key.");
             }
 
-            // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.
-            using (var memoryStream = new MemoryStream())
+            // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.s
+            var eBytes = E.Buffer;
+            var fBytes = reply.F.Buffer;
+            var kBytes = K.ToByteArray();
+            var cSize = _kexInitExchangeResult.Client.GetSize();
+            var sSize = _kexInitExchangeResult.Server.GetSize();
+            var totalBytes = _client.ConnectionInfo.ClientVersion.GetStringSize() +
+                             _client.ConnectionInfo.ServerVersion.GetStringSize() +
+                             4 + cSize + 4 + sSize +
+                             reply.ServerPublicHostKeyAndCertificates.GetBinaryStringSize() + 
+                             eBytes.GetBigIntegerSize() + 
+                             fBytes.GetBigIntegerSize() +
+                             kBytes.GetBigIntegerSize();
+
+            var byteWriter = new ByteWriter(totalBytes);
+            byteWriter.WriteString(_client.ConnectionInfo.ClientVersion);
+            byteWriter.WriteString(_client.ConnectionInfo.ServerVersion);
+            byteWriter.WriteKexInit(_kexInitExchangeResult.Client, cSize);
+            byteWriter.WriteKexInit(_kexInitExchangeResult.Server, sSize);
+            byteWriter.WriteBinaryString(reply.ServerPublicHostKeyAndCertificates);
+            byteWriter.WriteBigInteger(eBytes);
+            byteWriter.WriteBigInteger(fBytes);
+            byteWriter.WriteBigInteger(kBytes);
+
+            H = Hash(byteWriter.Bytes);
+
+            // Use the signing algorithm to verify the data sent by the server is correct.
+            if (!_signingAlgorithm.VerifySignature(H, reply.HSignature))
             {
-                memoryStream.WriteString(_client.ConnectionInfo.ClientVersion);
-                memoryStream.WriteString(_client.ConnectionInfo.ServerVersion);
-                memoryStream.WriteBinaryString(_kexInitExchangeResult.Client.GetBytes());
-                memoryStream.WriteBinaryString(_kexInitExchangeResult.Server.GetBytes());
-                memoryStream.WriteBinaryString(reply.ServerPublicHostKeyAndCertificates);
-                memoryStream.WriteBigInteger(E);
-                memoryStream.WriteBigInteger(reply.F);
-                memoryStream.WriteBigInteger(K);
-
-                H = Hash(memoryStream.ToArray());
-
-                // Use the signing algorithm to verify the data sent by the server is correct.
-                if (!_signingAlgorithm.VerifySignature(H, reply.HSignature))
-                {
-                    throw new SshException("Invalid Host Signature.");
-                }
+                throw new SshException("Invalid Host Signature.");
             }
 
             _keyExchangeAlgorithmState = State.Complete;

@@ -5,9 +5,9 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
 {
-    public class DhgReply : IMessage
+    internal class DhgReply : IMessage
     {
-        public DhgReply(byte[] serverPublicHostKeyAndCertificates, BigInteger f, byte[] hSignature)
+        public DhgReply(byte[] serverPublicHostKeyAndCertificates, BigInt f, byte[] hSignature)
         {
             ServerPublicHostKeyAndCertificates = serverPublicHostKeyAndCertificates;
             F = f;
@@ -22,7 +22,7 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
 
         }
 
-        public BigInteger F { get; }
+        public BigInt F { get; }
 
         public byte[] HSignature { get; }
 

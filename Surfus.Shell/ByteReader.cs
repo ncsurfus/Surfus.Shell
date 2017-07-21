@@ -117,7 +117,7 @@ namespace Surfus.Shell
         /// Reads a BigInteger from the byte array.
         /// </summary>
         /// <returns></returns>
-        internal BigInteger ReadBigInteger()
+        internal BigInt ReadBigInteger()
         {
             var length = (int)ReadUInt32();
 
@@ -131,7 +131,7 @@ namespace Surfus.Shell
             }
 
             _position += length;
-            return new BigInteger(bigIntegerBuffer);
+            return new BigInt(new BigInteger(bigIntegerBuffer), bigIntegerBuffer);
         }
 
         /// <summary>
