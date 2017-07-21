@@ -41,15 +41,15 @@ namespace Surfus.Shell.Signing
         public override bool VerifySignature(byte[] data, byte[] signature)
         {
 			using(var rsaService = RSA.Create())
-            using (var memoryStream = new MemoryStream(signature))
             {
+                var reader = new ByteReader(signature);
                 rsaService.ImportParameters(RsaParameters);
-                if (Name != memoryStream.ReadString())
+                if (Name != reader.ReadString())
                 {
                     throw new Exception($"Expected {Name} signature type");
                 }
 
-				return rsaService.VerifyData(data, memoryStream.ReadBinaryString(), HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
+				return rsaService.VerifyData(data, reader.ReadBinaryString(), HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
             }
         }
     }

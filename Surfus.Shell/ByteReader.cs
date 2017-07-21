@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Numerics;
 using System.Text;
 using Surfus.Shell.Extensions;
@@ -7,7 +6,7 @@ using Surfus.Shell.Extensions;
 namespace Surfus.Shell
 {
     /// <summary>
-    /// Reads data from the byte array. The array may be modified by methods in this class.
+    /// Reads data from the byte array.
     /// </summary>
     internal class ByteReader
     {
@@ -139,36 +138,34 @@ namespace Surfus.Shell
         /// Reads a BigInteger from the byte array.
         /// </summary>
         /// <returns></returns>
-        internal static BigInteger ReadBigInteger(byte[] buffer, int position, int length)
+        internal static BigInteger ReadBigInteger(byte[] bytes, int position, int length)
         {
-            // This code reverse the array AND then copies it... there must be a better way. Should I just copy this in reverse order?
-            // Reverse array to the expected order.
-            Array.Reverse(buffer, position, length);
-
             // If the buffer represents a negative format, add an additional piece at the end (which is initialized to 0), making our number positive.
-            var bigIntegerBuffer = buffer[length + position - 1] <= 127 ? new byte[length] : new byte[length + 1];
+            var bigIntegerBuffer = bytes[length + position - 1] <= 127 ? new byte[length] : new byte[length + 1];
 
-            Array.Copy(buffer, position, bigIntegerBuffer, 0, length);
+            // Copy to new buffer backwards.
+            for (var i = 0; i != length; i++)
+            {
+                bigIntegerBuffer[i] = bytes[position + length - i - 1];
+            }
 
             return new BigInteger(bigIntegerBuffer);
         }
 
         /// <summary>
-        /// Reads a BigInteger from the byte array.
+        /// Reads a BigInteger from the byte array. NOTE: The buffer may be mutated.
         /// </summary>
         /// <returns></returns>
         internal static BigInteger ReadBigInteger(byte[] buffer)
         {
-            // This code reverse the array AND then copies it... there must be a better way. Should I just copy this in reverse order?
-            // Reverse array to the expected order.
-            Array.Reverse(buffer);
-
             // If the buffer represents a negative format, add an additional piece at the end (which is initialized to 0), making our number positive.
-            if (buffer[buffer.Length - 1] <= 127)
+            if(buffer[buffer.Length - 1] <= 127)
             {
+                Array.Reverse(buffer);
                 return new BigInteger(buffer);
             }
             Array.Resize(ref buffer, buffer.Length + 1);
+
             return new BigInteger(buffer);
         }
 

@@ -15,11 +15,6 @@ namespace Surfus.Shell
         private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
 
         /// <summary>
-        /// The payload of the SSH Packet.
-        /// </summary>
-        internal readonly ArraySegment<byte> Payload;
-
-        /// <summary>
         /// A ByteReader for the SSH Packet.
         /// </summary>
         internal readonly ByteReader Reader;
@@ -58,7 +53,6 @@ namespace Surfus.Shell
             // Write Padding into 'Raw'
             Array.Copy(padding, 0, Raw, 5 + compressedPayload.Length, padding.Length);
 
-            Payload = new ArraySegment<byte>(Raw, 5, Raw.Length - 5 - Raw[4]);
             Reader = new ByteReader(Raw, 5);
         }
 
@@ -77,7 +71,6 @@ namespace Surfus.Shell
             Array.Copy(firstBlock, 0, Raw, 0, firstBlock.Length);
             Array.Copy(secondBlock, 0, Raw, firstBlock.Length, secondBlock.Length);
             Reader = new ByteReader(Raw, 5);
-            Payload = new ArraySegment<byte>(Raw, 5, Raw.Length - 5 - Raw[4]);
         }
 
         /// <summary>
@@ -92,7 +85,6 @@ namespace Surfus.Shell
             // The total size of the payload is BufferSize - 4 (Packet Length Bytes) - 1 (Padding Size Byte) - Padding Size
             Raw = buffer;
             Reader = new ByteReader(Raw, 5);
-            Payload = new ArraySegment<byte>(Raw, 5, Raw.Length - 5 - Raw[4]);
         }
     }
 }
