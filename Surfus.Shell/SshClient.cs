@@ -611,7 +611,7 @@ namespace Surfus.Shell
         /// <param name="message">The message to be sent</param>
         /// <param name="cancellationToken">The cancellation token is used to cancel the write message</param>
         /// <returns></returns>
-        internal async Task WriteMessageAsync(IMessage message, CancellationToken cancellationToken)
+        internal async Task WriteMessageAsync(IClientMessage message, CancellationToken cancellationToken)
         {
             var compressedPayload = ConnectionInfo.WriteCompressionAlgorithm.Compress(message.GetBytes());
             var sshPacket = new SshPacket(compressedPayload,

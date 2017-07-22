@@ -4,7 +4,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelData : IMessage, IChannelRecipient
+    public class ChannelData : IClientMessage, IChannelRecipient
     {
         private byte[] _data;
 

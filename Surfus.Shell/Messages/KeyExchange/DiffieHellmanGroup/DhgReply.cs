@@ -7,19 +7,11 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
 {
     internal class DhgReply : IMessage
     {
-        public DhgReply(byte[] serverPublicHostKeyAndCertificates, BigInt f, byte[] hSignature)
-        {
-            ServerPublicHostKeyAndCertificates = serverPublicHostKeyAndCertificates;
-            F = f;
-            HSignature = hSignature;
-        }
-
         internal DhgReply(SshPacket packet)
         {
             ServerPublicHostKeyAndCertificates = packet.Reader.ReadBinaryString();
             F = packet.Reader.ReadBigInteger();
             HSignature = packet.Reader.ReadBinaryString();
-
         }
 
         public BigInt F { get; }
@@ -31,17 +23,5 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
         public MessageType Type => MessageType.SSH_MSG_KEX_Exchange_33;
 
         public byte MessageId => (byte)Type;
-
-        public byte[] GetBytes()
-        {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-                memoryStream.WriteBinaryString(ServerPublicHostKeyAndCertificates);
-                memoryStream.WriteBigInteger(F);
-                memoryStream.WriteBinaryString(HSignature);
-                return memoryStream.ToArray();
-            }
-        }
     }
 }

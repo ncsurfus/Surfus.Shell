@@ -5,7 +5,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelExtendedData : IMessage, IChannelRecipient
+    public class ChannelExtendedData : IClientMessage, IChannelRecipient
     {
         [SuppressMessage("ReSharper", "InconsistentNaming")]
         public enum DataType : uint

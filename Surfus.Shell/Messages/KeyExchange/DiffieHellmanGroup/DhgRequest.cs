@@ -1,24 +1,12 @@
-﻿using System.IO;
-using Surfus.Shell.Exceptions;
-using Surfus.Shell.Extensions;
-
-namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
+﻿namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
 {
-    public class DhgRequest : IMessage
+    public class DhgRequest : IClientMessage
     {
         public DhgRequest(uint min, uint n, uint max)
         {
             Min = min;
             N = n;
             Max = max;
-        }
-
-        internal DhgRequest(SshPacket packet)
-        {
-            Min = packet.Reader.ReadUInt32();
-            N = packet.Reader.ReadUInt32();
-            Max = packet.Reader.ReadUInt32();
-
         }
 
         public uint Min { get; }
@@ -30,14 +18,13 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
 
         public byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-                memoryStream.WriteUInt(Min);
-                memoryStream.WriteUInt(N);
-                memoryStream.WriteUInt(Max);
-                return memoryStream.ToArray();
-            }
+            var size = 13;
+            var writer = new ByteWriter(size);
+            writer.WriteByte(MessageId);
+            writer.WriteUint(Min);
+            writer.WriteUint(N);
+            writer.WriteUint(Max);
+            return writer.Bytes;
         }
     }
 }

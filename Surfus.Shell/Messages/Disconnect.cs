@@ -5,7 +5,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages
 {
-    internal class Disconnect : IMessage
+    internal class Disconnect : IClientMessage
     {
         [SuppressMessage("ReSharper", "InconsistentNaming")]
         internal enum DisconnectReason : uint

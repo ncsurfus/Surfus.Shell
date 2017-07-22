@@ -4,7 +4,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages
 {
-    public class Unimplemented : IMessage
+    public class Unimplemented : IClientMessage
     {
         public Unimplemented(SshPacket packet)
         {

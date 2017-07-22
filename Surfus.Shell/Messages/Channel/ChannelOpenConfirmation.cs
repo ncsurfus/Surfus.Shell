@@ -4,7 +4,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelOpenConfirmation : IMessage, IChannelRecipient
+    public class ChannelOpenConfirmation : IClientMessage, IChannelRecipient
     {
         public ChannelOpenConfirmation(SshPacket packet)
         {

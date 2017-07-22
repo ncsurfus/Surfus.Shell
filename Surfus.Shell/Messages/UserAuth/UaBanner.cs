@@ -4,7 +4,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.UserAuth
 {
-    public class UaBanner : IMessage
+    public class UaBanner : IClientMessage
     {
         public UaBanner(SshPacket packet)
         {

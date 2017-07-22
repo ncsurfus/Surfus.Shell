@@ -4,7 +4,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.UserAuth
 {
-    public class UaRequest : IMessage
+    public class UaRequest : IClientMessage
     {
         public UaRequest(SshPacket packet)
         {
