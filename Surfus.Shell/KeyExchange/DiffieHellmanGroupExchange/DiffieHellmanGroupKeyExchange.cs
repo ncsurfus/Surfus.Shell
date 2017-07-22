@@ -277,32 +277,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
                 throw new SshException("Invalid Host Signature.");
             }
 
-            using (var memoryStream = new MemoryStream(65535))
-            {
-                memoryStream.WriteString(_client.ConnectionInfo.ClientVersion);
-                memoryStream.WriteString(_client.ConnectionInfo.ServerVersion);
-                memoryStream.WriteBinaryString(_kexInitExchangeResult.Client.GetBytes());
-                memoryStream.WriteBinaryString(_kexInitExchangeResult.Server.GetBytes());
-                memoryStream.WriteBinaryString(replyMessage.ServerPublicHostKeyAndCertificates);
-                memoryStream.WriteUInt(1024);
-                memoryStream.WriteUInt(2048);
-                memoryStream.WriteUInt(8192);
-                memoryStream.WriteBigInteger(_dhgGroupMessage.P);
-                memoryStream.WriteBigInteger(_dhgGroupMessage.G);
-                memoryStream.WriteBigInteger(_e);
-                memoryStream.WriteBigInteger(replyMessage.F);
-                memoryStream.WriteBigInteger(K);
-
-                H = Hash(memoryStream.ToArray());
-
-                // Use the signing algorithm to verify the data sent by the server is correct.
-
-                if (!_signingAlgorithm.VerifySignature(H, replyMessage.HSignature))
-                {
-                    throw new SshException("Invalid Host Signature.");
-                }
-            }
-
             _keyExchangeAlgorithmState = State.Complete;
             return await Task.FromResult(true);
         }
