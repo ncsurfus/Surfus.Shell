@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using System.Text;
 using Surfus.Shell.Extensions;
+using Surfus.Shell.Messages.KeyExchange;
 
 namespace Surfus.Shell
 {
@@ -43,9 +44,9 @@ namespace Surfus.Shell
             return 4 + bytes.Length;
         }
 
-        internal static int GetBigIntegerSize(this byte[] bigIntegerBytes)
+        internal static int GetBigIntegerSize(this BigInt bigInt)
         {
-            return 4 + bigIntegerBytes.Length;
+            return 4 + bigInt.Length;
         }
 
         internal static int GetAsciiStringSize(this string asciiString)
@@ -56,6 +57,11 @@ namespace Surfus.Shell
         internal static int GetStringSize(this string utf8String)
         {
             return 4 + Encoding.UTF8.GetByteCount(utf8String);
+        }
+
+        internal static int GetKexInitBinaryStringSize(this KexInit kexInit)
+        {
+            return 4 + kexInit.GetSize();
         }
     }
 }

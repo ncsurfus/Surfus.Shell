@@ -40,7 +40,7 @@ namespace Surfus.Shell.KeyExchange
         /// <summary>
         /// Gets the shared secret exchanged by the key exchange algorithm.
         /// </summary>
-        internal BigInteger K { get; set; }
+        internal BigInt K { get; set; }
 
         /// <summary>
         /// Creates the specified key exchange algorithm.

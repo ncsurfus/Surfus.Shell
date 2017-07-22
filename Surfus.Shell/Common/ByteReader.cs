@@ -13,12 +13,12 @@ namespace Surfus.Shell
         /// <summary>
         /// The internal byte array.
         /// </summary>
-        private readonly byte[] _bytes;
+        public byte[] Bytes { get; }
 
         /// <summary>
         /// The current position of the byte array.
         /// </summary>
-        private int _position;
+        public int Position { get; private set; }
 
         /// <summary>
         /// Constructs the ByteReader from the byte array.
@@ -26,7 +26,7 @@ namespace Surfus.Shell
         /// <param name="bytes">The byte array to be read.</param>
         internal ByteReader(byte[] bytes)
         {
-            _bytes = bytes;
+            Bytes = bytes;
         }
 
         /// <summary>
@@ -36,8 +36,8 @@ namespace Surfus.Shell
         /// <param name="index">The index to begin reading at.</param>
         internal ByteReader(byte[] bytes, int index)
         {
-            _bytes = bytes;
-            _position = index;
+            Bytes = bytes;
+            Position = index;
         }
 
         /// <summary>
@@ -47,8 +47,8 @@ namespace Surfus.Shell
         internal byte[] Read(int amount)
         {
             var buffer = new byte[amount];
-            Array.Copy(_bytes, _position, buffer, 0, amount);
-            _position += amount;
+            Array.Copy(Bytes, Position, buffer, 0, amount);
+            Position += amount;
             return buffer;
         }
 
@@ -58,7 +58,7 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal byte ReadByte()
         {
-            return _bytes[_position++];
+            return Bytes[Position++];
         }
 
         /// <summary>
@@ -67,7 +67,7 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal bool ReadBoolean()
         {
-            return _bytes[_position++] == 1;
+            return Bytes[Position++] == 1;
         }
 
         /// <summary>
@@ -79,14 +79,14 @@ namespace Surfus.Shell
             uint value;
             if (BitConverter.IsLittleEndian)
             {
-                value = (uint)(_bytes[_position + 0] << 24 | _bytes[_position + 1] << 16 | _bytes[_position + 2] << 8 | _bytes[_position + 3]);
+                value = (uint)(Bytes[Position + 0] << 24 | Bytes[Position + 1] << 16 | Bytes[Position + 2] << 8 | Bytes[Position + 3]);
             }
             else
             {
-                value = (uint)(_bytes[_position] | _bytes[_position + 1] << 8 | _bytes[_position + 2] << 16 | _bytes[_position + 3] << 24);
+                value = (uint)(Bytes[Position] | Bytes[Position + 1] << 8 | Bytes[Position + 2] << 16 | Bytes[Position + 3] << 24);
             }
             
-            _position += 4;
+            Position += 4;
             return value;
         }
 
@@ -94,7 +94,7 @@ namespace Surfus.Shell
         /// Reads a UInt32 from the byte array in a non impacting manner.
         /// </summary>
         /// <returns></returns>
-        internal static uint ReadUInt32Safe(byte[] buffer, int index)
+        internal static uint ReadUInt32(byte[] buffer, int index)
         {
             if (BitConverter.IsLittleEndian)
             {
@@ -122,16 +122,16 @@ namespace Surfus.Shell
             var length = (int)ReadUInt32();
 
             // If the buffer represents a negative format, add an additional piece at the end (which is initialized to 0), making our number positive.
-            var bigIntegerBuffer = _bytes[length + _position - 1] <= 127 ? new byte[length] : new byte[length + 1];
+            var bigIntegerBuffer = Bytes[length + Position - 1] <= 127 ? new byte[length] : new byte[length + 1];
 
             // Copy to new buffer backwards.
             for (var i = 0; i != length; i++)
             {
-                bigIntegerBuffer[i] = _bytes[_position + length - i - 1];
+                bigIntegerBuffer[i] = Bytes[Position + length - i - 1];
             }
 
-            _position += length;
-            return new BigInt(new BigInteger(bigIntegerBuffer), bigIntegerBuffer);
+            Position += length;
+            return new BigInt(new BigInteger(bigIntegerBuffer), bigIntegerBuffer, length);
         }
 
         /// <summary>
@@ -176,8 +176,8 @@ namespace Surfus.Shell
         internal string ReadString()
         {
             var length = (int)ReadUInt32();
-            var asciiString = length != 0 ? Encoding.UTF8.GetString(_bytes, _position, length) : null;
-            _position += length;
+            var asciiString = length != 0 ? Encoding.UTF8.GetString(Bytes, Position, length) : null;
+            Position += length;
             return asciiString;
         }
 
@@ -188,8 +188,8 @@ namespace Surfus.Shell
         internal string ReadAsciiString()
         {
             var length = (int)ReadUInt32();
-            var asciiString = length != 0 ? Encoding.ASCII.GetString(_bytes, _position, length) : null;
-            _position += length;
+            var asciiString = length != 0 ? Encoding.ASCII.GetString(Bytes, Position, length) : null;
+            Position += length;
             Console.WriteLine(asciiString);
             return asciiString;
         }
@@ -202,8 +202,8 @@ namespace Surfus.Shell
         {
             var length = (int)ReadUInt32();
             var binaryString = new byte[length];
-            Array.Copy(_bytes, _position, binaryString, 0, length);
-            _position += length;
+            Array.Copy(Bytes, Position, binaryString, 0, length);
+            Position += length;
             return binaryString;
         }
 
@@ -215,13 +215,13 @@ namespace Surfus.Shell
         {
             var length = (int)ReadUInt32();
             var offset = 0;
-            if (_bytes[_position] == 0)
+            if (Bytes[Position] == 0)
             {
                 offset = 1;
             }
             var binaryString = new byte[length - offset];
-            Array.Copy(_bytes, _position + offset, binaryString, 0, length - offset);
-            _position += length;
+            Array.Copy(Bytes, Position + offset, binaryString, 0, length - offset);
+            Position += length;
             return binaryString;
         }
     }

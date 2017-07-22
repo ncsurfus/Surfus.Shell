@@ -156,7 +156,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             }
 
             // Generate the shared secret 'K'
-            K = BigInteger.ModPow(reply.F.BigInteger, X.BigInteger, P.BigInteger);
+            K = new BigInt(BigInteger.ModPow(reply.F.BigInteger, X.BigInteger, P.BigInteger));
 
             // Prepare the signing algorithm from the servers public key.
             _signingAlgorithm = Signer.CreateSigner(
@@ -172,28 +172,24 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             }
 
             // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.s
-            var eBytes = E.Buffer;
-            var fBytes = reply.F.Buffer;
-            var kBytes = K.ToByteArray();
-            var cSize = _kexInitExchangeResult.Client.GetSize();
-            var sSize = _kexInitExchangeResult.Server.GetSize();
             var totalBytes = _client.ConnectionInfo.ClientVersion.GetStringSize() +
                              _client.ConnectionInfo.ServerVersion.GetStringSize() +
-                             4 + cSize + 4 + sSize +
+                             _kexInitExchangeResult.Client.GetKexInitBinaryStringSize() + 
+                             _kexInitExchangeResult.Server.GetKexInitBinaryStringSize() +
                              reply.ServerPublicHostKeyAndCertificates.GetBinaryStringSize() + 
-                             eBytes.GetBigIntegerSize() + 
-                             fBytes.GetBigIntegerSize() +
-                             kBytes.GetBigIntegerSize();
+                             E.GetBigIntegerSize() + 
+                             reply.F.GetBigIntegerSize() +
+                             K.GetBigIntegerSize();
 
             var byteWriter = new ByteWriter(totalBytes);
             byteWriter.WriteString(_client.ConnectionInfo.ClientVersion);
             byteWriter.WriteString(_client.ConnectionInfo.ServerVersion);
-            byteWriter.WriteKexInit(_kexInitExchangeResult.Client, cSize);
-            byteWriter.WriteKexInit(_kexInitExchangeResult.Server, sSize);
+            byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Client);
+            byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Server);
             byteWriter.WriteBinaryString(reply.ServerPublicHostKeyAndCertificates);
-            byteWriter.WriteBigInteger(eBytes);
-            byteWriter.WriteBigInteger(fBytes);
-            byteWriter.WriteBigInteger(kBytes);
+            byteWriter.WriteBigInteger(E);
+            byteWriter.WriteBigInteger(reply.F);
+            byteWriter.WriteBigInteger(K);
 
             H = Hash(byteWriter.Bytes);
 
