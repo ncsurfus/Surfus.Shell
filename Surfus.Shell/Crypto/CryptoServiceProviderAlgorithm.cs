@@ -105,7 +105,7 @@ namespace Surfus.Shell.Crypto
             CancellationToken cancellationToken)
         {
             var initialOutput = await ReadBlocks(networkStream, 1, cancellationToken).ConfigureAwait(false);
-            var packetLength = ByteReader.ReadUInt32Safe(initialOutput, 0);
+            var packetLength = ByteReader.ReadUInt32(initialOutput, 0);
             if (packetLength > 35000)
             {
                 throw new InvalidOperationException("Packet length is too large");

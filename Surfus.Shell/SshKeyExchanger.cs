@@ -123,6 +123,12 @@ namespace Surfus.Shell
                     }
                     await _client.WriteMessageAsync(new NewKeys(), cancellationToken).ConfigureAwait(false);
                     ApplyKeyExchange();
+
+                    // Remove references.
+                    _clientKexInit = null;
+                    SessionIdentifier = null;
+                    KeyExchangeResult = null;
+                    KeyExchangeAlgorithm = null;
                     _keyExchangeState = State.Initial;
                     break;
             }
