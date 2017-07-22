@@ -4,7 +4,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages
 {
-    public class ServiceRequest : IMessage
+    public class ServiceRequest : IClientMessage
     {
         public ServiceRequest(SshPacket packet)
         {

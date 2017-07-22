@@ -4,7 +4,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages
 {
-    public class Ignore : IMessage
+    public class Ignore : IClientMessage
     {
         public Ignore(SshPacket packet)
         {

@@ -4,7 +4,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelClose : IMessage, IChannelRecipient
+    public class ChannelClose : IClientMessage, IChannelRecipient
     {
         public ChannelClose(SshPacket packet)
         {

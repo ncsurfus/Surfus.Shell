@@ -4,7 +4,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelEof : IMessage, IChannelRecipient
+    public class ChannelEof : IClientMessage, IChannelRecipient
     {
         public ChannelEof(SshPacket packet)
         {

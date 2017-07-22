@@ -55,12 +55,6 @@ namespace Surfus.Shell.Extensions
             stream.Write(new[] {value}, 0, 1);
         }
 
-        internal static void WriteBigInteger(this MemoryStream stream, BigInteger bigInteger)
-        {
-            var bigIntegerBytes = bigInteger.ToByteArray().Reverse().ToArray();
-            stream.WriteBinaryString(bigIntegerBytes);
-        }
-
         internal static void WriteBigInteger(this MemoryStream stream, BigInt bigInteger)
         {
             var bigIntegerBytes = bigInteger.Buffer.Reverse().ToArray();

@@ -4,7 +4,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelWindowAdjust : IMessage, IChannelRecipient
+    public class ChannelWindowAdjust : IClientMessage, IChannelRecipient
     {
         public ChannelWindowAdjust(SshPacket packet)
         {

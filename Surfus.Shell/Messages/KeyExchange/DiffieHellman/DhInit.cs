@@ -1,21 +1,10 @@
-﻿using System;
-using System.IO;
-using System.Numerics;
-using Surfus.Shell.Extensions;
-
-namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
+﻿namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
 {
-    internal class DhInit : IMessage
+    internal class DhInit : IClientMessage
     {
         internal DhInit(BigInt e)
         {
             E = e;
-        }
-
-        internal DhInit(SshPacket packet)
-        {
-            E = packet.Reader.ReadBigInteger();
-
         }
 
         internal BigInt E { get; }
@@ -25,13 +14,11 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
 
         public byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-				memoryStream.WriteBigInteger(E);
-
-                return memoryStream.ToArray();
-            }
+            var size = 1 + E.GetBigIntegerSize();
+            var writer = new ByteWriter(size);
+            writer.WriteByte(MessageId);
+            writer.WriteBigInteger(E);
+            return writer.Bytes;
         }
     }
 }
