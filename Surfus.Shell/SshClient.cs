@@ -618,7 +618,8 @@ namespace Surfus.Shell
                     ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize > 8
                     ? ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize : 8);
 
-            await _tcpStream.WriteAsync(ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer), cancellationToken).ConfigureAwait(false);
+            var encryptedData = ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
+            await _tcpStream.WriteAsync(encryptedData.Array, encryptedData.Offset, encryptedData.Count, cancellationToken).ConfigureAwait(false);
 
             if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
             {

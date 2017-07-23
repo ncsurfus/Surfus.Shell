@@ -54,7 +54,7 @@ namespace Surfus.Shell.Crypto
         internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, CancellationToken cancellationToken)
         {
             var bufferFree = _buffer.Length - _writePosition;
-            if (bufferFree < 4) // Check if there is enough room in the buffer to read or store an entire Length;
+            if (_writePosition - _readPosition < 4 && bufferFree < 4) // Check if there is enough room in the buffer to read or store a 4 byte packet length;
             {
                 // Reset buffer to beginning.
                 for (int i = _writePosition; i != bufferFree; i++)
@@ -85,20 +85,22 @@ namespace Surfus.Shell.Crypto
 
                 // Get the packet out of the buffer.
                 // The contents of _buffer *will* change, so we *must* allocate a new buffer that includes the packet length.
-                var fullPacket = new byte[packetLength];
-                Array.Copy(_buffer, _readPosition, fullPacket, 0, _writePosition - _readPosition);
-                _readPosition = _writePosition;
+                // Add 4 to the packet length to hold the packetSequenceIdentifier in the MAC calculation. Offset all writes to this buffer by 4.
+                var fullPacket = new byte[packetLength + 4];
+                Array.Copy(_buffer, _readPosition, fullPacket, 4, fullPacket.Length - 4);
+                _readPosition += fullPacket.Length - 4;
                 return new SshPacket(fullPacket);
             }
 
             // The data is to big to be stored completely in the rest of our buffer.
             // Copy our current data into a new buffer.
-            var bigPacket = new byte[packetLength];
-            Array.Copy(_buffer, _readPosition, bigPacket, 0, _writePosition - _readPosition);
+            // Add 4 to the packet length to hold the packetSequenceIdentifier in the MAC calculation. Offset all writes to this buffer by 4.
+            var bigPacket = new byte[packetLength + 4];
+            Array.Copy(_buffer, _readPosition, bigPacket, 4, _writePosition - _readPosition - 4);
             var position = _writePosition - _readPosition;
             while (position != bigPacket.Length) // Read until the data left to read 
             {
-                var bytesRead = await networkStream.ReadAsync(bigPacket, position, bigPacket.Length - position, cancellationToken);
+                var bytesRead = await networkStream.ReadAsync(bigPacket, position + 4, bigPacket.Length - position + 4, cancellationToken);
                 position += bytesRead;
             }
             _readPosition = 0;
@@ -111,9 +113,9 @@ namespace Surfus.Shell.Crypto
         /// </summary>
         /// <param name="plainText">The plaintext data.</param>
         /// <returns></returns>
-        internal override byte[] Encrypt(byte[] plainText)
+        internal override ArraySegment<byte> Encrypt(byte[] plainText, int offset, int length)
         {
-            return plainText;
+            return new ArraySegment<byte>(plainText, offset, length);
         }
 
         /// <summary>
