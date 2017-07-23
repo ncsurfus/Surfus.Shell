@@ -29,10 +29,8 @@ namespace Surfus.Shell.MessageAuthentication
 
         public override byte[] ComputeHash(uint sequenceNumber, SshPacket sshPacket)
         {
-            var writer = new ByteWriter(4 + sshPacket.Buffer.Length);
-            writer.WriteUint(sequenceNumber);
-            writer.WriteByteBlob(sshPacket.Buffer);
-            return _macProvider.ComputeHash(writer.Bytes);
+            ByteWriter.WriteUint(sshPacket.Buffer, 0, sequenceNumber);
+            return _macProvider.ComputeHash(sshPacket.Buffer, 0, sshPacket.Length + 4);
         }
 
         public override bool VerifyMac(byte[] expectedMac, uint sequenceNumber, SshPacket sshPacket)

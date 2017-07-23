@@ -55,9 +55,31 @@ namespace Surfus.Shell
             else
             {
                 Bytes[Position++] = (byte)value;
-                Bytes[Position++] = (byte)(value >> 24);
-                Bytes[Position++] = (byte)(value >> 16);
                 Bytes[Position++] = (byte)(value >> 8);
+                Bytes[Position++] = (byte)(value >> 16);
+                Bytes[Position++] = (byte)(value >> 24);
+            }
+        }
+
+        /// <summary>
+        /// Writes an unsigned integer to the byte array.
+        /// </summary>
+        /// <param name="value"></param>
+        internal static void WriteUint(byte[] bytes, int position, uint value)
+        {
+            if (BitConverter.IsLittleEndian)
+            {
+                bytes[position] = (byte)(value >> 24);
+                bytes[position + 1] = (byte)(value >> 16);
+                bytes[position + 2] = (byte)(value >> 8);
+                bytes[position + 3] = (byte)value;
+            }
+            else
+            {
+                bytes[position] = (byte)value;
+                bytes[position + 1] = (byte)(value >> 8);
+                bytes[position + 2] = (byte)(value >> 16);
+                bytes[position + 3] = (byte)(value >> 24);
             }
         }
 
