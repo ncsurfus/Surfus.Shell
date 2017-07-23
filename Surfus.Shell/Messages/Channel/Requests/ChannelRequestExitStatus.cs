@@ -3,7 +3,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel.Requests
 {
-    public class ChannelRequestExitStatus : ChannelRequest
+    internal class ChannelRequestExitStatus : ChannelRequest
     {
         public ChannelRequestExitStatus(SshPacket packet, uint recipientChannel) : base(packet, "exec", recipientChannel)
         {
@@ -19,11 +19,9 @@ namespace Surfus.Shell.Messages.Channel.Requests
 
         public override byte[] GetBytes()
         {
-            using (var stream = GetMemoryStream())
-            {
-                stream.WriteUInt(ExitStatus);
-                return stream.ToArray();
-            }
+            var writer = GetByteWriter(GetBaseSize() + 4);
+            writer.WriteUint(ExitStatus);
+            return writer.Bytes;
         }
     }
 }

@@ -5,7 +5,7 @@ using Surfus.Shell.Messages.Channel.Open;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelOpen : IClientMessage
+    internal class ChannelOpen : IClientMessage
     {
         protected ChannelOpen(SshPacket packet, string channelType)
         {
@@ -32,15 +32,13 @@ namespace Surfus.Shell.Messages.Channel
 
         public virtual byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-                memoryStream.WriteAsciiString(ChannelType);
-                memoryStream.WriteUInt(SenderChannel);
-                memoryStream.WriteUInt(InitialWindowSize);
-                memoryStream.WriteUInt(MaximumPacketSize);
-                return memoryStream.ToArray();
-            }
+            var writer = new ByteWriter(GetBaseSize());
+            writer.WriteByte(MessageId);
+            writer.WriteAsciiString(ChannelType);
+            writer.WriteUint(SenderChannel);
+            writer.WriteUint(InitialWindowSize);
+            writer.WriteUint(MaximumPacketSize);
+            return writer.Bytes;
         }
 
         public static ChannelOpen FromBuffer(SshPacket packet)
@@ -62,17 +60,20 @@ namespace Surfus.Shell.Messages.Channel
             }
         }
 
-        protected MemoryStream GetMemoryStream()
+        protected int GetBaseSize()
         {
-            var memoryStream = new MemoryStream();
+            return 1 + ChannelType.GetAsciiStringSize() + 12;
+        }
 
-            memoryStream.WriteByte(MessageId);
-            memoryStream.WriteAsciiString(ChannelType);
-            memoryStream.WriteUInt(SenderChannel);
-            memoryStream.WriteUInt(InitialWindowSize);
-            memoryStream.WriteUInt(MaximumPacketSize);
-
-            return memoryStream;
+        protected ByteWriter GetByteWriter(int size)
+        {
+            var writer = new ByteWriter(GetBaseSize());
+            writer.WriteByte(MessageId);
+            writer.WriteAsciiString(ChannelType);
+            writer.WriteUint(SenderChannel);
+            writer.WriteUint(InitialWindowSize);
+            writer.WriteUint(MaximumPacketSize);
+            return writer;
         }
     }
 }

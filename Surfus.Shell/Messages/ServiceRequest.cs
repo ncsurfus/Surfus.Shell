@@ -6,11 +6,6 @@ namespace Surfus.Shell.Messages
 {
     public class ServiceRequest : IClientMessage
     {
-        public ServiceRequest(SshPacket packet)
-        {
-            ServiceName = packet.Reader.ReadString();
-        }
-
         public ServiceRequest(string serviceName)
         {
             ServiceName = serviceName;
@@ -23,12 +18,11 @@ namespace Surfus.Shell.Messages
 
         public byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-                memoryStream.WriteString(ServiceName);
-                return memoryStream.ToArray();
-            }
+            var size = 1 + ServiceName.GetStringSize();
+            var writer = new ByteWriter(size);
+            writer.WriteByte(MessageId);
+            writer.WriteString(ServiceName);
+            return writer.Bytes;
         }
     }
 }

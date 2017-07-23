@@ -3,7 +3,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel.Requests
 {
-    public class ChannelRequestSubsystem : ChannelRequest
+    internal class ChannelRequestSubsystem : ChannelRequest
     {
         public ChannelRequestSubsystem(SshPacket packet, uint recipientChannel) : base(packet, "subsystem", recipientChannel)
         {
@@ -19,11 +19,9 @@ namespace Surfus.Shell.Messages.Channel.Requests
 
         public override byte[] GetBytes()
         {
-            using (var stream = GetMemoryStream())
-            {
-                stream.WriteString(Subsystem);
-                return stream.ToArray();
-            }
+            var writer = GetByteWriter(GetBaseSize() + Subsystem.GetStringSize());
+            writer.WriteString(Subsystem);
+            return writer.Bytes;
         }
     }
 }

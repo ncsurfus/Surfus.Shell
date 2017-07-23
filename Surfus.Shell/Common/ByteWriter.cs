@@ -86,6 +86,16 @@ namespace Surfus.Shell
         /// Writes a binary blob to the byte array.
         /// </summary>
         /// <param name="byteBlob"></param>
+        internal void WriteByteBlob(byte[] byteBlob, int index, int length)
+        {
+            Array.Copy(byteBlob, index, Bytes, Position, length);
+            Position += length - index;
+        }
+
+        /// <summary>
+        /// Writes a binary blob to the byte array.
+        /// </summary>
+        /// <param name="byteBlob"></param>
         internal void WriteByteBlob(ArraySegment<byte> byteBlob)
         {
             Array.Copy(byteBlob.Array, byteBlob.Offset, Bytes, Position, byteBlob.Count);
@@ -98,6 +108,11 @@ namespace Surfus.Shell
         /// <param name="utf8String"></param>
         internal void WriteString(string utf8String)
         {
+            if(utf8String == null)
+            {
+                WriteUint(0);
+                return;
+            }
             var totalBytes = Encoding.UTF8.GetBytes(utf8String, 0, utf8String.Length, Bytes, Position + 4);
             WriteUint((uint)totalBytes);
             Position += totalBytes;
@@ -109,6 +124,11 @@ namespace Surfus.Shell
         /// <param name="asciiString"></param>
         internal void WriteAsciiString(string asciiString)
         {
+            if (asciiString == null)
+            {
+                WriteUint(0);
+                return;
+            }
             var totalBytes = Encoding.ASCII.GetBytes(asciiString, 0, asciiString.Length, Bytes, Position + 4);
             WriteUint((uint)totalBytes);
             Position += totalBytes;

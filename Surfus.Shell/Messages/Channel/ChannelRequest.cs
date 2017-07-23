@@ -5,7 +5,7 @@ using Surfus.Shell.Messages.Channel.Requests;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelRequest : IClientMessage, IChannelRecipient
+    internal class ChannelRequest : IClientMessage, IChannelRecipient
     {
         protected ChannelRequest(SshPacket packet, string requestType, uint recipientChannel)
         {
@@ -31,14 +31,12 @@ namespace Surfus.Shell.Messages.Channel
 
         public virtual byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-                memoryStream.WriteUInt(RecipientChannel);
-                memoryStream.WriteAsciiString(RequestType);
-                memoryStream.WriteByte(WantReply ? (byte) 1 : (byte)0);
-                return memoryStream.ToArray();
-            }
+            var writer = new ByteWriter(GetBaseSize());
+            writer.WriteByte(MessageId);
+            writer.WriteUint(RecipientChannel);
+            writer.WriteAsciiString(RequestType);
+            writer.WriteByte(WantReply ? (byte)1 : (byte)0);
+            return writer.Bytes;
         }
 
         public static ChannelRequest FromBuffer(SshPacket packet)
@@ -59,16 +57,19 @@ namespace Surfus.Shell.Messages.Channel
             }
         }
 
-        protected MemoryStream GetMemoryStream()
+        protected int GetBaseSize()
         {
-            var memoryStream = new MemoryStream();
+            return 1 + 4 + RequestType.GetAsciiStringSize() + 1;
+        }
 
-            memoryStream.WriteByte(MessageId);
-            memoryStream.WriteUInt(RecipientChannel);
-            memoryStream.WriteAsciiString(RequestType);
-            memoryStream.WriteByte(WantReply ? (byte) 1 : (byte) 0);
-
-            return memoryStream;
+        protected ByteWriter GetByteWriter(int size)
+        {
+            var writer = new ByteWriter(size);
+            writer.WriteByte(MessageId);
+            writer.WriteUint(RecipientChannel);
+            writer.WriteAsciiString(RequestType);
+            writer.WriteByte(WantReply ? (byte)1 : (byte)0);
+            return writer;
         }
     }
 }

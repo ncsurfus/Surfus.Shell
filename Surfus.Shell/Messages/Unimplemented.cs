@@ -23,12 +23,10 @@ namespace Surfus.Shell.Messages
 
         public byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-                memoryStream.WriteUInt(PacketSequenceNumber);
-                return memoryStream.ToArray();
-            }
+            var writer = new ByteWriter(5);
+            writer.WriteByte(MessageId);
+            writer.WriteUint(PacketSequenceNumber);
+            return writer.Bytes;
         }
     }
 }
