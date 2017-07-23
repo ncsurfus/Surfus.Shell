@@ -14,7 +14,7 @@ namespace Surfus.Shell.Crypto
         /// <summary>
         /// Stores extra data when reading the length of a packet.
         /// </summary>
-        private byte[] _buffer = new byte[2048];
+        private byte[] _buffer = new byte[4096];
 
         private int _readPosition = 0;
 
@@ -88,7 +88,7 @@ namespace Surfus.Shell.Crypto
             // The data is to big to be stored completely in the rest of our bufer
             // Get the first part of our packet out of the buffer.
             // Our buffer is static and the contents *will* , so we *must* allocate a new buffer that includes the packet length.
-            var firstPacket = new byte[packetLength - _writePosition - _readPosition];
+            var firstPacket = new byte[_writePosition - _readPosition];
             Array.Copy(_buffer, _readPosition, firstPacket, 0, _writePosition - _readPosition);
             _readPosition = 0;
             _writePosition = 0;
