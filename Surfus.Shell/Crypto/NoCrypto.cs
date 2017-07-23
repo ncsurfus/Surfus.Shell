@@ -14,10 +14,16 @@ namespace Surfus.Shell.Crypto
         /// <summary>
         /// Stores extra data when reading the length of a packet.
         /// </summary>
-        private byte[] _buffer = new byte[4096];
+        private byte[] _buffer = new byte[64];
 
+        /// <summary>
+        /// Tracks the read position.
+        /// </summary>
         private int _readPosition = 0;
 
+        /// <summary>
+        /// Tracks the write position.
+        /// </summary>
         private int _writePosition = 0;
 
         /// <summary>
@@ -78,22 +84,26 @@ namespace Surfus.Shell.Crypto
                 }
 
                 // Get the packet out of the buffer.
-                // Our buffer is static and the contents *will* , so we *must* allocate a new buffer that includes the packet length.
+                // The contents of _buffer *will* change, so we *must* allocate a new buffer that includes the packet length.
                 var fullPacket = new byte[packetLength];
                 Array.Copy(_buffer, _readPosition, fullPacket, 0, _writePosition - _readPosition);
                 _readPosition = _writePosition;
                 return new SshPacket(fullPacket);
             }
 
-            // The data is to big to be stored completely in the rest of our bufer
-            // Get the first part of our packet out of the buffer.
-            // Our buffer is static and the contents *will* , so we *must* allocate a new buffer that includes the packet length.
-            var firstPacket = new byte[_writePosition - _readPosition];
-            Array.Copy(_buffer, _readPosition, firstPacket, 0, _writePosition - _readPosition);
+            // The data is to big to be stored completely in the rest of our buffer.
+            // Copy our current data into a new buffer.
+            var bigPacket = new byte[packetLength];
+            Array.Copy(_buffer, _readPosition, bigPacket, 0, _writePosition - _readPosition);
+            var position = _writePosition - _readPosition;
+            while (position != bigPacket.Length) // Read until the data left to read 
+            {
+                var bytesRead = await networkStream.ReadAsync(bigPacket, position, bigPacket.Length - position, cancellationToken);
+                position += bytesRead;
+            }
             _readPosition = 0;
             _writePosition = 0;
-            var secondPacket = await networkStream.ReadBytesAsync(packetLength - (uint)firstPacket.Length, cancellationToken);
-            return new SshPacket(firstPacket, secondPacket);
+            return new SshPacket(bigPacket);
         }
 
         /// <summary>
