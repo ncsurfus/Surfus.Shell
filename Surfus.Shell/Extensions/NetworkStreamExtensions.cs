@@ -31,7 +31,7 @@ namespace Surfus.Shell.Extensions
 
         internal static Task<byte[]> ReadFourBytesAsync(this NetworkStream stream, CancellationToken cancellationToken)
         {
-            return stream.ReadBytesAsync(4, cancellationToken);
+            return stream.ReadBytesAsync(16, cancellationToken);
         }
     }
 }
