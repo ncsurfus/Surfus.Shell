@@ -3,7 +3,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel.Open
 {
-    public class ChannelOpenX11 : ChannelOpen
+    internal class ChannelOpenX11 : ChannelOpen
     {
         public ChannelOpenX11(SshPacket packet) : base(packet, "x11")
         {
@@ -22,12 +22,10 @@ namespace Surfus.Shell.Messages.Channel.Open
 
         public override byte[] GetBytes()
         {
-            using (var memoryStream = GetMemoryStream())
-            {
-                memoryStream.WriteString(OriginatorAddress);
-                memoryStream.WriteUInt(OriginatorPort);
-                return memoryStream.ToArray();
-            }
+            var writer = GetByteWriter(GetBaseSize() + OriginatorAddress.GetStringSize() + 4);
+            writer.WriteString(OriginatorAddress);
+            writer.WriteUint(OriginatorPort);
+            return writer.Bytes;
         }
     }
 }

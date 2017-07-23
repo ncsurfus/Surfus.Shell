@@ -29,13 +29,11 @@ namespace Surfus.Shell.Messages.Channel
 
         public byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-                memoryStream.WriteUInt(RecipientChannel);
-                memoryStream.WriteBinaryString(Data);
-                return memoryStream.ToArray();
-            }
+            var writer = new ByteWriter(1 + 4 + Data.GetBinaryStringSize());
+            writer.WriteByte(MessageId);
+            writer.WriteUint(RecipientChannel);
+            writer.WriteBinaryString(Data);
+            return writer.Bytes;
         }
 
         public void ResizeData(int length)

@@ -10,11 +10,9 @@ namespace Surfus.Shell.Messages
 
         public byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-                return memoryStream.ToArray();
-            }
+            var writer = new ByteWriter(1);
+            writer.WriteByte(MessageId);
+            return writer.Bytes;
         }
     }
 }

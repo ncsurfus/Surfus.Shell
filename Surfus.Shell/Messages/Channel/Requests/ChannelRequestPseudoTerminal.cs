@@ -3,7 +3,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel.Requests
 {
-    public class ChannelRequestPseudoTerminal : ChannelRequest
+    internal class ChannelRequestPseudoTerminal : ChannelRequest
     {
         public ChannelRequestPseudoTerminal(SshPacket packet, uint recipientChannel) : base(packet, "pty-req", recipientChannel)
         {
@@ -31,16 +31,14 @@ namespace Surfus.Shell.Messages.Channel.Requests
 
         public override byte[] GetBytes()
         {
-            using (var stream = GetMemoryStream())
-            {
-                stream.WriteString(TermEnvironment);
-                stream.WriteUInt(TerminalWidthCharacters);
-                stream.WriteUInt(TerminalHeightRows);
-                stream.WriteUInt(TerminalWidthPixels);
-                stream.WriteUInt(TerminalHeightPixels);
-                stream.WriteBinaryString(TerminalModes);
-                return stream.ToArray();
-            }
+            var writer = GetByteWriter(GetBaseSize() + TermEnvironment.GetStringSize() + 16 + TerminalModes.GetBinaryStringSize());
+            writer.WriteString(TermEnvironment);
+            writer.WriteUint(TerminalWidthCharacters);
+            writer.WriteUint(TerminalHeightRows);
+            writer.WriteUint(TerminalWidthPixels);
+            writer.WriteUint(TerminalHeightPixels);
+            writer.WriteBinaryString(TerminalModes);
+            return writer.Bytes;
         }
     }
 }

@@ -69,14 +69,8 @@ namespace Surfus.Shell.Messages
                         return _message = new Disconnect(Packet);
                     case MessageType.SSH_MSG_SERVICE_ACCEPT:
                         return _message = new ServiceAccept(Packet);
-                    case MessageType.SSH_MSG_SERVICE_REQUEST:
-                        return _message = new ServiceRequest(Packet);
-                    case MessageType.SSH_MSG_USERAUTH_REQUEST:
-                        return _message = new UaRequest(Packet);
                     case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
                         return _message = new UaInfoRequest(Packet);
-                    case MessageType.SSH_MSG_USERAUTH_INFO_RESPONSE:
-                        return _message = new UaInfoResponse(Packet);
                     case MessageType.SSH_MSG_USERAUTH_FAILURE:
                         return _message = new UaFailure();
                     case MessageType.SSH_MSG_USERAUTH_SUCCESS:

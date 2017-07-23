@@ -87,32 +87,33 @@ namespace Surfus.Shell.KeyExchange
 
             using (var hashAlgorithm = CreateHashAlgorithm())
             {
-                using (var memoryStream = new MemoryStream())
+                var keySize = hashAlgorithm.HashSize / 8;
+
+                while(keySize < requiredBytes)
                 {
-                    memoryStream.WriteBigInteger(K);
-                    memoryStream.Write(H);
-                    memoryStream.WriteByte(Encoding.UTF8.GetBytes(new[] { letter })[0]);
-                    memoryStream.Write(sessionId);
-                    hashList.Add(hashAlgorithm.ComputeHash(memoryStream.ToArray()));
+                    keySize += hashAlgorithm.HashSize / 8;
                 }
 
-                while (hashList.Sum(x => x.Length) < requiredBytes)
-                {
-                    using (var memoryStream = new MemoryStream())
-                    {
-                        memoryStream.WriteBigInteger(K);
-                        memoryStream.Write(H);
-                        foreach (var hashEntry in hashList)
-                        {
-                            memoryStream.Write(hashEntry);
-                        }
+                var keyWriter = new ByteWriter(keySize);
 
-                        hashList.Add(hashAlgorithm.ComputeHash(memoryStream.ToArray()));
-                    }
+                var firstHashWriter = new ByteWriter(K.GetBigIntegerSize() + H.GetByteBlobSize() + 1 + sessionId.GetByteBlobSize());
+                firstHashWriter.WriteBigInteger(K);
+                firstHashWriter.WriteByteBlob(H);
+                firstHashWriter.WriteByte((byte)letter);
+                firstHashWriter.WriteByteBlob(sessionId);
+                keyWriter.WriteByteBlob(hashAlgorithm.ComputeHash(firstHashWriter.Bytes));
+
+                while(keyWriter.Position < requiredBytes)
+                {
+                    var repeatHashWriter = new ByteWriter(K.GetBigIntegerSize() + H.GetByteBlobSize() + keyWriter.Position);
+                    repeatHashWriter.WriteBigInteger(K);
+                    repeatHashWriter.WriteByteBlob(H);
+                    repeatHashWriter.WriteByteBlob(keyWriter.Bytes, 0, keyWriter.Position);
+                    keyWriter.WriteByteBlob(hashAlgorithm.ComputeHash(repeatHashWriter.Bytes));
                 }
+
+                return keyWriter.Bytes;
             }
-
-            return hashList.SelectMany(x => x).ToArray();
         }
 
         /// <summary>

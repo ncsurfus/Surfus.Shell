@@ -37,14 +37,12 @@ namespace Surfus.Shell.Messages.Channel
 
         public byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-                memoryStream.WriteUInt(RecipientChannel);
-                memoryStream.WriteUInt((uint)DataTypeCode);
-                memoryStream.WriteBinaryString(Data);
-                return memoryStream.ToArray();
-            }
+            var writer = new ByteWriter(9 + Data.GetBinaryStringSize());
+            writer.WriteByte(MessageId);
+            writer.WriteUint(RecipientChannel);
+            writer.WriteUint((uint)DataTypeCode);
+            writer.WriteBinaryString(Data);
+            return writer.Bytes;
         }
     }
 }

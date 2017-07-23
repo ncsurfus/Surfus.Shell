@@ -62,14 +62,15 @@ namespace Surfus.Shell.Messages
         /// <returns></returns>
         public byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
-            {
-                memoryStream.WriteByte(MessageId);
-                memoryStream.WriteUInt(ReasonId);
-                memoryStream.WriteString(Description);
-                memoryStream.WriteString(LanguageTag);
-                return memoryStream.ToArray();
-            }
+            var size = 1 + 4 + Description.GetStringSize() + LanguageTag.GetStringSize();
+
+            var writer = new ByteWriter(size);
+            writer.WriteByte(MessageId);
+            writer.WriteUint(ReasonId);
+            writer.WriteString(Description);
+            writer.WriteString(LanguageTag);
+
+            return writer.Bytes;
         }
     }
 }

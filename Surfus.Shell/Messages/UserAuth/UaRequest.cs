@@ -6,22 +6,6 @@ namespace Surfus.Shell.Messages.UserAuth
 {
     public class UaRequest : IClientMessage
     {
-        public UaRequest(SshPacket packet)
-        {
-            Username = packet.Reader.ReadString();
-            ServiceName = packet.Reader.ReadAsciiString();
-            MethodName = packet.Reader.ReadAsciiString();
-            if (MethodName == "password")
-            {
-                Password = Password;
-            }
-            if (MethodName == "keyboard-interactive")
-            {
-                Language = packet.Reader.ReadString();
-                Submethods = packet.Reader.ReadString();
-            }
-        }
-
         public UaRequest(string username, string serviceName, string methodName, string password)
         {
             Username = username;
@@ -35,8 +19,6 @@ namespace Surfus.Shell.Messages.UserAuth
             Username = username;
             ServiceName = serviceName;
             MethodName = methodName;
-            Language = language;
-            Submethods = subMethods;
         }
 
         public string Username { get; }
@@ -51,26 +33,36 @@ namespace Surfus.Shell.Messages.UserAuth
 
         public virtual byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
+            var size = 1 + Username.GetStringSize() + ServiceName.GetAsciiStringSize() + MethodName.GetAsciiStringSize();
+            if (MethodName == "password")
             {
-                memoryStream.WriteByte(MessageId);
-                memoryStream.WriteString(Username);
-                memoryStream.WriteAsciiString(ServiceName);
-                memoryStream.WriteAsciiString(MethodName);
-                if (MethodName == "password")
-                {
-                    memoryStream.WriteByte(0);
-                    memoryStream.WriteString(Password);
-                }
-
-                if (MethodName == "keyboard-interactive")
-                {
-                    memoryStream.WriteString(Language ?? "");
-                    memoryStream.WriteString(Submethods ?? "");
-                }
-
-                return memoryStream.ToArray();
+                size += 1 + Password.GetStringSize();
             }
+
+            if (MethodName == "keyboard-interactive")
+            {
+                size += Language.GetStringSize() + Submethods.GetStringSize();
+            }
+
+            var writer = new ByteWriter(size);
+            writer.WriteByte(MessageId);
+            writer.WriteString(Username);
+            writer.WriteAsciiString(ServiceName);
+            writer.WriteAsciiString(MethodName);
+            if (MethodName == "password")
+            {
+                writer.WriteByte(0);
+                writer.WriteString(Password);
+            }
+
+            if (MethodName == "keyboard-interactive")
+            {
+                writer.WriteString(Language);
+                writer.WriteString(Submethods);
+            }
+
+            return writer.Bytes;
         }
     }
 }
+;

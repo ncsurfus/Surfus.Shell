@@ -51,11 +51,19 @@ namespace Surfus.Shell
 
         internal static int GetAsciiStringSize(this string asciiString)
         {
+            if(asciiString == null)
+            {
+                return 4;
+            }
             return 4 + Encoding.ASCII.GetByteCount(asciiString);
         }
 
         internal static int GetStringSize(this string utf8String)
         {
+            if(utf8String == null)
+            {
+                return 4;
+            }
             return 4 + Encoding.UTF8.GetByteCount(utf8String);
         }
 

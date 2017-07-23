@@ -3,7 +3,7 @@ using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel.Open
 {
-    public class ChannelOpenDirectTcpIp : ChannelOpen
+    internal class ChannelOpenDirectTcpIp : ChannelOpen
     {
         internal ChannelOpenDirectTcpIp(SshPacket packet) : base(packet, "direct-tcpip")
         {
@@ -28,14 +28,12 @@ namespace Surfus.Shell.Messages.Channel.Open
 
         public override byte[] GetBytes()
         {
-            using (var memoryStream = GetMemoryStream())
-            {
-                memoryStream.WriteString(Host);
-                memoryStream.WriteUInt(Port);
-                memoryStream.WriteString(OriginatorAddress);
-                memoryStream.WriteUInt(OriginatorPort);
-                return memoryStream.ToArray();
-            }
+            var writer = GetByteWriter(GetBaseSize() + Host.GetStringSize() + 4 + OriginatorAddress.GetStringSize() + 4);
+            writer.WriteString(Host);
+            writer.WriteUint(Port);
+            writer.WriteString(OriginatorAddress);
+            writer.WriteUint(OriginatorPort);
+            return writer.Bytes;
         }
     }
 }

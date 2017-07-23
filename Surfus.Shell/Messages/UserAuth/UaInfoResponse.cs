@@ -6,15 +6,6 @@ namespace Surfus.Shell.Messages.UserAuth
 {
     public class UaInfoResponse : IClientMessage
     {
-        public UaInfoResponse(SshPacket packet)
-        {
-            PromptNumber = packet.Reader.ReadUInt32();
-            for (var i = 0; i != PromptNumber; i++)
-            {
-                Responses[i] = packet.Reader.ReadString();
-            }
-        }
-
         public UaInfoResponse(uint promptNumber, string[] responses)
         {
             PromptNumber = promptNumber;
@@ -29,19 +20,20 @@ namespace Surfus.Shell.Messages.UserAuth
 
         public virtual byte[] GetBytes()
         {
-            using (var memoryStream = new MemoryStream())
+            var size = 1 + 4;
+            for (int i = 0; i != PromptNumber; i++)
             {
-                memoryStream.WriteByte(MessageId);
-
-                memoryStream.WriteUInt(PromptNumber);
-
-                for (int i = 0; i != PromptNumber; i++)
-                {
-                     memoryStream.WriteString(Responses[i]);
-                }
-
-                return memoryStream.ToArray();
+                size += Responses[i].GetStringSize();
             }
+
+            var writer = new ByteWriter(size);
+            writer.WriteByte(MessageId);
+            writer.WriteUint(PromptNumber);
+            for (int i = 0; i != PromptNumber; i++)
+            {
+                writer.WriteString(Responses[i]);
+            }
+            return writer.Bytes;
         }
     }
 }

@@ -622,8 +622,9 @@ namespace Surfus.Shell
 
             if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
             {
-                await _tcpStream.WriteAsync(ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence,
-                            sshPacket), cancellationToken).ConfigureAwait(false);
+
+                var macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
+                await _tcpStream.WriteAsync(macOutput, 0, ConnectionInfo.WriteMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
             }
 
             await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
