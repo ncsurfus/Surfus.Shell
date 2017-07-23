@@ -14,7 +14,7 @@ namespace Surfus.Shell.Crypto
         /// <summary>
         /// Stores extra data when reading the length of a packet.
         /// </summary>
-        private byte[] _buffer = new byte[64];
+        private byte[] _buffer = new byte[2048];
 
         /// <summary>
         /// Tracks the read position.
