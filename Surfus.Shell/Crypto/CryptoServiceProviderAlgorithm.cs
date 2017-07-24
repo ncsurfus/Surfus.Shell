@@ -92,41 +92,41 @@ namespace Surfus.Shell.Crypto
         {
             var blockSize = _decryptor.InputBlockSize; // This code was made assuming the decryption and encryption block sizes are the same!
             var expectedPacketSize = 128; // We're going to initialize the buffer to the average expected packet length.
-            var _buffer = new byte[4 + blockSize + expectedPacketSize + hmacSize];// Array Length: uint (packetSequenceNumber) + uint (packet size) + expectedPacketSize + hmac size
+            var buffer = new byte[4 + blockSize + expectedPacketSize + hmacSize];// Array Length: uint (packetSequenceNumber) + uint (packet size) + expectedPacketSize + hmac size
 
-            ByteWriter.WriteUint(_buffer, 0, packetSequenceNumber); // Write first uint, which is the packet sequence number.
+            ByteWriter.WriteUint(buffer, 0, packetSequenceNumber); // Write first uint, which is the packet sequence number.
             var packetStart = 4; // This is where we actually start adding packet data, skipping the provided packet sequence number..
-            var _bufferPosition = 4; // Tracks where we last wrote data into our buffer.
+            var bufferPosition = 4; // Tracks where we last wrote data into our buffer.
 
             // Read enough data until we have at least 1 block.
-            while (_bufferPosition != blockSize + packetStart)
+            while (bufferPosition != blockSize + packetStart)
             {
-                _bufferPosition += await networkStream.ReadAsync(_buffer, _bufferPosition, blockSize + packetStart - _bufferPosition, cancellationToken);
+                bufferPosition += await networkStream.ReadAsync(buffer, bufferPosition, blockSize + packetStart - bufferPosition, cancellationToken);
             }
 
-            _decryptor.TransformBlock(_buffer, _bufferPosition - blockSize, blockSize, _buffer, _bufferPosition - blockSize); // Decrypt the first block in the buffer.
+            _decryptor.TransformBlock(buffer, bufferPosition - blockSize, blockSize, buffer, bufferPosition - blockSize); // Decrypt the first block in the buffer.
 
-            var sshPacketSize = ByteReader.ReadUInt32(_buffer, 4); // Get the length of the packet.
+            var sshPacketSize = ByteReader.ReadUInt32(buffer, 4); // Get the length of the packet.
             if (sshPacketSize > 35000) throw new SshException("Invalid message sent, packet was to large!");
             int bufferLength = (int)(4 + 4 + sshPacketSize + hmacSize); // Calculate the full size of what our buffer *should* be.
 
-            if(_buffer.Length < bufferLength) // Check to see if we need a bigger buffer and should allocate additional data.
+            if(buffer.Length < bufferLength) // Check to see if we need a bigger buffer and should allocate additional data.
             {
-                Array.Resize(ref _buffer, bufferLength);// Array Length: uint (packetSequenceNumber) + uint (packet size) + packet + hmac size
+                Array.Resize(ref buffer, bufferLength);// Array Length: uint (packetSequenceNumber) + uint (packet size) + packet + hmac size
             }
 
-            while (_bufferPosition != bufferLength) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
+            while (bufferPosition != bufferLength) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
             {
-                _bufferPosition += await networkStream.ReadAsync(_buffer, _bufferPosition, bufferLength - _bufferPosition, cancellationToken);
+                bufferPosition += await networkStream.ReadAsync(buffer, bufferPosition, bufferLength - bufferPosition, cancellationToken);
             }
 
             if(sshPacketSize > blockSize) // Check if this was more than a single block..
             {
                 // Decrypt everything except the first block as that was already decrypted!
-                _decryptor.TransformBlock(_buffer, 4 + blockSize, bufferLength - 4 - blockSize - hmacSize, _buffer, 4 + blockSize);
+                _decryptor.TransformBlock(buffer, 4 + blockSize, bufferLength - 4 - blockSize - hmacSize, buffer, 4 + blockSize);
             }
 
-            return new SshPacket(_buffer, 4, bufferLength - 4 - hmacSize);
+            return new SshPacket(buffer, 4, bufferLength - 4 - hmacSize);
         }
     }
 }
