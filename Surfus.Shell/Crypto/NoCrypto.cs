@@ -39,7 +39,7 @@ namespace Surfus.Shell.Crypto
         /// <returns></returns>
         internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, uint packetSequenceNumber, int hmacSize, CancellationToken cancellationToken)
         {
-            var blockSize = 8; // This code was made assuming the decryption and encryption block sizes are the same!
+            var blockSize = CipherBlockSize;
             var expectedPacketSize = 768; // We're going to initialize the buffer to the average expected packet length. Unencrypted size will be higher due to BigIntegers in initial key exchange!
             var buffer = new byte[4 + blockSize + expectedPacketSize + hmacSize];// Array Length: uint (packetSequenceNumber) + uint (packet size) + expectedPacketSize + hmac size
 
@@ -59,7 +59,6 @@ namespace Surfus.Shell.Crypto
 
             if (buffer.Length < bufferLength) // Check to see if we need a bigger buffer and should allocate additional data.
             {
-                Console.WriteLine("allocating?");
                 Array.Resize(ref buffer, bufferLength);// Array Length: uint (packetSequenceNumber) + uint (packet size) + packet + hmac size
             }
 
