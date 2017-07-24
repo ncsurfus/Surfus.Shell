@@ -21,13 +21,6 @@ namespace Surfus.Shell.Messages
         public MessageType Type { get; } = MessageType.SSH_MSG_UNIMPLEMENTED;
         public byte MessageId => (byte)Type;
 
-        public byte[] GetBytes()
-        {
-            var writer = new ByteWriter(5);
-            writer.WriteByte(MessageId);
-            writer.WriteUint(PacketSequenceNumber);
-            return writer.Bytes;
-        }
         public ByteWriter GetByteWriter()
         {
             var writer = new ByteWriter(Type, 4);

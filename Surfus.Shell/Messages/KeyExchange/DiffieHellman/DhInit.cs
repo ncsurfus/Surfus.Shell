@@ -12,14 +12,6 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
         public MessageType Type => MessageType.SSH_MSG_KEX_Exchange_30;
         public byte MessageId => (byte)Type;
 
-        public byte[] GetBytes()
-        {
-            var size = 1 + E.GetBigIntegerSize();
-            var writer = new ByteWriter(size);
-            writer.WriteByte(MessageId);
-            writer.WriteBigInteger(E);
-            return writer.Bytes;
-        }
         public ByteWriter GetByteWriter()
         {
             var writer = new ByteWriter(Type, E.GetBigIntegerSize());

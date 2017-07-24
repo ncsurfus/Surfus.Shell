@@ -31,39 +31,7 @@ namespace Surfus.Shell.Messages.UserAuth
         public MessageType Type { get; } = MessageType.SSH_MSG_USERAUTH_REQUEST;
         public byte MessageId => (byte)Type;
 
-        public virtual byte[] GetBytes()
-        {
-            var size = 1 + Username.GetStringSize() + ServiceName.GetAsciiStringSize() + MethodName.GetAsciiStringSize();
-            if (MethodName == "password")
-            {
-                size += 1 + Password.GetStringSize();
-            }
-
-            if (MethodName == "keyboard-interactive")
-            {
-                size += Language.GetStringSize() + Submethods.GetStringSize();
-            }
-
-            var writer = new ByteWriter(size);
-            writer.WriteByte(MessageId);
-            writer.WriteString(Username);
-            writer.WriteAsciiString(ServiceName);
-            writer.WriteAsciiString(MethodName);
-            if (MethodName == "password")
-            {
-                writer.WriteByte(0);
-                writer.WriteString(Password);
-            }
-
-            if (MethodName == "keyboard-interactive")
-            {
-                writer.WriteString(Language);
-                writer.WriteString(Submethods);
-            }
-
-            return writer.Bytes;
-        }
-        public virtual ByteWriter GetByteWriter()
+        public ByteWriter GetByteWriter()
         {
             var size = Username.GetStringSize() + ServiceName.GetAsciiStringSize() + MethodName.GetAsciiStringSize();
             if (MethodName == "password")

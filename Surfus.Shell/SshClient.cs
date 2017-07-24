@@ -614,13 +614,10 @@ namespace Surfus.Shell
         internal async Task WriteMessageAsync(IClientMessage message, CancellationToken cancellationToken)
         {
             // TODO: Fix compressedPayload! var compressedPayload = ConnectionInfo.WriteCompressionAlgorithm.Compress(message.GetBytes());
+            // We don't actually support compression though... so no rush...
             var sshPacket = new SshPacket(message.GetByteWriter(), Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8));
             ByteWriter.WriteUint(sshPacket.Buffer, SshPacket.SequenceIndex, ConnectionInfo.OutboundPacketSequence);
-            byte[] macOutput = null;
-            if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
-            {
-                macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
-            }
+            byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
 
             ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
             await _tcpStream.WriteAsync(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length, cancellationToken).ConfigureAwait(false);

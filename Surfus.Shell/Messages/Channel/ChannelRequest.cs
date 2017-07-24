@@ -29,16 +29,6 @@ namespace Surfus.Shell.Messages.Channel
         public MessageType Type { get; } = MessageType.SSH_MSG_CHANNEL_REQUEST;
         public byte MessageId => (byte)Type;
 
-        public virtual byte[] GetBytes()
-        {
-            var writer = new ByteWriter(GetBaseSize());
-            writer.WriteByte(MessageId);
-            writer.WriteUint(RecipientChannel);
-            writer.WriteAsciiString(RequestType);
-            writer.WriteByte(WantReply ? (byte)1 : (byte)0);
-            return writer.Bytes;
-        }
-
         public virtual ByteWriter GetByteWriter()
         {
             return GetByteWriter(0);
@@ -60,21 +50,6 @@ namespace Surfus.Shell.Messages.Channel
                 default:
                     return new ChannelRequest(packet, requestType, recipientChannel);
             }
-        }
-
-        protected int GetBaseSize()
-        {
-            return 1 + 4 + RequestType.GetAsciiStringSize() + 1;
-        }
-
-        protected ByteWriter GetByteWriterBuffered(int size)
-        {
-            var writer = new ByteWriter(size);
-            writer.WriteByte(MessageId);
-            writer.WriteUint(RecipientChannel);
-            writer.WriteAsciiString(RequestType);
-            writer.WriteByte(WantReply ? (byte)1 : (byte)0);
-            return writer;
         }
 
         protected ByteWriter GetByteWriter(int additionalSize)

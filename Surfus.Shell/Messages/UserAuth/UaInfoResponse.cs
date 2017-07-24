@@ -18,24 +18,6 @@ namespace Surfus.Shell.Messages.UserAuth
         public MessageType Type { get; } = MessageType.SSH_MSG_USERAUTH_INFO_RESPONSE;
         public byte MessageId => (byte)Type;
 
-        public virtual byte[] GetBytes()
-        {
-            var size = 1 + 4;
-            for (int i = 0; i != PromptNumber; i++)
-            {
-                size += Responses[i].GetStringSize();
-            }
-
-            var writer = new ByteWriter(size);
-            writer.WriteByte(MessageId);
-            writer.WriteUint(PromptNumber);
-            for (int i = 0; i != PromptNumber; i++)
-            {
-                writer.WriteString(Responses[i]);
-            }
-            return writer.Bytes;
-        }
-
         public virtual ByteWriter GetByteWriter()
         {
             var size = 4;

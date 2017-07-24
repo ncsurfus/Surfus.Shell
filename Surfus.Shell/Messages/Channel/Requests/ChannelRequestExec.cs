@@ -17,13 +17,6 @@ namespace Surfus.Shell.Messages.Channel.Requests
 
         public string Command { get; }
 
-        public override byte[] GetBytes()
-        {
-            var writer = GetByteWriterBuffered(GetBaseSize() + Command.GetStringSize());
-            writer.WriteString(Command);
-            return writer.Bytes;
-        }
-
         public override ByteWriter GetByteWriter()
         {
             var writer = GetByteWriter(Command.GetStringSize());
