@@ -27,7 +27,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The index of when the packet data begins for all packets.
         /// </summary>
-        internal const int DataIndex = 8;
+        internal const int DataIndex = 9;
 
         /// <summary>
         /// A random number generator used to generate padding.
@@ -81,11 +81,11 @@ namespace Surfus.Shell
             // Write Padding into 'Raw'
             Array.Copy(padding, 0, Buffer, compressedPayload.PaddingIndex, padding.Length);
 
-            Reader = new ByteReader(Buffer, 9);
+            Reader = new ByteReader(Buffer, DataIndex);
 
             // The Packet Sequence Identifier isn't part of the actual length.
             Offset = 4;
-            Length = compressedPayload.PaddingIndex + padding.Length - 4; // Everything is valid *except* for the first 4 bytes and any unused padding.
+            Length = compressedPayload.PaddingIndex + paddingLength - 4; // Everything is valid *except* for the first 4 bytes and any unused padding.
         }
 
         /// <summary>

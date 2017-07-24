@@ -73,7 +73,7 @@ namespace Surfus.Shell.Crypto
         /// The data to be encrypted
         /// </param>
         /// <returns>The encrypted data</returns>
-        internal abstract ArraySegment<byte> Encrypt(byte[] plainText, int offset, int length);
+        internal abstract void Encrypt(byte[] plainText, int offset, int length);
 
         /// <summary>
         /// Initializes the cipher. You must initialize the cipher before caling Encrypt or ReadPacket.

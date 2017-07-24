@@ -53,16 +53,9 @@ namespace Surfus.Shell.Crypto
         /// </summary>
         /// <param name="byteArray">The data to encrypt.</param>
         /// <returns></returns>
-        internal override ArraySegment<byte> Encrypt(byte[] byteArray, int offset, int length)
+        internal override void Encrypt(byte[] byteArray, int offset, int length)
         {
-            var encryptedBlocks = new byte[(length / _encryptor.InputBlockSize) * _encryptor.OutputBlockSize];
-            var totalEncryptedBytes = _encryptor.TransformBlock(byteArray, offset, length, encryptedBlocks, 0);
-            if (totalEncryptedBytes != encryptedBlocks.Length)
-            {
-                throw new Exception("Invalid byteArray encryption");
-            }
-
-            return new ArraySegment<byte>(encryptedBlocks);
+             _encryptor.TransformBlock(byteArray, offset, length, byteArray, offset);
         }
 
         /// <summary>

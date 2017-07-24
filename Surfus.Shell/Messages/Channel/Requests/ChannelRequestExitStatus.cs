@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel.Requests
@@ -19,9 +19,15 @@ namespace Surfus.Shell.Messages.Channel.Requests
 
         public override byte[] GetBytes()
         {
-            var writer = GetByteWriter(GetBaseSize() + 4);
+            var writer = GetByteWriterBuffered(GetBaseSize() + 4);
             writer.WriteUint(ExitStatus);
             return writer.Bytes;
+        }
+        public override ByteWriter GetByteWriter()
+        {
+            var writer = GetByteWriter(4);
+            writer.WriteUint(ExitStatus);
+            return writer;
         }
     }
 }

@@ -41,6 +41,11 @@ namespace Surfus.Shell.Messages.Channel
             return writer.Bytes;
         }
 
+        public virtual ByteWriter GetByteWriter()
+        {
+            return GetByteWriter(0);
+        }
+
         public static ChannelOpen FromBuffer(SshPacket packet)
         {
             var channelType = packet.Reader.ReadAsciiString();
@@ -65,10 +70,20 @@ namespace Surfus.Shell.Messages.Channel
             return 1 + ChannelType.GetAsciiStringSize() + 12;
         }
 
-        protected ByteWriter GetByteWriter(int size)
+        protected ByteWriter GetByteWriterBuffered(int size)
         {
-            var writer = new ByteWriter(GetBaseSize());
+            var writer = new ByteWriter(size);
             writer.WriteByte(MessageId);
+            writer.WriteAsciiString(ChannelType);
+            writer.WriteUint(SenderChannel);
+            writer.WriteUint(InitialWindowSize);
+            writer.WriteUint(MaximumPacketSize);
+            return writer;
+        }
+
+        protected ByteWriter GetByteWriter(int additionalSize)
+        {
+            var writer = new ByteWriter(Type, 16 + ChannelType.GetAsciiStringSize() + additionalSize);
             writer.WriteAsciiString(ChannelType);
             writer.WriteUint(SenderChannel);
             writer.WriteUint(InitialWindowSize);

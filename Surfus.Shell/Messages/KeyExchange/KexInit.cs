@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Compression;
 using Surfus.Shell.Crypto;
@@ -95,12 +95,31 @@ namespace Surfus.Shell.Messages.KeyExchange
             return byteWriter.Bytes;
         }
 
+        public ByteWriter GetByteWriter()
+        {
+            var writer = new ByteWriter(Type, GetSize() - 1); // Take off the initial message size.
+            writer.WriteByteBlob(RandomBytes);
+            writer.WriteNameList(KexAlgorithms);
+            writer.WriteNameList(ServerHostKeyAlgorithms);
+            writer.WriteNameList(EncryptionClientToServer);
+            writer.WriteNameList(EncryptionServerToClient);
+            writer.WriteNameList(MacClientToServer);
+            writer.WriteNameList(MacServerToClient);
+            writer.WriteNameList(CompressionClientToServer);
+            writer.WriteNameList(CompressionServerToClient);
+            writer.WriteNameList(LanguagesClientToServer);
+            writer.WriteNameList(LanguagesServerToClient);
+            writer.WriteByte(FirstKexPacketFollows ? (byte)1 : (byte)0);
+            writer.WriteUint(0);
+            return writer;
+        }
+
         public int GetSize()
         {
-            if(_bytes.Array != null)
-            {
-                return _bytes.Count;
-            }
+            //if(_bytes.Array != null)
+           // {
+            //    return _bytes.Count;
+           // }
             return ByteSizer.GetByteSize() +
                    RandomBytes.GetByteBlobSize() +
                    KexAlgorithms.GetNameListSize() +

@@ -63,6 +63,37 @@ namespace Surfus.Shell.Messages.UserAuth
 
             return writer.Bytes;
         }
+        public virtual ByteWriter GetByteWriter()
+        {
+            var size = Username.GetStringSize() + ServiceName.GetAsciiStringSize() + MethodName.GetAsciiStringSize();
+            if (MethodName == "password")
+            {
+                size += 1 + Password.GetStringSize();
+            }
+
+            if (MethodName == "keyboard-interactive")
+            {
+                size += Language.GetStringSize() + Submethods.GetStringSize();
+            }
+
+            var writer = new ByteWriter(Type, size);
+            writer.WriteString(Username);
+            writer.WriteAsciiString(ServiceName);
+            writer.WriteAsciiString(MethodName);
+            if (MethodName == "password")
+            {
+                writer.WriteByte(0);
+                writer.WriteString(Password);
+            }
+
+            if (MethodName == "keyboard-interactive")
+            {
+                writer.WriteString(Language);
+                writer.WriteString(Submethods);
+            }
+
+            return writer;
+        }
     }
 }
 ;

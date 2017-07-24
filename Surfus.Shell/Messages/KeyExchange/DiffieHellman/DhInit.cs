@@ -1,4 +1,4 @@
-﻿namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
+namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
 {
     internal class DhInit : IClientMessage
     {
@@ -19,6 +19,12 @@
             writer.WriteByte(MessageId);
             writer.WriteBigInteger(E);
             return writer.Bytes;
+        }
+        public ByteWriter GetByteWriter()
+        {
+            var writer = new ByteWriter(Type, E.GetBigIntegerSize());
+            writer.WriteBigInteger(E);
+            return writer;
         }
     }
 }

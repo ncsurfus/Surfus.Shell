@@ -35,6 +35,13 @@ namespace Surfus.Shell.Messages.Channel
             writer.WriteBinaryString(Data);
             return writer.Bytes;
         }
+        public ByteWriter GetByteWriter()
+        {
+            var writer = new ByteWriter(Type, 4 + Data.GetBinaryStringSize());
+            writer.WriteUint(RecipientChannel);
+            writer.WriteBinaryString(Data);
+            return writer;
+        }
 
         public void ResizeData(int length)
         {

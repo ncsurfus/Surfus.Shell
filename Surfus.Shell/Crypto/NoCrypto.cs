@@ -75,9 +75,9 @@ namespace Surfus.Shell.Crypto
         /// </summary>
         /// <param name="plainText">The plaintext data.</param>
         /// <returns></returns>
-        internal override ArraySegment<byte> Encrypt(byte[] plainText, int offset, int length)
+        internal override void Encrypt(byte[] plainText, int offset, int length)
         {
-            return new ArraySegment<byte>(plainText, offset, length);
+            return;
         }
 
         /// <summary>

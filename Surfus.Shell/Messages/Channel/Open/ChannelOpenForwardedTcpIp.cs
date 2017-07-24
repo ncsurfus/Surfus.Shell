@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel.Open
@@ -28,12 +28,22 @@ namespace Surfus.Shell.Messages.Channel.Open
 
         public override byte[] GetBytes()
         {
-            var writer = GetByteWriter(GetBaseSize() + AddressConnected.GetStringSize() + 4 + OriginatorAddress.GetStringSize() + 4);
+            var writer = GetByteWriterBuffered(GetBaseSize() + AddressConnected.GetStringSize() + 4 + OriginatorAddress.GetStringSize() + 4);
             writer.WriteString(AddressConnected);
             writer.WriteUint(PortConnected);
             writer.WriteString(OriginatorAddress);
             writer.WriteUint(OriginatorPort);
             return writer.Bytes;
+        }
+
+        public override ByteWriter GetByteWriter()
+        {
+            var writer = GetByteWriter(AddressConnected.GetStringSize() + 4 + OriginatorAddress.GetStringSize() + 4);
+            writer.WriteString(AddressConnected);
+            writer.WriteUint(PortConnected);
+            writer.WriteString(OriginatorAddress);
+            writer.WriteUint(OriginatorPort);
+            return writer;
         }
     }
 }

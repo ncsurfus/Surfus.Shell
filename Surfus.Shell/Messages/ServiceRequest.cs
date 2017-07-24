@@ -24,5 +24,11 @@ namespace Surfus.Shell.Messages
             writer.WriteString(ServiceName);
             return writer.Bytes;
         }
+        public ByteWriter GetByteWriter()
+        {
+            var writer = new ByteWriter(Type, ServiceName.GetStringSize());
+            writer.WriteString(ServiceName);
+            return writer;
+        }
     }
 }
