@@ -32,7 +32,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The offset of the buffer. Hardcoded to 4 to represent the space allocated for the packet sequence identifier.
         /// </summary>
-        internal readonly int Offset = 4;
+        internal readonly int Offset;
 
         /// <summary>
         /// Constructs an SSH Packet from the compressed payload and padding multiplier. Used to write a packet.
@@ -68,6 +68,7 @@ namespace Surfus.Shell
             Reader = new ByteReader(Buffer, 9);
 
             // The Packet Sequence Identifier isn't part of the actual length.
+            Offset = 4;
             Length = Buffer.Length - 4;
         }
 
@@ -84,6 +85,7 @@ namespace Surfus.Shell
             // The total size of the payload is BufferSize - 4 (Packet Length Bytes) - 1 (Padding Size Byte) - Padding Size
             Buffer = buffer;
             Reader = new ByteReader(Buffer, 5 + packetStart); // Start reading after the first 5 bytes of the packet (skipping the packet length and padding amount)
+            Offset = packetStart;
             Length = packetLength;
         }
     }
