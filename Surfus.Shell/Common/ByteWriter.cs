@@ -22,12 +22,69 @@ namespace Surfus.Shell
         public int Position { get; private set; }
 
         /// <summary>
-        /// Constructs a new ByteWriter with an array of the provided sie.
+        /// Where the actual data in the buffer begins.
+        /// </summary>
+        public int DataIndex { get; }
+
+        /// <summary>
+        /// The length of the data in the buffer.
+        /// </summary>
+        public int DataLength { get; }
+
+        /// <summary>
+        /// The index to write the sequence number.
+        /// </summary>
+        public int SequenceIndex { get; }
+
+        /// <summary>
+        /// The index to write the packet size.
+        /// </summary>
+        public int PacketSizeIndex { get; }
+
+        /// <summary>
+        /// The index to write the padding byte.
+        /// </summary>
+        public int PaddingByteIndex { get; }
+
+        /// <summary>
+        /// The index to write the padding.
+        /// </summary>
+        public int PaddingIndex { get; }
+
+        /// <summary>
+        /// The index to write the padding.
+        /// </summary>
+        public bool IsMessage { get; }
+
+        /// <summary>
+        /// Constructs a new ByteWriter with an array of the provided.
         /// </summary>
         /// <param name="size"></param>
         internal ByteWriter(int size)
         {
+            IsMessage = false;
+            DataIndex = 0;
+            DataLength = size;
             Bytes = new byte[size];
+        }
+
+        /// <summary>
+        /// Constructs a new ByteWriter for a message, preallocating space for the sequence number (uint), size (uint), and padding (up to 255 bytes).
+        /// </summary>
+        /// <param name="size"></param>
+        internal ByteWriter(Messages.IMessage message, int size)
+        {
+            IsMessage = true;
+            SequenceIndex = SshPacket.SequenceIndex;
+            PacketSizeIndex = SshPacket.PacketSizeIndex;
+            PaddingByteIndex = SshPacket.PaddingByteIndex;
+            DataIndex = SshPacket.DataIndex;
+            DataLength = size + 1; // Add 1 for the message size.
+            PaddingIndex = SequenceIndex + PacketSizeIndex + PaddingByteIndex + DataIndex + DataLength;
+
+            Bytes = new byte[PaddingIndex + 255]; // sequence number (uint), size (uint), paddingSize,  and padding (up to 255 bytes).
+            Position = DataIndex;
+            WriteByte(message.MessageId);
         }
 
         /// <summary>
