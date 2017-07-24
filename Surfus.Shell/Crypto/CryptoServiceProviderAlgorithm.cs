@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Surfus.Shell.Extensions;
+using Surfus.Shell.Exceptions;
 
 namespace Surfus.Shell.Crypto
 {
@@ -13,21 +14,6 @@ namespace Surfus.Shell.Crypto
     /// </summary>
     internal abstract class CryptoServiceProviderAlgorithm : CryptoAlgorithm
     {
-        /// <summary>
-        /// Stores extra data when reading the length of a packet.
-        /// </summary>
-        private byte[] _buffer;
-
-        /// <summary>
-        /// Tracks the read position.
-        /// </summary>
-        private int _readPosition = 0;
-
-        /// <summary>
-        /// Tracks the write position.
-        /// </summary>
-        private int _writePosition = 0;
-
         /// <summary>
         /// The crypto provider.
         /// </summary>
@@ -101,56 +87,39 @@ namespace Surfus.Shell.Crypto
                 throw new Exception("Decryptor: CanTransformMultipleBlocks is not true!");
             }
         }
-        internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, int macSize, CancellationToken cancellationToken)
+
+        internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, uint packetSequenceNumber, int hmacSize, CancellationToken cancellationToken)
         {
             // This code was made assuming the decryption and encryption block sizes are the same!
             var blockSize = _decryptor.InputBlockSize;
-
-            if (_buffer.Length - _readPosition < blockSize) // Check to see if there is a block left to read within the buffer.
-            {
-                // Shift buffer left.
-                var shiftStart = _readPosition; // Where to start copying the data.
-                var shiftLength = _writePosition - _readPosition; // How much data we should copy.
-                Array.Copy(_buffer, shiftStart, _buffer, 0, shiftLength); // Copying of data
-                _readPosition = 0; // Reseting of values...
-                _writePosition = shiftLength;
-            }
+            var _buffer = new byte[4 + blockSize];
+            ByteWriter.WriteUint(_buffer, 0, packetSequenceNumber); // Write first uint (packet sequence number)
+            var _bufferPosition = 4;
 
             // Read enough data until we have at least 1 block.
-            while (_writePosition - _readPosition < blockSize)
+            while (_bufferPosition != _buffer.Length)
             {
-                // Read as much data as possible into the buffer.
-                _writePosition += await networkStream.ReadAsync(_buffer, _writePosition, _buffer.Length - _writePosition, cancellationToken);
+                _bufferPosition += await networkStream.ReadAsync(_buffer, _bufferPosition, _buffer.Length - _bufferPosition, cancellationToken);
             }
 
-            _decryptor.TransformBlock(_buffer, _readPosition, blockSize, _buffer, _readPosition); // Decrypt the first block in the buffer.
+            _decryptor.TransformBlock(_buffer, _bufferPosition - blockSize, blockSize, _buffer, _bufferPosition - blockSize); // Decrypt the first block in the buffer.
 
-            var sshPacketSize = ByteReader.ReadUInt32(_buffer, _readPosition); // Get packet size...
-            var sshPacket = new byte[4 + 4 + sshPacketSize + macSize]; // Array Length: uint (packetSequenceNumber) + uint (packet size) + packet + hmac size
-            var sshPacketPosition = 4; // Skip first uint - packet sequence number.
-            var bufferedData = Math.Min(sshPacket.Length - sshPacketPosition, _writePosition - _readPosition); // The amount of data to copy over from the buffer.
-            Array.Copy(_buffer, _readPosition, sshPacket, sshPacketPosition, bufferedData); // Copy data from buffer to sshPacket.
-            _readPosition += bufferedData;
-            sshPacketPosition += bufferedData;
+            var sshPacketSize = ByteReader.ReadUInt32(_buffer, 4); // Get packet size...
+            if (sshPacketSize > 35000) throw new SshException("Invalid message sent, packet was to large!");
+            Array.Resize(ref _buffer, (int)(4 + 4 + sshPacketSize + hmacSize));// Array Length: uint (packetSequenceNumber) + uint (packet size) + packet + hmac size
 
-            while (sshPacketPosition != sshPacket.Length) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
+            while (_bufferPosition != _buffer.Length) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
             {
-                sshPacketPosition += await networkStream.ReadAsync(sshPacket, sshPacketPosition, sshPacket.Length - sshPacketPosition, cancellationToken);
+                _bufferPosition += await networkStream.ReadAsync(_buffer, _bufferPosition, _buffer.Length - _bufferPosition, cancellationToken);
             }
 
             if(sshPacketSize > blockSize) // Check if this was more than a single block..
             {
                 // Decrypt everything except the first block as that was already decrypted!
-                _decryptor.TransformBlock(sshPacket, 4 + blockSize, sshPacket.Length - 4 - blockSize - macSize, sshPacket, 4 + blockSize);
-            }
-           
-            if (_readPosition == _writePosition)
-            {
-                _readPosition = 0;
-                _writePosition = 0;
+                _decryptor.TransformBlock(_buffer, 4 + blockSize, _buffer.Length - 4 - blockSize - hmacSize, _buffer, 4 + blockSize);
             }
 
-            return new SshPacket(sshPacket, true, macSize);
+            return new SshPacket(_buffer, 4, _buffer.Length - 4 - hmacSize);
         }
     }
 }

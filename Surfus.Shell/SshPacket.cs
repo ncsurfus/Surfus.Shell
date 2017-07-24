@@ -74,41 +74,17 @@ namespace Surfus.Shell
         /// <summary>
         /// Constructs an SSH Packet from incoming data.
         /// </summary>
-        /// <param name="firstBlock"></param>
-        /// <param name="secondBlock"></param>
-        internal SshPacket(byte[] firstBlock, byte[] secondBlock)
-        {
-            // An extra 4 bytes were allocated at the start of the packet for the MAC.
-            // The actual 4 bytes of the packet buffer is the size.
-            // The 5th byte (index 4) is the amount of padding.
-            // The 6th byte (index 5) is the start of the payload.
-            // The total size of the payload is BufferSize - 4 (Packet Length Bytes) - 1 (Padding Size Byte) - Padding Size
-            // Extra bytes were allocated at the end for the MAC.
-            Buffer = new byte[firstBlock.Length + secondBlock.Length];
-            Array.Copy(firstBlock, 0, Buffer, 0, firstBlock.Length);
-            Array.Copy(secondBlock, 0, Buffer, firstBlock.Length, secondBlock.Length);
-            Reader = new ByteReader(Buffer, 9);
-
-            // The Packet Sequence Identifier isn't part of the actual length.
-            Length = Buffer.Length - 4;
-        }
-
-        /// <summary>
-        /// Constructs an SSH Packet from incoming data.
-        /// </summary>
         /// <param name="buffer"></param>
-        internal SshPacket(byte[] buffer, bool withHmac = false, int hmacSize = 0)
+        internal SshPacket(byte[] buffer, int packetStart, int packetLength)
         {
-            // An extra 4 bytes were allocated at the start of the packet for the MAC.
+            // An extra 4 bytes were allocated at the start of the packet for the HMAC.
             // First 4 bytes of buffer is the size.
             // The 5th byte (index 4) is the amount of padding.
             // The 6th byte (index 5) is the start of the payload.
             // The total size of the payload is BufferSize - 4 (Packet Length Bytes) - 1 (Padding Size Byte) - Padding Size
             Buffer = buffer;
-            Reader = new ByteReader(Buffer, 9);
-
-            // The Packet Sequence Identifier isn't part of the actual length.
-            Length = withHmac ? Buffer.Length - 4 - hmacSize : Buffer.Length - 4;
+            Reader = new ByteReader(Buffer, 5 + packetStart); // Start reading after the first 5 bytes of the packet (skipping the packet length and padding amount)
+            Length = packetLength;
         }
     }
 }

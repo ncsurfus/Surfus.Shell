@@ -1,4 +1,5 @@
-﻿using Surfus.Shell.Extensions;
+﻿using Surfus.Shell.Exceptions;
+using Surfus.Shell.Extensions;
 using System;
 using System.Net.Sockets;
 using System.Threading;
@@ -11,21 +12,6 @@ namespace Surfus.Shell.Crypto
     /// </summary>
     internal class NoCrypto : CryptoAlgorithm
     {
-        /// <summary>
-        /// Stores extra data when reading the length of a packet.
-        /// </summary>
-        private byte[] _buffer = new byte[2048];
-
-        /// <summary>
-        /// Tracks the read position.
-        /// </summary>
-        private int _readPosition = 0;
-
-        /// <summary>
-        /// Tracks the write position.
-        /// </summary>
-        private int _writePosition = 0;
-
         /// <summary>
         /// The minimum cipher block size specified by SSH.
         /// </summary>
@@ -51,63 +37,29 @@ namespace Surfus.Shell.Crypto
         /// <param name="networkStream">The underlying TCP network stream.</param>
         /// <param name="cancellationToken">The cancellation token used to cancel the task.</param>
         /// <returns></returns>
-        internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, int macSize, CancellationToken cancellationToken)
-        { 
-            // HMAC is 0 when NoCrypto.
+        internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, uint packetSequenceNumber, int hmacSize, CancellationToken cancellationToken)
+        {
+            // This code was made assuming the decryption and encryption block sizes are the same!
+            var blockSize = CipherBlockSize;
+            var _buffer = new byte[4 + blockSize];
+            ByteWriter.WriteUint(_buffer, 0, packetSequenceNumber); // Write first uint (packet sequence number)
+            var _bufferPosition = 4;
 
-            var bufferFree = _buffer.Length - _writePosition;
-            if (_writePosition - _readPosition < 4 && bufferFree < 4) // Check if there is enough room in the buffer to read or store a 4 byte packet length;
-            {
-                // Reset buffer to beginning.
-                for (int i = _writePosition; i != bufferFree; i++)
-                {
-                    _buffer[i - _writePosition] = _buffer[_writePosition];
-                }
-                _readPosition = 0;
-                _writePosition = bufferFree;
+            // Read enough data until we have at least 1 block.
+            while (_bufferPosition != _buffer.Length)
+            {           
+                _bufferPosition += await networkStream.ReadAsync(_buffer, _bufferPosition, _buffer.Length - _bufferPosition, cancellationToken);
             }
+            
+            var packetSize = ByteReader.ReadUInt32(_buffer, 4); // Get packet size...
+            if (packetSize > 35000) throw new SshException("Invalid message sent, packet was to large!");
+            Array.Resize(ref _buffer, (int)(4 + 4 + packetSize + hmacSize));// Array Length: uint (packetSequenceNumber) + uint (packet size) + packet + hmac size
 
-            while (_writePosition - _readPosition < 4) // Read data until we have at least 4 bytes..
+            while (_bufferPosition != _buffer.Length) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
             {
-                var bytesRead = await networkStream.ReadAsync(_buffer, _writePosition, _buffer.Length - _writePosition, cancellationToken);
-                _writePosition += bytesRead;
+                _bufferPosition += await networkStream.ReadAsync(_buffer, _bufferPosition, _buffer.Length - _bufferPosition, cancellationToken);
             }
-
-            var packetLength = ByteReader.ReadUInt32(_buffer, _readPosition) + 4; // Get size of packet + packet length integer
-            if (packetLength > 35004) throw new InvalidOperationException($"Packet length is too large {packetLength}");
-
-            // Check to see if we can fit the entire packet in our buffer. If so, read the entire packet into the buffer.
-            if (_buffer.Length - _writePosition >= packetLength - (_writePosition - _readPosition))
-            {
-                while (_writePosition - _readPosition < packetLength) // Read until the data left to read 
-                {
-                    var bytesRead = await networkStream.ReadAsync(_buffer, _writePosition, _buffer.Length - _writePosition, cancellationToken);
-                    _writePosition += bytesRead;
-                }
-
-                // Get the packet out of the buffer.
-                // The contents of _buffer *will* change, so we *must* allocate a new buffer that includes the packet length.
-                // Add 4 to the packet length to hold the packetSequenceIdentifier in the MAC calculation. Offset all writes to this buffer by 4.
-                var fullPacket = new byte[packetLength + 4];
-                Array.Copy(_buffer, _readPosition, fullPacket, 4, fullPacket.Length - 4);
-                _readPosition += fullPacket.Length - 4;
-                return new SshPacket(fullPacket);
-            }
-
-            // The data is to big to be stored completely in the rest of our buffer.
-            // Copy our current data into a new buffer.
-            // Add 4 to the packet length to hold the packetSequenceIdentifier in the MAC calculation. Offset all writes to this buffer by 4.
-            var bigPacket = new byte[packetLength + 4];
-            Array.Copy(_buffer, _readPosition, bigPacket, 4, _writePosition - _readPosition - 4);
-            var position = _writePosition - _readPosition;
-            while (position != bigPacket.Length) // Read until the data left to read 
-            {
-                var bytesRead = await networkStream.ReadAsync(bigPacket, position + 4, bigPacket.Length - position + 4, cancellationToken);
-                position += bytesRead;
-            }
-            _readPosition = 0;
-            _writePosition = 0;
-            return new SshPacket(bigPacket);
+            return new SshPacket(_buffer, 4, _buffer.Length - 4 - hmacSize);
         }
 
         /// <summary>
