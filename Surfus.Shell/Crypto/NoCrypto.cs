@@ -1,5 +1,4 @@
 ﻿using Surfus.Shell.Exceptions;
-using Surfus.Shell.Extensions;
 using System;
 using System.Net.Sockets;
 using System.Threading;

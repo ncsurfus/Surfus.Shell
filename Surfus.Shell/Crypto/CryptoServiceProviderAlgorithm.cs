@@ -4,7 +4,6 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using Surfus.Shell.Extensions;
 using Surfus.Shell.Exceptions;
 
 namespace Surfus.Shell.Crypto

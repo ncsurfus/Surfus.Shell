@@ -1,9 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Numerics;
-using Surfus.Shell.Extensions;
-
-namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
+﻿namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
 {
     internal class DhReply : IMessage
     {

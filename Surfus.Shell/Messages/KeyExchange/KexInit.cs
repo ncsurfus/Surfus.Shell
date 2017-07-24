@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using Surfus.Shell.Compression;
 using Surfus.Shell.Crypto;
 using Surfus.Shell.Extensions;

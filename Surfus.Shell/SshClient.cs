@@ -1,15 +1,12 @@
 ﻿using Surfus.Shell.Exceptions;
-using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
-using Surfus.Shell.Messages.Channel.Requests;
 using Surfus.Shell.Messages.UserAuth;
 using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 

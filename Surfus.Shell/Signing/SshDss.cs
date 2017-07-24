@@ -1,9 +1,6 @@
 using System;
-using System.IO;
-using System.Linq;
 
 using Surfus.Shell.Exceptions;
-using Surfus.Shell.Extensions;
 using System.Security.Cryptography;
 using System.Numerics;
 

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages.KeyExchange;

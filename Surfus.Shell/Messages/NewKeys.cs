@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-
 namespace Surfus.Shell.Messages
 {
     public class NewKeys : IClientMessage

@@ -1,9 +1,5 @@
 ﻿using System;
-using System.IO;
-using System.Linq;
-using System.Numerics;
 using System.Security.Cryptography;
-using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Signing
 {

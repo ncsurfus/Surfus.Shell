@@ -1,7 +1,4 @@
-﻿using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
-using Surfus.Shell.Extensions;
+﻿using System.Security.Cryptography;
 using System;
 
 namespace Surfus.Shell.MessageAuthentication

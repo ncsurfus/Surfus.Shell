@@ -1,5 +1,4 @@
-﻿using System;
-using Surfus.Shell.Messages.Channel;
+﻿using Surfus.Shell.Messages.Channel;
 using Surfus.Shell.Messages.KeyExchange;
 using Surfus.Shell.Messages.UserAuth;
 
