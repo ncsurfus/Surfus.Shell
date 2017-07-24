@@ -83,8 +83,6 @@ namespace Surfus.Shell.KeyExchange
                 throw new ArgumentException(nameof(letter));
             }
 
-            var hashList = new List<byte[]>();
-
             using (var hashAlgorithm = CreateHashAlgorithm())
             {
                 var keySize = hashAlgorithm.HashSize / 8;
