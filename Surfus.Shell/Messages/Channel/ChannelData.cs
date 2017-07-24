@@ -2,21 +2,19 @@ namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelData : IClientMessage, IChannelRecipient
     {
-        private byte[] _data;
-
         public ChannelData(SshPacket packet)
         {
             RecipientChannel = packet.Reader.ReadUInt32();
-            _data = packet.Reader.ReadBinaryString();
+            Data = packet.Reader.ReadBinaryString();
         }
 
         public ChannelData(uint recipientChannel, byte[] data)
         {
             RecipientChannel = recipientChannel;
-            _data = data;
+            Data = data;
         }
 
-        public byte[] Data => _data;
+        public byte[] Data { get; }
 
         public uint RecipientChannel { get; }
 
