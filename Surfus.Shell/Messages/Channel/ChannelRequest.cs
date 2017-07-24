@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages.Channel.Requests;
 
 namespace Surfus.Shell.Messages.Channel

@@ -1,7 +1,4 @@
-using System;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.Channel
 {

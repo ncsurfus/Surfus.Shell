@@ -1,6 +1,3 @@
-using System.IO;
-using Surfus.Shell.Extensions;
-
 namespace Surfus.Shell.Messages.Channel.Open
 {
     internal class ChannelOpenX11 : ChannelOpen

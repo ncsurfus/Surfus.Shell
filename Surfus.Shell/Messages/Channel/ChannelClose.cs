@@ -1,7 +1,3 @@
-using System;
-using System.IO;
-using Surfus.Shell.Extensions;
-
 namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelClose : IClientMessage, IChannelRecipient

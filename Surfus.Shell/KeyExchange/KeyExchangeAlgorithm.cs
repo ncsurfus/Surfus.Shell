@@ -1,13 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Numerics;
 using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
-using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages;
 using System.Threading;
 using Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange;

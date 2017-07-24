@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Security.Cryptography;
-using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell
 {
