@@ -19,11 +19,6 @@ namespace Surfus.Shell.Crypto
         private byte[] _buffer;
 
         /// <summary>
-        /// Stores encrypted data when reading the length of a packet.
-        /// </summary>
-        private byte[] _encryptedData;
-
-        /// <summary>
         /// Tracks the read position.
         /// </summary>
         private int _readPosition = 0;
@@ -105,55 +100,12 @@ namespace Surfus.Shell.Crypto
             {
                 throw new Exception("Decryptor: CanTransformMultipleBlocks is not true!");
             }
-
-            int bufferSize = 2048;
-
-            // Make buffer sizes even with input/output block sizes.
-            _encryptedData = new byte[(bufferSize - (bufferSize % _decryptor.InputBlockSize))];
-            _buffer = new byte[(bufferSize - (bufferSize % _decryptor.OutputBlockSize))];
         }
-
-        /// <summary>
-        /// Decrypts the next packet in the network stream.
-        /// </summary>
-        /// <param name="networkStream">
-        /// The network stream to decrypt the packet from.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// The cancellation token associated with the async method.
-        /// </param>
-        /// <returns>
-        /// The SSH Packet.
-        /// </returns>
-        internal async Task<SshPacket> ReadPacketAsync2(NetworkStream networkStream, CancellationToken cancellationToken)
-        {
-            var initialOutput = await ReadBlocks(networkStream, 1, cancellationToken).ConfigureAwait(false);
-            var packetLength = ByteReader.ReadUInt32(initialOutput, 0);
-            if (packetLength > 35000)
-            {
-                throw new InvalidOperationException("Packet length is too large");
-            }
-
-            if (packetLength + 4 <= initialOutput.Length)
-            {
-                return new SshPacket(new byte[4], initialOutput);
-            }
-
-            var totalEncryptedBlocks =
-                (uint)((packetLength + 4) * (_decryptor.InputBlockSize / _decryptor.OutputBlockSize))
-                / _decryptor.InputBlockSize;
-
-            var secondaryOutput =
-                await ReadBlocks(networkStream, (uint)(totalEncryptedBlocks - 1), cancellationToken).ConfigureAwait(false);
-
-            return new SshPacket(new byte[4].Concat(initialOutput).ToArray(), secondaryOutput);
-        }
-
         internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, int macSize, CancellationToken cancellationToken)
         {
             // This code was made assuming the decryption and encryption block sizes are the same!
-            Console.WriteLine("READING PACKET");
             var blockSize = _decryptor.InputBlockSize;
+
             if (_buffer.Length - _readPosition < blockSize) // Check to see if there is a block left to read within the buffer.
             {
                 // Shift buffer left.
@@ -199,57 +151,6 @@ namespace Surfus.Shell.Crypto
             }
 
             return new SshPacket(sshPacket, true, macSize);
-        }
-
-        /// <summary>
-        /// Decrypts data from a network stream.
-        /// </summary>
-        /// <param name="networkStream">The network stream to read the encrypted data from.</param>
-        /// <param name="blocks">blocks * blocksize determines how much data to read from the stream.</param>
-        /// <param name="cancellationToken">The cancellation token associated with the async method.</param>
-        /// <returns></returns>
-        private async Task<byte[]> ReadBlocks(NetworkStream networkStream, uint blocks, CancellationToken cancellationToken)
-        {
-            var encryptedInput = await networkStream.ReadBytesAsync((uint)(_decryptor.InputBlockSize * blocks), cancellationToken).ConfigureAwait(false);
-            var decryptedOutput = new byte[_decryptor.OutputBlockSize * blocks];
-            var initialOutput = _decryptor.TransformBlock(
-                encryptedInput, 
-                0, 
-                encryptedInput.Length, 
-                decryptedOutput, 
-                0);
-            if (initialOutput != decryptedOutput.Length)
-            {
-                throw new Exception("Invalid Decryption");
-            }
-
-            return decryptedOutput;
-        }
-
-        
-        /// <summary>
-        /// Decrypts data from a network stream.
-        /// </summary>
-        /// <param name="networkStream">The network stream to read the encrypted data from.</param>
-        /// <param name="cancellationToken">The cancellation token associated with the async method.</param>
-        /// <returns></returns>
-        private async Task<int> ReadEncryptedData(NetworkStream networkStream, byte[] buffer, int index, CancellationToken cancellationToken)
-        {
-            var spaceAvailable = ((buffer.Length - index) / _decryptor.OutputBlockSize) * _decryptor.InputBlockSize;
-            if(spaceAvailable > _encryptedData.Length)
-            {
-                spaceAvailable = _encryptedData.Length;
-            }
-            Console.WriteLine(spaceAvailable);
-            var encryptedBytesRead = await networkStream.ReadAsync(_encryptedData, 0, spaceAvailable);
-            while(encryptedBytesRead % _decryptor.InputBlockSize != 0)
-            {
-                Console.Write("Test2 - " + _decryptor.InputBlockSize + " - "+ encryptedBytesRead + " - " + (spaceAvailable - encryptedBytesRead));
-                encryptedBytesRead += await networkStream.ReadAsync(_encryptedData, encryptedBytesRead, spaceAvailable - encryptedBytesRead, cancellationToken);
-                Console.WriteLine(" -  " + encryptedBytesRead);
-            }
-            Console.WriteLine("Escaped");
-            return _decryptor.TransformBlock(_encryptedData, 0, encryptedBytesRead, buffer, index);
         }
     }
 }
