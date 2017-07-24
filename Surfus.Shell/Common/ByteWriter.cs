@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Text;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages.KeyExchange;
+using Surfus.Shell.Messages;
 
 namespace Surfus.Shell
 {
     /// <summary>
     /// Writes data to a pre-defined byte array.
     /// </summary>
-    internal class ByteWriter
+    public class ByteWriter
     {
         /// <summary>
         /// The internal byte array.
@@ -72,7 +73,7 @@ namespace Surfus.Shell
         /// Constructs a new ByteWriter for a message, preallocating space for the sequence number (uint), size (uint), and padding (up to 255 bytes).
         /// </summary>
         /// <param name="size"></param>
-        internal ByteWriter(Messages.IMessage message, int size)
+        internal ByteWriter(MessageType message, int size)
         {
             IsMessage = true;
             SequenceIndex = SshPacket.SequenceIndex;
@@ -80,11 +81,11 @@ namespace Surfus.Shell
             PaddingByteIndex = SshPacket.PaddingByteIndex;
             DataIndex = SshPacket.DataIndex;
             DataLength = size + 1; // Add 1 for the message size.
-            PaddingIndex = SequenceIndex + PacketSizeIndex + PaddingByteIndex + DataIndex + DataLength;
+            PaddingIndex = DataIndex + DataLength;
 
             Bytes = new byte[PaddingIndex + 255]; // sequence number (uint), size (uint), paddingSize,  and padding (up to 255 bytes).
             Position = DataIndex;
-            WriteByte(message.MessageId);
+            WriteByte((byte)message);
         }
 
         /// <summary>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using Surfus.Shell.Extensions;
@@ -71,6 +71,15 @@ namespace Surfus.Shell.Messages
             writer.WriteString(LanguageTag);
 
             return writer.Bytes;
+        }
+        public ByteWriter GetByteWriter()
+        {
+            var writer = new ByteWriter(Type, 4 + Description.GetStringSize() + LanguageTag.GetStringSize());
+            writer.WriteUint(ReasonId);
+            writer.WriteString(Description);
+            writer.WriteString(LanguageTag);
+
+            return writer;
         }
     }
 }

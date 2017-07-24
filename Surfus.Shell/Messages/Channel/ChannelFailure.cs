@@ -28,5 +28,11 @@ namespace Surfus.Shell.Messages.Channel
             writer.WriteUint(RecipientChannel);
             return writer.Bytes;
         }
+        public ByteWriter GetByteWriter()
+        {
+            var writer = new ByteWriter(Type, 4);
+            writer.WriteUint(RecipientChannel);
+            return writer;
+        }
     }
 }

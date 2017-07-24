@@ -35,5 +35,22 @@ namespace Surfus.Shell.Messages.UserAuth
             }
             return writer.Bytes;
         }
+
+        public virtual ByteWriter GetByteWriter()
+        {
+            var size = 4;
+            for (int i = 0; i != PromptNumber; i++)
+            {
+                size += Responses[i].GetStringSize();
+            }
+
+            var writer = new ByteWriter(Type, size);
+            writer.WriteUint(PromptNumber);
+            for (int i = 0; i != PromptNumber; i++)
+            {
+                writer.WriteString(Responses[i]);
+            }
+            return writer;
+        }
     }
 }

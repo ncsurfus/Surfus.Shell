@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Surfus.Shell.Extensions;
 
@@ -27,6 +27,12 @@ namespace Surfus.Shell.Messages.Channel
             writer.WriteByte(MessageId);
             writer.WriteUint(RecipientChannel);
             return writer.Bytes;
+        }
+        public ByteWriter GetByteWriter()
+        {
+            var writer = new ByteWriter(Type, 4);
+            writer.WriteUint(RecipientChannel);
+            return writer;
         }
     }
 }

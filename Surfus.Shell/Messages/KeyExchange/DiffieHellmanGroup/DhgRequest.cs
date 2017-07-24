@@ -1,4 +1,4 @@
-﻿namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
+namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
 {
     public class DhgRequest : IClientMessage
     {
@@ -25,6 +25,14 @@
             writer.WriteUint(N);
             writer.WriteUint(Max);
             return writer.Bytes;
+        }
+        public ByteWriter GetByteWriter()
+        {
+            var writer = new ByteWriter(Type, 12);
+            writer.WriteUint(Min);
+            writer.WriteUint(N);
+            writer.WriteUint(Max);
+            return writer;
         }
     }
 }

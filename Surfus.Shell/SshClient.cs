@@ -2,6 +2,7 @@
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
+using Surfus.Shell.Messages.Channel.Requests;
 using Surfus.Shell.Messages.UserAuth;
 using System;
 using System.Collections.Generic;
@@ -612,15 +613,20 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task WriteMessageAsync(IClientMessage message, CancellationToken cancellationToken)
         {
-            var compressedPayload = ConnectionInfo.WriteCompressionAlgorithm.Compress(message.GetBytes());
-            var sshPacket = new SshPacket(compressedPayload, Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8));
-            ByteWriter.WriteUint(sshPacket.Buffer, 0, ConnectionInfo.OutboundPacketSequence);
-            var encryptedData = ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
-            await _tcpStream.WriteAsync(encryptedData.Array, encryptedData.Offset, encryptedData.Count, cancellationToken).ConfigureAwait(false);
+            // TODO: Fix compressedPayload! var compressedPayload = ConnectionInfo.WriteCompressionAlgorithm.Compress(message.GetBytes());
+            var sshPacket = new SshPacket(message.GetByteWriter(), Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8));
+            ByteWriter.WriteUint(sshPacket.Buffer, SshPacket.SequenceIndex, ConnectionInfo.OutboundPacketSequence);
+            byte[] macOutput = null;
+            if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
+            {
+                macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
+            }
+
+            ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
+            await _tcpStream.WriteAsync(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length, cancellationToken).ConfigureAwait(false);
 
             if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
             {
-                var macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
                 await _tcpStream.WriteAsync(macOutput, 0, ConnectionInfo.WriteMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
             }
 

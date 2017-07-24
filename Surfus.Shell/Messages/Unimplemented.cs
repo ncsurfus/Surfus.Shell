@@ -28,5 +28,11 @@ namespace Surfus.Shell.Messages
             writer.WriteUint(PacketSequenceNumber);
             return writer.Bytes;
         }
+        public ByteWriter GetByteWriter()
+        {
+            var writer = new ByteWriter(Type, 4);
+            writer.WriteUint(PacketSequenceNumber);
+            return writer;
+        }
     }
 }
