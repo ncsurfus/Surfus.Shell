@@ -33,16 +33,16 @@ namespace Surfus.Shell.MessageAuthentication
             return _macProvider.ComputeHash(sshPacket.Buffer, 0, sshPacket.Length + 4);
         }
 
-        public override bool VerifyMac(byte[] expectedMac, uint sequenceNumber, SshPacket sshPacket)
+        public override bool VerifyMac(uint sequenceNumber, SshPacket sshPacket)
         {
             var computedMac = ComputeHash(sequenceNumber, sshPacket);
-            if(expectedMac != computedMac)
+            if (computedMac.Length < OutputSize)
             {
                 return false;
             }
-            for (int i = 0; i != expectedMac.Length; i++)
+            for (int i = 0; i != OutputSize; i++)
             {
-                if(expectedMac[i] != computedMac[i])
+                if (sshPacket.Buffer[sshPacket.Buffer.Length - i] != computedMac[i])
                 {
                     return false;
                 }

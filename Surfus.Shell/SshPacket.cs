@@ -27,7 +27,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The length of the buffer.
         /// </summary>
-        internal readonly int Length;
+        internal int Length;
 
         /// <summary>
         /// The offset of the buffer. Hardcoded to 4 to represent the space allocated for the packet sequence identifier.
@@ -97,19 +97,18 @@ namespace Surfus.Shell
         /// Constructs an SSH Packet from incoming data.
         /// </summary>
         /// <param name="buffer"></param>
-        internal SshPacket(byte[] buffer)
+        internal SshPacket(byte[] buffer, bool withHmac = false, int hmacSize = 0)
         {
             // An extra 4 bytes were allocated at the start of the packet for the MAC.
             // First 4 bytes of buffer is the size.
             // The 5th byte (index 4) is the amount of padding.
             // The 6th byte (index 5) is the start of the payload.
             // The total size of the payload is BufferSize - 4 (Packet Length Bytes) - 1 (Padding Size Byte) - Padding Size
-            // Extra bytes were allocated at the end for the MAC.
             Buffer = buffer;
             Reader = new ByteReader(Buffer, 9);
 
             // The Packet Sequence Identifier isn't part of the actual length.
-            Length = Buffer.Length - 4;
+            Length = withHmac ? Buffer.Length - 4 - hmacSize : Buffer.Length - 4;
         }
     }
 }

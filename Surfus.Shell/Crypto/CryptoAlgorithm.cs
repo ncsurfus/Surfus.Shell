@@ -94,6 +94,6 @@ namespace Surfus.Shell.Crypto
         /// <returns>
         /// The SSH Packet.
         /// </returns>
-        internal abstract Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, CancellationToken cancellationToken);
+        internal abstract Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, int macSize, CancellationToken cancellationToken);
     }
 }
