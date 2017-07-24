@@ -51,8 +51,10 @@ namespace Surfus.Shell.Crypto
         /// <param name="networkStream">The underlying TCP network stream.</param>
         /// <param name="cancellationToken">The cancellation token used to cancel the task.</param>
         /// <returns></returns>
-        internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, CancellationToken cancellationToken)
-        {
+        internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, int macSize, CancellationToken cancellationToken)
+        { 
+            // HMAC is 0 when NoCrypto.
+
             var bufferFree = _buffer.Length - _writePosition;
             if (_writePosition - _readPosition < 4 && bufferFree < 4) // Check if there is enough room in the buffer to read or store a 4 byte packet length;
             {

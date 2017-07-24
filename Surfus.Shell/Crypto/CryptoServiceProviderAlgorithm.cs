@@ -125,7 +125,7 @@ namespace Surfus.Shell.Crypto
         /// <returns>
         /// The SSH Packet.
         /// </returns>
-        internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, CancellationToken cancellationToken)
+        internal async Task<SshPacket> ReadPacketAsync2(NetworkStream networkStream, CancellationToken cancellationToken)
         {
             var initialOutput = await ReadBlocks(networkStream, 1, cancellationToken).ConfigureAwait(false);
             var packetLength = ByteReader.ReadUInt32(initialOutput, 0);
@@ -149,89 +149,56 @@ namespace Surfus.Shell.Crypto
             return new SshPacket(new byte[4].Concat(initialOutput).ToArray(), secondaryOutput);
         }
 
-        internal async Task<SshPacket> ReadPacketAsync2(NetworkStream networkStream, SshConnectionInfo connectionInfo, CancellationToken cancellationToken)
+        internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, int macSize, CancellationToken cancellationToken)
         {
-            var bufferFree = _buffer.Length - _writePosition;
-            if (_writePosition - _readPosition < _decryptor.InputBlockSize && bufferFree < _decryptor.InputBlockSize) // Check if there is enough room in the buffer to read or store an input packet;
+            // This code was made assuming the decryption and encryption block sizes are the same!
+            Console.WriteLine("READING PACKET");
+            var blockSize = _decryptor.InputBlockSize;
+            if (_buffer.Length - _readPosition < blockSize) // Check to see if there is a block left to read within the buffer.
             {
-                // Reset buffer to beginning.
-                for (int i = _writePosition; i != bufferFree; i++)
-                {
-                    _buffer[i - _writePosition] = _buffer[_writePosition];
-                }
+                // Shift buffer left.
+                var shiftStart = _readPosition; // Where to start copying the data.
+                var shiftLength = _writePosition - _readPosition; // How much data we should copy.
+                Array.Copy(_buffer, shiftStart, _buffer, 0, shiftLength); // Copying of data
+                _readPosition = 0; // Reseting of values...
+                _writePosition = shiftLength;
+            }
+
+            // Read enough data until we have at least 1 block.
+            while (_writePosition - _readPosition < blockSize)
+            {
+                // Read as much data as possible into the buffer.
+                _writePosition += await networkStream.ReadAsync(_buffer, _writePosition, _buffer.Length - _writePosition, cancellationToken);
+            }
+
+            _decryptor.TransformBlock(_buffer, _readPosition, blockSize, _buffer, _readPosition); // Decrypt the first block in the buffer.
+
+            var sshPacketSize = ByteReader.ReadUInt32(_buffer, _readPosition); // Get packet size...
+            var sshPacket = new byte[4 + 4 + sshPacketSize + macSize]; // Array Length: uint (packetSequenceNumber) + uint (packet size) + packet + hmac size
+            var sshPacketPosition = 4; // Skip first uint - packet sequence number.
+            var bufferedData = Math.Min(sshPacket.Length - sshPacketPosition, _writePosition - _readPosition); // The amount of data to copy over from the buffer.
+            Array.Copy(_buffer, _readPosition, sshPacket, sshPacketPosition, bufferedData); // Copy data from buffer to sshPacket.
+            _readPosition += bufferedData;
+            sshPacketPosition += bufferedData;
+
+            while (sshPacketPosition != sshPacket.Length) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
+            {
+                sshPacketPosition += await networkStream.ReadAsync(sshPacket, sshPacketPosition, sshPacket.Length - sshPacketPosition, cancellationToken);
+            }
+
+            if(sshPacketSize > blockSize) // Check if this was more than a single block..
+            {
+                // Decrypt everything except the first block as that was already decrypted!
+                _decryptor.TransformBlock(sshPacket, 4 + blockSize, sshPacket.Length - 4 - blockSize - macSize, sshPacket, 4 + blockSize);
+            }
+           
+            if (_readPosition == _writePosition)
+            {
                 _readPosition = 0;
-                _writePosition = bufferFree;
+                _writePosition = 0;
             }
 
-            while (_writePosition - _readPosition < _decryptor.InputBlockSize) // Read data until we have at least 4 bytes..
-            {
-                var bytesRead = await networkStream.ReadAsync(_buffer, _writePosition, _buffer.Length - _writePosition, cancellationToken);
-                _writePosition += bytesRead;
-            }
-
-            if (_decryptor.InputBlockSize != _decryptor.OutputBlockSize) // Move this check to when the decyptor is constructed.
-            {
-                throw new NotSupportedException("InputBlockSize must not be smaller than the output block size!");
-            }
-
-            // Decrypt first packet so we can get the length
-            _decryptor.TransformBlock(_buffer, _readPosition, _decryptor.InputBlockSize, _buffer, _readPosition);
-
-            var unencryptedLength = ByteReader.ReadUInt32(_buffer, _readPosition) + 4; // Get size of packet + packet length integer
-            var encryptedLength = (int)((unencryptedLength / _decryptor.OutputBlockSize) * _decryptor.InputBlockSize) - _decryptor.InputBlockSize;
-            if (unencryptedLength > 35004) throw new InvalidOperationException($"Packet length is too large {unencryptedLength}");
-
-            // Check to see if we can fit the entire packet in our buffer. If so, read the entire packet into the buffer.
-            if (_buffer.Length - _writePosition >= encryptedLength - (_writePosition - _readPosition))
-            {
-                while (_writePosition - _readPosition < encryptedLength) // Read until the data left to read 
-                {
-                    var bytesRead = await networkStream.ReadAsync(_buffer, _writePosition, _buffer.Length - _writePosition, cancellationToken);
-                    _writePosition += bytesRead;
-                }
-
-                // Get the packet out of the buffer.
-                // The contents of _buffer *will* change, so we *must* allocate a new buffer that includes the packet length.
-                var fullPacket = new byte[unencryptedLength];
-                // Copy our first unencrypted packet and then decrypt the rest of the packet to our array.
-                Array.Copy(_buffer, _readPosition, fullPacket, 0, _decryptor.OutputBlockSize);
-                
-                // If we had less data than we put in, let's adjust the reading position.
-                _readPosition += _decryptor.InputBlockSize - _decryptor.OutputBlockSize;
-                _decryptor.TransformBlock(_buffer, _readPosition, encryptedLength, fullPacket, _decryptor.OutputBlockSize);
-                _readPosition += encryptedLength;
-
-                // TODO: Need to verify MAC here!
-                return new SshPacket(fullPacket);
-            }
-
-            // The data is to big to be stored completely in the rest of our buffer.
-            // Create an array the size of the *encryptedLength* (which must be larger or equal to our unencrypted length!)
-            // We will ignore anything extra later on.
-            var bigPacket = new byte[encryptedLength];
-
-            // Copy our first unencrypted packet
-            Array.Copy(_buffer, _readPosition, bigPacket, 0, _decryptor.OutputBlockSize);
-            var position = _decryptor.OutputBlockSize;
-
-            if(_readPosition + _decryptor.InputBlockSize != _writePosition) // Check if there is more data in the buffer than just the first block.
-            {
-                // Let's decrypt it over to our new buffer.
-                position += _decryptor.TransformBlock(_buffer, _readPosition + _decryptor.InputBlockSize, _writePosition - _readPosition - _decryptor.InputBlockSize, bigPacket, position);
-            }
-
-            var unencryptedPosition = position;
-            while (position != unencryptedLength) // Copy the rest of our data into our new buffer (leave it encrypted)
-            {
-                var bytesRead = await networkStream.ReadAsync(bigPacket, position, bigPacket.Length - position, cancellationToken);
-                position += bytesRead;
-            }
-           unencryptedPosition += _decryptor.TransformBlock(bigPacket, unencryptedPosition, position - unencryptedPosition, bigPacket, unencryptedPosition);
-            
-            // TODO: Need to verify MAC here!
-            _readPosition = 0;
-            _writePosition = 0;
-            return new SshPacket(bigPacket);
+            return new SshPacket(sshPacket, true, macSize);
         }
 
         /// <summary>

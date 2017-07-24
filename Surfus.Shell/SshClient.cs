@@ -441,7 +441,7 @@ namespace Surfus.Shell
             var cancelRead = new TaskCompletionSource<bool>();
             using (cancellationToken.Register(() => cancelRead.SetResult(true)))
             {
-                var sshPacketTask = ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(_tcpStream, cancellationToken);
+                var sshPacketTask = ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(_tcpStream, ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken);
                 var readPacket = await Task.WhenAny(cancelRead.Task, sshPacketTask).ConfigureAwait(false);
 
                 if(readPacket == cancelRead.Task)
@@ -453,8 +453,7 @@ namespace Surfus.Shell
 
                 if (ConnectionInfo.ReadMacAlgorithm.OutputSize != 0)
                 {
-                    var messageAuthenticationHash = await _tcpStream.ReadBytesAsync((uint)ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
-                    if (!ConnectionInfo.ReadMacAlgorithm.VerifyMac(messageAuthenticationHash, ConnectionInfo.InboundPacketSequence, sshPacket))
+                    if (!ConnectionInfo.ReadMacAlgorithm.VerifyMac(ConnectionInfo.InboundPacketSequence, sshPacket))
                     {
                         throw new SshException("The server sent a malformed message.");
                     }
@@ -623,7 +622,6 @@ namespace Surfus.Shell
 
             if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
             {
-
                 var macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
                 await _tcpStream.WriteAsync(macOutput, 0, ConnectionInfo.WriteMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
             }

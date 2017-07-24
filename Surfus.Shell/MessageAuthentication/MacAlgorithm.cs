@@ -11,7 +11,7 @@ namespace Surfus.Shell.MessageAuthentication
         public abstract void Initialize(byte[] key);
 
         public abstract byte[] ComputeHash(uint sequenceNumber, SshPacket sshPacket);
-        public abstract bool VerifyMac(byte[] expectedMac, uint sequenceNumber, SshPacket sshPacket);
+        public abstract bool VerifyMac(uint sequenceNumber, SshPacket sshPacket);
 
         public static MacAlgorithm Create(string name)
         {

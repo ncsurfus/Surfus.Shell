@@ -15,9 +15,9 @@
             return new byte[] { };
         }
 
-        public override bool VerifyMac(byte[] expectedMac, uint sequenceNumber, SshPacket sshPacket)
+        public override bool VerifyMac(uint sequenceNumber, SshPacket sshPacket)
         {
-            return expectedMac.Length != 0;
+            return true;
         }
     }
 }
