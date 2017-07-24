@@ -28,7 +28,6 @@ namespace Surfus.Shell.MessageAuthentication
 
         public override byte[] ComputeHash(uint sequenceNumber, SshPacket sshPacket)
         {
-            ByteWriter.WriteUint(sshPacket.Buffer, 0, sequenceNumber);
             return _macProvider.ComputeHash(sshPacket.Buffer, 0, sshPacket.Length + 4);
         }
 
