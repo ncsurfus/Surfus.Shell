@@ -441,7 +441,7 @@ namespace Surfus.Shell
             var cancelRead = new TaskCompletionSource<bool>();
             using (cancellationToken.Register(() => cancelRead.SetResult(true)))
             {
-                var sshPacketTask = ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(_tcpStream, ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken);
+                var sshPacketTask = ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(_tcpStream, ConnectionInfo.InboundPacketSequence, ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken);
                 var readPacket = await Task.WhenAny(cancelRead.Task, sshPacketTask).ConfigureAwait(false);
 
                 if(readPacket == cancelRead.Task)
