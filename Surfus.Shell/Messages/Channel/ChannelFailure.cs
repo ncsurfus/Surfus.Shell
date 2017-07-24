@@ -21,13 +21,6 @@ namespace Surfus.Shell.Messages.Channel
         public MessageType Type { get; } = MessageType.SSH_MSG_CHANNEL_FAILURE;
         public byte MessageId => (byte)Type;
 
-        public byte[] GetBytes()
-        {
-            var writer = new ByteWriter(5);
-            writer.WriteByte(MessageId);
-            writer.WriteUint(RecipientChannel);
-            return writer.Bytes;
-        }
         public ByteWriter GetByteWriter()
         {
             var writer = new ByteWriter(Type, 4);

@@ -60,18 +60,6 @@ namespace Surfus.Shell.Messages
         /// Gets the unencrypted SSH packet bytes.
         /// </summary>
         /// <returns></returns>
-        public byte[] GetBytes()
-        {
-            var size = 1 + 4 + Description.GetStringSize() + LanguageTag.GetStringSize();
-
-            var writer = new ByteWriter(size);
-            writer.WriteByte(MessageId);
-            writer.WriteUint(ReasonId);
-            writer.WriteString(Description);
-            writer.WriteString(LanguageTag);
-
-            return writer.Bytes;
-        }
         public ByteWriter GetByteWriter()
         {
             var writer = new ByteWriter(Type, 4 + Description.GetStringSize() + LanguageTag.GetStringSize());

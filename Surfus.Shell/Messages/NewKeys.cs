@@ -8,12 +8,6 @@ namespace Surfus.Shell.Messages
         public MessageType Type { get; } = MessageType.SSH_MSG_NEWKEYS;
         public byte MessageId => (byte)Type;
 
-        public byte[] GetBytes()
-        {
-            var writer = new ByteWriter(1);
-            writer.WriteByte(MessageId);
-            return writer.Bytes;
-        }
         public ByteWriter GetByteWriter()
         {
             var writer = new ByteWriter(Type, 0);

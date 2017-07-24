@@ -25,15 +25,6 @@ namespace Surfus.Shell.Messages.Channel
         public MessageType Type { get; } = MessageType.SSH_MSG_CHANNEL_WINDOW_ADJUST;
         public byte MessageId => (byte)Type;
 
-        public byte[] GetBytes()
-        {
-            var writer = new ByteWriter(9);
-            writer.WriteByte(MessageId);
-            writer.WriteUint(RecipientChannel);
-            writer.WriteUint(BytesToAdd);
-            return writer.Bytes;
-        }
-
         public ByteWriter GetByteWriter()
         {
             var writer = new ByteWriter(Type, 8);

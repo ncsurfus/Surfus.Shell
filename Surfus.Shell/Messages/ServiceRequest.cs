@@ -16,14 +16,6 @@ namespace Surfus.Shell.Messages
         public MessageType Type { get; } = MessageType.SSH_MSG_SERVICE_REQUEST;
         public byte MessageId => (byte)Type;
 
-        public byte[] GetBytes()
-        {
-            var size = 1 + ServiceName.GetStringSize();
-            var writer = new ByteWriter(size);
-            writer.WriteByte(MessageId);
-            writer.WriteString(ServiceName);
-            return writer.Bytes;
-        }
         public ByteWriter GetByteWriter()
         {
             var writer = new ByteWriter(Type, ServiceName.GetStringSize());

@@ -6,8 +6,6 @@
         /// Gets the unencrypted SSH packet bytes.
         /// </summary>
         /// <returns></returns>
-        byte[] GetBytes();
-
         ByteWriter GetByteWriter();
     }
 }

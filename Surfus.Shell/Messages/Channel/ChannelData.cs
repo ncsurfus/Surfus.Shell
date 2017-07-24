@@ -27,25 +27,12 @@ namespace Surfus.Shell.Messages.Channel
         public MessageType Type { get; } = MessageType.SSH_MSG_CHANNEL_DATA;
         public byte MessageId => (byte)Type;
 
-        public byte[] GetBytes()
-        {
-            var writer = new ByteWriter(1 + 4 + Data.GetBinaryStringSize());
-            writer.WriteByte(MessageId);
-            writer.WriteUint(RecipientChannel);
-            writer.WriteBinaryString(Data);
-            return writer.Bytes;
-        }
         public ByteWriter GetByteWriter()
         {
             var writer = new ByteWriter(Type, 4 + Data.GetBinaryStringSize());
             writer.WriteUint(RecipientChannel);
             writer.WriteBinaryString(Data);
             return writer;
-        }
-
-        public void ResizeData(int length)
-        {
-            Array.Resize(ref _data, length);
         }
     }
 }

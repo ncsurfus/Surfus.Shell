@@ -49,7 +49,7 @@ namespace Surfus.Shell
         /// <summary>
         /// A callback once data is received.
         /// </summary>
-        internal Action<byte[]> OnDataReceived;
+        internal Action<byte[], int, int> OnDataReceived;
 
         /// <summary>
         /// A callback when a channel end of file is received.
@@ -263,10 +263,6 @@ namespace Surfus.Shell
             }
 
             var length = message.Data.Length > ReceiveWindow ? ReceiveWindow : message.Data.Length;
-            if (length != message.Data.Length)
-            {
-                message.ResizeData(length);
-            }
 
             ReceiveWindow -= length;
 
@@ -276,7 +272,7 @@ namespace Surfus.Shell
                 ReceiveWindow += WindowRefill;
             }
 
-            OnDataReceived?.Invoke(message.Data);
+            OnDataReceived?.Invoke(message.Data, 0, length);
         }
 
         /// <summary>

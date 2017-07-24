@@ -21,14 +21,6 @@ namespace Surfus.Shell.Messages
         public MessageType Type { get; } = MessageType.SSH_MSG_IGNORE;
         public byte MessageId => (byte)Type;
 
-        public byte[] GetBytes()
-        {
-            var size = 1 + Data.GetStringSize();
-            var writer = new ByteWriter(size);
-            writer.WriteByte(MessageId);
-            writer.WriteString(Data);
-            return writer.Bytes;
-        }
         public ByteWriter GetByteWriter()
         {
             var writer = new ByteWriter(Type, Data.GetStringSize());

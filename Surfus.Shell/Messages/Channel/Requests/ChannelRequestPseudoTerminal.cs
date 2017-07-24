@@ -29,18 +29,6 @@ namespace Surfus.Shell.Messages.Channel.Requests
         public uint TerminalHeightPixels { get; } = 480;
         public byte[] TerminalModes { get; } = {};
 
-        public override byte[] GetBytes()
-        {
-            var writer = GetByteWriterBuffered(GetBaseSize() + TermEnvironment.GetStringSize() + 16 + TerminalModes.GetBinaryStringSize());
-            writer.WriteString(TermEnvironment);
-            writer.WriteUint(TerminalWidthCharacters);
-            writer.WriteUint(TerminalHeightRows);
-            writer.WriteUint(TerminalWidthPixels);
-            writer.WriteUint(TerminalHeightPixels);
-            writer.WriteBinaryString(TerminalModes);
-            return writer.Bytes;
-        }
-
         public override ByteWriter GetByteWriter()
         {
             var writer = GetByteWriter(TermEnvironment.GetStringSize() + 16 + TerminalModes.GetBinaryStringSize());

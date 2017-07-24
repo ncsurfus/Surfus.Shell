@@ -17,12 +17,6 @@ namespace Surfus.Shell.Messages.Channel.Requests
 
         public uint ExitStatus { get; }
 
-        public override byte[] GetBytes()
-        {
-            var writer = GetByteWriterBuffered(GetBaseSize() + 4);
-            writer.WriteUint(ExitStatus);
-            return writer.Bytes;
-        }
         public override ByteWriter GetByteWriter()
         {
             var writer = GetByteWriter(4);
