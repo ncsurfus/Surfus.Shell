@@ -10,6 +10,26 @@ namespace Surfus.Shell
     public class SshPacket
     {
         /// <summary>
+        /// The index of the sequence number for all packets.
+        /// </summary>
+        internal const int SequenceIndex = 0;
+
+        /// <summary>
+        /// The index of the packet size for all packets.
+        /// </summary>
+        internal const int PacketSizeIndex = 4;
+
+        /// <summary>
+        /// The index of the padding byte for all packets.
+        /// </summary>
+        internal const int PaddingByteIndex = 8;
+
+        /// <summary>
+        /// The index of when the packet data begins for all packets.
+        /// </summary>
+        internal const int DataIndex = 8;
+
+        /// <summary>
         /// A random number generator used to generate padding.
         /// </summary>
         private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
@@ -39,14 +59,47 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="compressedPayload">The compressed payload.</param>
         /// <param name="paddingMultiplier">The padding multipler.</param>
+        internal SshPacket(ByteWriter compressedPayload, int paddingMultiplier)
+        {
+            // Generate padding
+            var paddingLength = -((5 + compressedPayload.DataLength) % paddingMultiplier) + paddingMultiplier * 2;
+            paddingLength = paddingLength <= 255 ? paddingLength : paddingLength - paddingMultiplier;
+            var padding = new byte[paddingLength];
+            RandomGenerator.GetBytes(padding); // TODO: On switch to .NET Standard 2.0, we can write directly to the buffer.
+
+            // Add 4 for the MAC authentication packet sequence number.
+            // Offset everything by 4...
+            Buffer = compressedPayload.Bytes;
+
+            // Write Packet Length into 'Raw'
+            var length = (uint)(compressedPayload.DataLength + padding.Length + 1);
+            ByteWriter.WriteUint(Buffer, PacketSizeIndex, length);
+
+            // Write Padding Length into 'Raw'
+            Buffer[PaddingByteIndex] = (byte)padding.Length;
+
+            // Write Padding into 'Raw'
+            Array.Copy(padding, 0, Buffer, compressedPayload.PaddingIndex, padding.Length);
+
+            Reader = new ByteReader(Buffer, 9);
+
+            // The Packet Sequence Identifier isn't part of the actual length.
+            Offset = 4;
+            Length = compressedPayload.PaddingIndex + padding.Length - 4; // Everything is valid *except* for the first 4 bytes and any unused padding.
+        }
+
+        /// <summary>
+        /// Constructs an SSH Packet from the compressed payload and padding multiplier. Used to write a packet.
+        /// </summary>
+        /// <param name="compressedPayload">The compressed payload.</param>
+        /// <param name="paddingMultiplier">The padding multipler.</param>
         internal SshPacket(byte[] compressedPayload, int paddingMultiplier)
         {
             // Generate padding
             var paddingLength = -((5 + compressedPayload.Length) % paddingMultiplier) + paddingMultiplier * 2;
-            var padding = new byte[paddingLength <= 255 ? paddingLength : paddingLength - paddingMultiplier];
-            RandomGenerator.GetBytes(padding);
-
-            if (padding.Length > byte.MaxValue) throw new ArgumentException($"{nameof(padding)} cannot be greater than {byte.MaxValue}");
+            paddingLength = paddingLength <= 255 ? paddingLength : paddingLength - paddingMultiplier;
+            var padding = new byte[paddingLength];
+            RandomGenerator.GetBytes(padding); // TODO: On switch to .NET Standard 2.0, we can write directly to the buffer.
 
             // Add 4 for the MAC authentication packet sequence number.
             // Offset everything by 4...
@@ -54,7 +107,7 @@ namespace Surfus.Shell
 
             // Write Packet Length into 'Raw'
             var length = (uint)(compressedPayload.Length + padding.Length + 1);
-            Array.Copy(length.GetBigEndianBytes(), 0, Buffer, 4, 4);
+            ByteWriter.WriteUint(Buffer, 4, length);
 
             // Write Padding Length into 'Raw'
             Buffer[8] = (byte)padding.Length;

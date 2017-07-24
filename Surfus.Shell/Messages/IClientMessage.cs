@@ -7,5 +7,7 @@
         /// </summary>
         /// <returns></returns>
         byte[] GetBytes();
+
+        ByteWriter GetByteWriter();
     }
 }

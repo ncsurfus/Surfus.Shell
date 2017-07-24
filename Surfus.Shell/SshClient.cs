@@ -613,9 +613,7 @@ namespace Surfus.Shell
         internal async Task WriteMessageAsync(IClientMessage message, CancellationToken cancellationToken)
         {
             var compressedPayload = ConnectionInfo.WriteCompressionAlgorithm.Compress(message.GetBytes());
-            var sshPacket = new SshPacket(compressedPayload,
-                    ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize > 8
-                    ? ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize : 8);
+            var sshPacket = new SshPacket(compressedPayload, Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8));
             ByteWriter.WriteUint(sshPacket.Buffer, 0, ConnectionInfo.OutboundPacketSequence);
             var encryptedData = ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
             await _tcpStream.WriteAsync(encryptedData.Array, encryptedData.Offset, encryptedData.Count, cancellationToken).ConfigureAwait(false);
