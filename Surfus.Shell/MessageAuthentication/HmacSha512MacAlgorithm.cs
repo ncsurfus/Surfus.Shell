@@ -38,7 +38,7 @@ namespace Surfus.Shell.MessageAuthentication
             var computedMac = ComputeHash(sequenceNumber, sshPacket);
             for (int i = 0; i != OutputSize; i++)
             {
-                if (sshPacket.Buffer[sshPacket.Buffer.Length - OutputSize + i] != computedMac[i])
+                if (sshPacket.Buffer[sshPacket.Length + 4 + i] != computedMac[i])
                 {
                     return false;
                 }
