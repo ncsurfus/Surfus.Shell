@@ -10,12 +10,12 @@
            
         }
 
-        public override byte[] ComputeHash(uint sequenceNumber, SshPacket sshPacket)
+        public override byte[] ComputeHash(SshPacket sshPacket)
         {
             return null;
         }
 
-        public override bool VerifyMac(uint sequenceNumber, SshPacket sshPacket)
+        public override bool VerifyMac(SshPacket sshPacket)
         {
             return true;
         }

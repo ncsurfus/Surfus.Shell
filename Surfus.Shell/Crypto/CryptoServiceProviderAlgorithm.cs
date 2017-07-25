@@ -118,7 +118,7 @@ namespace Surfus.Shell.Crypto
                 _decryptor.TransformBlock(buffer, 4 + blockSize, bufferLength - 4 - blockSize - hmacSize, buffer, 4 + blockSize);
             }
 
-            return new SshPacket(buffer, 4, bufferLength - 4 - hmacSize);
+            return new SshPacket(buffer, bufferLength - hmacSize, hmacSize);
         }
     }
 }

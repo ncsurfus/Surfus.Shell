@@ -24,17 +24,17 @@ namespace Surfus.Shell.MessageAuthentication
             _macProvider.Initialize();
         }
 
-        public override byte[] ComputeHash(uint sequenceNumber, SshPacket sshPacket)
+        public override byte[] ComputeHash(SshPacket sshPacket)
         {
-            return _macProvider.ComputeHash(sshPacket.Buffer, 0, sshPacket.Length + 4);
+            return _macProvider.ComputeHash(sshPacket.MacVerificationBytes.Array, sshPacket.MacVerificationBytes.Offset, sshPacket.MacVerificationBytes.Count);
         }
 
-        public override bool VerifyMac(uint sequenceNumber, SshPacket sshPacket)
+        public override bool VerifyMac(SshPacket sshPacket)
         {
-            var computedMac = ComputeHash(sequenceNumber, sshPacket);
+            var computedMac = ComputeHash(sshPacket);
             for (int i = 0; i != OutputSize; i++)
             {
-                if (sshPacket.Buffer[sshPacket.Length + 4 + i] != computedMac[i])
+                if (sshPacket.ServerMacResult.Array[sshPacket.ServerMacResult.Offset + i] != computedMac[i])
                 {
                     return false;
                 }

@@ -66,7 +66,7 @@ namespace Surfus.Shell.Crypto
                 bufferPosition += await networkStream.ReadAsync(buffer, bufferPosition, bufferLength - bufferPosition, cancellationToken);
             }
 
-            return new SshPacket(buffer, 4, bufferLength - 4 - hmacSize);
+            return new SshPacket(buffer, bufferLength - hmacSize, hmacSize);
         }
 
         /// <summary>

@@ -44,101 +44,108 @@ namespace Surfus.Shell
         internal readonly byte[] Buffer;
 
         /// <summary>
-        /// The length of the buffer.
+        /// The range of bytes in the SshPacket that make up the packet payload.
         /// </summary>
-        internal int Length;
+        internal ArraySegment<byte> Payload { get; }
 
         /// <summary>
-        /// The offset of the buffer. Hardcoded to 4 to represent the space allocated for the packet sequence identifier.
+        /// The range of bytes in the SshPacket that make up the actual packet.
+        /// When writing this does not include our message authentication code.
+        /// When reading this does include the server's Message authentication code.
         /// </summary>
-        internal readonly int Offset;
+        internal ArraySegment<byte> Packet { get; }
+
+        /// <summary>
+        /// The range of bytes in the SshPacket that should be used to calculate the message authentication code.
+        /// </summary>
+        internal ArraySegment<byte> MacVerificationBytes { get; }
+
+        /// <summary>
+        /// The server's message authentication code.
+        /// This 
+        /// </summary>
+        internal ArraySegment<byte> ServerMacResult { get; }
 
         /// <summary>
         /// Constructs an SSH Packet from the compressed payload and padding multiplier. Used to write a packet.
         /// </summary>
         /// <param name="compressedPayload">The compressed payload.</param>
-        /// <param name="paddingMultiplier">The padding multipler.</param>
-        internal SshPacket(ByteWriter compressedPayload, int paddingMultiplier)
+        /// <param name="blockSize">The block used used to determine the padding. Must be at least 8.</param>
+        internal SshPacket(ByteWriter payload, int blockSize, uint sequenceNumber)
         {
-            // Generate padding
-            var paddingLength = -((5 + compressedPayload.DataLength) % paddingMultiplier) + paddingMultiplier * 2;
-            paddingLength = paddingLength <= 255 ? paddingLength : paddingLength - paddingMultiplier;
-            var padding = new byte[paddingLength];
+            // Generate padding to make the packet perfectly divisiblie by the block size.
+            // uint (length) + byte (padding length) + payload + padding % blockSize = 0.
+            var padding = new byte[(2 * blockSize) - ((5 + payload.DataLength) % blockSize)];
             RandomGenerator.GetBytes(padding); // TODO: On switch to .NET Standard 2.0, we can write directly to the buffer.
 
             // Add 4 for the MAC authentication packet sequence number.
             // Offset everything by 4...
-            Buffer = compressedPayload.Bytes;
+            Buffer = payload.Bytes;
 
-            // Write Packet Length into 'Raw'
-            var length = (uint)(compressedPayload.DataLength + padding.Length + 1);
+            // Write packet length
+            var length = (uint)(payload.DataLength + padding.Length + 1);
             ByteWriter.WriteUint(Buffer, PacketSizeIndex, length);
+
+            // Write sequence number
+            ByteWriter.WriteUint(Buffer, SequenceIndex, sequenceNumber);
 
             // Write Padding Length into 'Raw'
             Buffer[PaddingByteIndex] = (byte)padding.Length;
 
             // Write Padding into 'Raw'
-            Array.Copy(padding, 0, Buffer, compressedPayload.PaddingIndex, padding.Length);
+            Array.Copy(padding, 0, Buffer, payload.PaddingIndex, padding.Length);
 
-            Reader = new ByteReader(Buffer, DataIndex);
+            // Payload offset skips (uint)sequence + (uint)size + (byte)padding length.
+            // Payload length is the size of the compressedPayload.
+            Payload = new ArraySegment<byte>(Buffer, 4 + 4 + 1, payload.DataLength);
 
-            // The Packet Sequence Identifier isn't part of the actual length.
-            Offset = 4;
-            Length = compressedPayload.PaddingIndex + paddingLength - 4; // Everything is valid *except* for the first 4 bytes and any unused padding.
-        }
+            // Packet offset skips (uint)sequence
+            // Packet length is the (uint)size + (byte)padding length + (byte[])payload + (byte[])padding. 
+            Packet = new ArraySegment<byte>(Buffer, 4, 4 + 1 + payload.DataLength + padding.Length);
 
-        /// <summary>
-        /// Constructs an SSH Packet from the compressed payload and padding multiplier. Used to write a packet.
-        /// </summary>
-        /// <param name="compressedPayload">The compressed payload.</param>
-        /// <param name="paddingMultiplier">The padding multipler.</param>
-        internal SshPacket(byte[] compressedPayload, int paddingMultiplier)
-        {
-            // Generate padding
-            var paddingLength = -((5 + compressedPayload.Length) % paddingMultiplier) + paddingMultiplier * 2;
-            paddingLength = paddingLength <= 255 ? paddingLength : paddingLength - paddingMultiplier;
-            var padding = new byte[paddingLength];
-            RandomGenerator.GetBytes(padding); // TODO: On switch to .NET Standard 2.0, we can write directly to the buffer.
+            // MacVerificatonBytes offset skips nothing.
+            // MacVerificatonBytes length is the (uint) sequence + (uint)size + (byte)padding length + (byte[])payload + (byte[])padding. 
+            MacVerificationBytes = new ArraySegment<byte>(Buffer, 0, 4 + 4 + 1 + payload.DataLength + padding.Length);
 
-            // Add 4 for the MAC authentication packet sequence number.
-            // Offset everything by 4...
-            Buffer = new byte[4 + 5 + compressedPayload.Length + padding.Length];
+            // There is no server Mac result. This is a client packet, and the computation always produces a new array, so it doesn't make sense to copy it here.
 
-            // Write Packet Length into 'Raw'
-            var length = (uint)(compressedPayload.Length + padding.Length + 1);
-            ByteWriter.WriteUint(Buffer, 4, length);
-
-            // Write Padding Length into 'Raw'
-            Buffer[8] = (byte)padding.Length;
-
-            // Write Payload into 'Raw'
-            Array.Copy(compressedPayload, 0, Buffer, 9, compressedPayload.Length);
-
-            // Write Padding into 'Raw'
-            Array.Copy(padding, 0, Buffer, 9 + compressedPayload.Length, padding.Length);
-
-            Reader = new ByteReader(Buffer, 9);
-
-            // The Packet Sequence Identifier isn't part of the actual length.
-            Offset = 4;
-            Length = Buffer.Length - 4;
+            // This packet wont be read, but for consistency the read will be set to the payload offset.
+            Reader = new ByteReader(Buffer, Payload.Offset);
         }
 
         /// <summary>
         /// Constructs an SSH Packet from incoming data.
         /// </summary>
         /// <param name="buffer"></param>
-        internal SshPacket(byte[] buffer, int packetStart, int packetLength)
+        internal SshPacket(byte[] buffer, int packetLength, int hmacSize)
         {
-            // An extra 4 bytes were allocated at the start of the packet for the HMAC.
-            // First 4 bytes of buffer is the size.
-            // The 5th byte (index 4) is the amount of padding.
-            // The 6th byte (index 5) is the start of the payload.
-            // The total size of the payload is BufferSize - 4 (Packet Length Bytes) - 1 (Padding Size Byte) - Padding Size
+            // The full buffer length is packetLength + hmacSize. The actual length property on the buffer may be larger!
+            // 
+            // This packet was read from the server. Description of this is below.
+            // 4 bytes (uint) is the inbound packet number. This wasn't sent by the server, but we use it to calculate the message authentication code.
+            // 4 bytes (uint) is the packet size, sent by the server.
+            // 1 byte (byte) is the amount of padding.
+            // n bytes where n = (packet size, defined above) is size of the payload and padding.
+            // n bytes where n = (hmacSize) is the server's calculated message authentication code.
+            // packetLength is the size of everything except the hmac.
+
             Buffer = buffer;
-            Reader = new ByteReader(Buffer, 5 + packetStart); // Start reading after the first 5 bytes of the packet (skipping the packet length and padding amount)
-            Offset = packetStart;
-            Length = packetLength;
+            Reader = new ByteReader(Buffer, 9); // Start reading after the first 5 bytes of the packet (skipping the packet length and padding amount)
+
+            // Payload offset skips (uint)sequence + (uint)size + (byte)padding length.
+            // Payload length = packet length - (uint)sequence + (uint)size + (byte)padding length.
+            Payload = new ArraySegment<byte>(Buffer, 4 + 4 + 1, packetLength - 4 - 4 - 1);
+
+            // Packet offset skips (uint)sequence
+            // Packet length = packet length - (uint)sequence.
+            Packet = new ArraySegment<byte>(Buffer, 4, packetLength - 4);
+
+            // MacVerificatonBytes offset skips nothing.
+            // MacVerificatonBytes length = packet length.
+            MacVerificationBytes = new ArraySegment<byte>(Buffer, 0, packetLength);
+
+            // Server MAC result skips the entire packet as the mac is at the end.
+            ServerMacResult = new ArraySegment<byte>(Buffer, packetLength, hmacSize);
         }
     }
 }

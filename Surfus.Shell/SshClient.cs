@@ -451,7 +451,7 @@ namespace Surfus.Shell
 
                 if (ConnectionInfo.ReadMacAlgorithm.OutputSize != 0)
                 {
-                    if (!ConnectionInfo.ReadMacAlgorithm.VerifyMac(ConnectionInfo.InboundPacketSequence, sshPacket))
+                    if (!ConnectionInfo.ReadMacAlgorithm.VerifyMac(sshPacket))
                     {
                         throw new SshException("The server sent a malformed message.");
                     }
@@ -610,16 +610,19 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task WriteMessageAsync(IClientMessage message, CancellationToken cancellationToken)
         {
-            // TODO: Fix compressedPayload! var compressedPayload = ConnectionInfo.WriteCompressionAlgorithm.Compress(message.GetBytes());
-            // We don't actually support compression though... so no rush...
-            var sshPacket = new SshPacket(message.GetByteWriter(), Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8));
-            ByteWriter.WriteUint(sshPacket.Buffer, SshPacket.SequenceIndex, ConnectionInfo.OutboundPacketSequence);
-            byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
+            // Get the packet.
+            var sshPacket = new SshPacket(message.GetByteWriter(), ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, ConnectionInfo.OutboundPacketSequence);
+            
+            // Produce the message authentication code.
+            byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(sshPacket);
 
-            ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
-            await _tcpStream.WriteAsync(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length, cancellationToken).ConfigureAwait(false);
+            // Encrypt the packet. This will not produce a new array, but the entire packet's lifecycle is within this method.
+            ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Packet.Array, sshPacket.Packet.Offset, sshPacket.Packet.Count);
 
-            if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
+            // Write the packet to the server.
+            await _tcpStream.WriteAsync(sshPacket.Packet.Array, sshPacket.Packet.Offset, sshPacket.Packet.Count, cancellationToken).ConfigureAwait(false);
+
+            if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0) // Don't attempt to write the message authentication code if there is none...
             {
                 await _tcpStream.WriteAsync(macOutput, 0, ConnectionInfo.WriteMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
             }
