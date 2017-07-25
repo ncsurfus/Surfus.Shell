@@ -26,9 +26,9 @@ namespace Surfus.Shell.Messages
 
         internal Disconnect(SshPacket packet)
         {
-            Reason = (DisconnectReason)packet.Reader.ReadUInt32();
-            Description = packet.Reader.ReadString();
-            LanguageTag = packet.Reader.ReadString();
+            Reason = (DisconnectReason)packet.PayloadReader.ReadUInt32();
+            Description = packet.PayloadReader.ReadString();
+            LanguageTag = packet.PayloadReader.ReadString();
         }
 
         internal Disconnect(DisconnectReason disconnectReason, string description, string languageTag = null)

@@ -4,10 +4,10 @@ namespace Surfus.Shell.Messages.Channel
     {
         public ChannelOpenFailure(SshPacket packet)
         {
-            RecipientChannel = packet.Reader.ReadUInt32();
-            ReasonCode = packet.Reader.ReadUInt32();
-            Description = packet.Reader.ReadString();
-            Language = packet.Reader.ReadString();
+            RecipientChannel = packet.PayloadReader.ReadUInt32();
+            ReasonCode = packet.PayloadReader.ReadUInt32();
+            Description = packet.PayloadReader.ReadString();
+            Language = packet.PayloadReader.ReadString();
         }
 
         public uint RecipientChannel { get; }

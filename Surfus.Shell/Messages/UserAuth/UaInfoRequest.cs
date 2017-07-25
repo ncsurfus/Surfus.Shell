@@ -4,16 +4,16 @@ namespace Surfus.Shell.Messages.UserAuth
     {
         public UaInfoRequest(SshPacket packet)
         {
-            Name = packet.Reader.ReadString();
-            Instruction = packet.Reader.ReadString();
-            Language = packet.Reader.ReadString();
-            PromptNumber = packet.Reader.ReadUInt32();
+            Name = packet.PayloadReader.ReadString();
+            Instruction = packet.PayloadReader.ReadString();
+            Language = packet.PayloadReader.ReadString();
+            PromptNumber = packet.PayloadReader.ReadUInt32();
             Prompt = new string[PromptNumber];
             Echo = new bool[PromptNumber];
             for (var i = 0; i != PromptNumber; i++)
             {
-                Prompt[i] = packet.Reader.ReadString();
-                Echo[i] = packet.Reader.ReadBoolean();
+                Prompt[i] = packet.PayloadReader.ReadString();
+                Echo[i] = packet.PayloadReader.ReadBoolean();
             }
         }
         public string Name { get; }

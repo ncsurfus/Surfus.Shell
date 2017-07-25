@@ -4,10 +4,10 @@ namespace Surfus.Shell.Messages.Channel
     {
         public ChannelOpenConfirmation(SshPacket packet)
         {
-            RecipientChannel = packet.Reader.ReadUInt32();
-            SenderChannel = packet.Reader.ReadUInt32();
-            InitialWindowSize = packet.Reader.ReadUInt32();
-            MaximumWindowSize = packet.Reader.ReadUInt32();
+            RecipientChannel = packet.PayloadReader.ReadUInt32();
+            SenderChannel = packet.PayloadReader.ReadUInt32();
+            InitialWindowSize = packet.PayloadReader.ReadUInt32();
+            MaximumWindowSize = packet.PayloadReader.ReadUInt32();
         }
 
         public uint RecipientChannel { get; }

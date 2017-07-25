@@ -4,8 +4,8 @@ namespace Surfus.Shell.Messages.Channel
     {
         public ChannelWindowAdjust(SshPacket packet)
         {
-            RecipientChannel = packet.Reader.ReadUInt32();
-            BytesToAdd = packet.Reader.ReadUInt32();
+            RecipientChannel = packet.PayloadReader.ReadUInt32();
+            BytesToAdd = packet.PayloadReader.ReadUInt32();
         }
 
         public ChannelWindowAdjust(uint recipientChannel, uint bytesToAdd)

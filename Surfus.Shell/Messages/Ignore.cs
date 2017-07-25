@@ -4,7 +4,7 @@ namespace Surfus.Shell.Messages
     {
         public Ignore(SshPacket packet)
         {
-            Data = packet.Reader.ReadString();
+            Data = packet.PayloadReader.ReadString();
         }
 
         public Ignore(string data)

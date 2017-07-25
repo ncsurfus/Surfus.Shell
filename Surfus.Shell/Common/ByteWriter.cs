@@ -88,6 +88,18 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Constructs a ByteWriter and allocates additional data to the buffer to hold the entire packet. The write position is then aligned to where the payload begins.
+        /// </summary>
+        /// <param name="packetSegment">The packet segment to be read.</param>
+        static internal ByteWriter WritePacketPayload(MessageType message, int payloadSize)
+        {
+            return new ByteWriter(payloadSize + 1) // Add additional byte for message type.
+            {
+                Position = 9
+            };
+        }
+
+        /// <summary>
         /// Writes a single byte to the array.
         /// </summary>
         /// <param name="value"></param>

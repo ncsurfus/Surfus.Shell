@@ -23,7 +23,7 @@ namespace Surfus.Shell.Messages
         public MessageEvent(SshPacket packet)
         {
             Packet = packet;
-            TypeId = packet.Reader.ReadByte();
+            TypeId = packet.PayloadReader.ReadByte();
             Type = (MessageType)TypeId;
         }
 

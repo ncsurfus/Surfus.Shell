@@ -4,8 +4,8 @@
     {
         internal DhgGroup(SshPacket packet)
         {
-            P = packet.Reader.ReadBigInteger();
-            G = packet.Reader.ReadBigInteger();
+            P = packet.PayloadReader.ReadBigInteger();
+            G = packet.PayloadReader.ReadBigInteger();
         }
 
         public BigInt P { get; }

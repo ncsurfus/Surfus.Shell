@@ -4,12 +4,12 @@ namespace Surfus.Shell.Messages.Channel.Requests
     {
         public ChannelRequestPseudoTerminal(SshPacket packet, uint recipientChannel) : base(packet, "pty-req", recipientChannel)
         {
-            TermEnvironment = packet.Reader.ReadString();
-            TerminalWidthCharacters = packet.Reader.ReadUInt32();
-            TerminalHeightRows = packet.Reader.ReadUInt32();
-            TerminalWidthPixels = packet.Reader.ReadUInt32();
-            TerminalHeightPixels = packet.Reader.ReadUInt32();
-            TerminalModes = packet.Reader.ReadBinaryString();
+            TermEnvironment = packet.PayloadReader.ReadString();
+            TerminalWidthCharacters = packet.PayloadReader.ReadUInt32();
+            TerminalHeightRows = packet.PayloadReader.ReadUInt32();
+            TerminalWidthPixels = packet.PayloadReader.ReadUInt32();
+            TerminalHeightPixels = packet.PayloadReader.ReadUInt32();
+            TerminalModes = packet.PayloadReader.ReadBinaryString();
         }
 
         public ChannelRequestPseudoTerminal(uint recipientChannel, bool wantReply, string terminalEnvironment, uint terminalCharacters, uint terminalRows) : base(recipientChannel, "pty-req", wantReply)

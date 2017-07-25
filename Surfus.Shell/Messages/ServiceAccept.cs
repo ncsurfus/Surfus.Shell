@@ -4,7 +4,7 @@ namespace Surfus.Shell.Messages
     {
         public ServiceAccept(SshPacket packet)
         {
-            ServiceName = packet.Reader.ReadString();
+            ServiceName = packet.PayloadReader.ReadString();
         }
         public string ServiceName { get; }
 

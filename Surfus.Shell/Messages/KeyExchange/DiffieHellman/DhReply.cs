@@ -4,9 +4,9 @@
     {
         internal DhReply(SshPacket packet)
         {
-            ServerPublicHostKeyAndCertificates = packet.Reader.ReadBinaryString();
-            F = packet.Reader.ReadBigInteger();
-            HSignature = packet.Reader.ReadBinaryString();
+            ServerPublicHostKeyAndCertificates = packet.PayloadReader.ReadBinaryString();
+            F = packet.PayloadReader.ReadBigInteger();
+            HSignature = packet.PayloadReader.ReadBinaryString();
         }
 
         public BigInt F { get; }

@@ -4,7 +4,7 @@ namespace Surfus.Shell.Messages.Channel.Requests
     {
         public ChannelRequestSubsystem(SshPacket packet, uint recipientChannel) : base(packet, "subsystem", recipientChannel)
         {
-            Subsystem = packet.Reader.ReadString();
+            Subsystem = packet.PayloadReader.ReadString();
         }
 
         public ChannelRequestSubsystem(uint recipientChannel, bool wantReply, string subsystem) : base(recipientChannel, "subsysem", wantReply)

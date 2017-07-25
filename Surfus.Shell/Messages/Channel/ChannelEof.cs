@@ -4,7 +4,7 @@ namespace Surfus.Shell.Messages.Channel
     {
         public ChannelEof(SshPacket packet)
         {
-            RecipientChannel = packet.Reader.ReadUInt32();
+            RecipientChannel = packet.PayloadReader.ReadUInt32();
         }
 
         public ChannelEof(uint recipientChannel)

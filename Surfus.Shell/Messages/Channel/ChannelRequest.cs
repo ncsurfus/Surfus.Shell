@@ -8,7 +8,7 @@ namespace Surfus.Shell.Messages.Channel
         {
             RecipientChannel = recipientChannel;
             RequestType = requestType;
-            WantReply = packet.Reader.ReadBoolean();
+            WantReply = packet.PayloadReader.ReadBoolean();
         }
 
         public ChannelRequest(uint recipientChannel, string requestType, bool wantReply)
@@ -33,8 +33,8 @@ namespace Surfus.Shell.Messages.Channel
 
         public static ChannelRequest FromBuffer(SshPacket packet)
         {
-            var recipientChannel = packet.Reader.ReadUInt32();
-            var requestType = packet.Reader.ReadAsciiString();
+            var recipientChannel = packet.PayloadReader.ReadUInt32();
+            var requestType = packet.PayloadReader.ReadAsciiString();
 
             switch (requestType)
             {

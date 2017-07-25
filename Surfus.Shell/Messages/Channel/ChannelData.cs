@@ -4,8 +4,8 @@ namespace Surfus.Shell.Messages.Channel
     {
         public ChannelData(SshPacket packet)
         {
-            RecipientChannel = packet.Reader.ReadUInt32();
-            Data = packet.Reader.ReadBinaryString();
+            RecipientChannel = packet.PayloadReader.ReadUInt32();
+            Data = packet.PayloadReader.ReadBinaryString();
         }
 
         public ChannelData(uint recipientChannel, byte[] data)

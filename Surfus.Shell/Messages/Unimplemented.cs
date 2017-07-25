@@ -4,7 +4,7 @@ namespace Surfus.Shell.Messages
     {
         public Unimplemented(SshPacket packet)
         {
-            PacketSequenceNumber = packet.Reader.ReadUInt32();
+            PacketSequenceNumber = packet.PayloadReader.ReadUInt32();
         }
 
         public Unimplemented(uint packetSequenceNumber)

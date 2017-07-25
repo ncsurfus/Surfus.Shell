@@ -7,9 +7,9 @@ namespace Surfus.Shell.Messages.Channel
         protected ChannelOpen(SshPacket packet, string channelType)
         {
             ChannelType = channelType;
-            SenderChannel = packet.Reader.ReadUInt32();
-            InitialWindowSize = packet.Reader.ReadUInt32();
-            MaximumPacketSize = packet.Reader.ReadUInt32();
+            SenderChannel = packet.PayloadReader.ReadUInt32();
+            InitialWindowSize = packet.PayloadReader.ReadUInt32();
+            MaximumPacketSize = packet.PayloadReader.ReadUInt32();
         }
 
         public ChannelOpen(string channelType, uint senderChannel, uint initialWindowSize = 35000)
@@ -34,7 +34,7 @@ namespace Surfus.Shell.Messages.Channel
 
         public static ChannelOpen FromBuffer(SshPacket packet)
         {
-            var channelType = packet.Reader.ReadAsciiString();
+            var channelType = packet.PayloadReader.ReadAsciiString();
 
             switch (channelType)
             {

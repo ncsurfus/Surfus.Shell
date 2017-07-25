@@ -2,6 +2,7 @@
 using System.Numerics;
 using System.Text;
 using Surfus.Shell.Extensions;
+using Surfus.Shell.Common;
 
 namespace Surfus.Shell
 {
@@ -30,14 +31,15 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Constructs the ByteReader from the byte array.
+        /// Constructs the ByteReader from a PacketSegment.
         /// </summary>
-        /// <param name="bytes">The byte array to be read.</param>
-        /// <param name="index">The index to begin reading at.</param>
-        internal ByteReader(byte[] bytes, int index)
+        /// <param name="packetSegment">The packet segment to be read.</param>
+        static internal ByteReader ReadPacketSegment(PacketSegment packetSegment)
         {
-            Bytes = bytes;
-            Position = index;
+            return new ByteReader(packetSegment.Array)
+            {
+                Position = packetSegment.Offset
+            };
         }
 
         /// <summary>

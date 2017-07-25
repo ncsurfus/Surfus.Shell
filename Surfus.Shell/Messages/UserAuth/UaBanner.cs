@@ -4,8 +4,8 @@ namespace Surfus.Shell.Messages.UserAuth
     {
         public UaBanner(SshPacket packet)
         {
-            Message = packet.Reader.ReadString();
-            LanguageTag = packet.Reader.ReadString();
+            Message = packet.PayloadReader.ReadString();
+            LanguageTag = packet.PayloadReader.ReadString();
         }
 
         public string Message { get; }

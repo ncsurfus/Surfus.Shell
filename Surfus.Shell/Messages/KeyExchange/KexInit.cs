@@ -35,21 +35,21 @@ namespace Surfus.Shell.Messages.KeyExchange
         internal KexInit(SshPacket packet)
         {
             // Backup the start position we can also grab the message id in the segement.
-            var startPosition = packet.Reader.Position - 1;
-            RandomBytes = packet.Reader.Read(16);
-            KexAlgorithms = packet.Reader.ReadNameList();
-            ServerHostKeyAlgorithms = packet.Reader.ReadNameList();
-            EncryptionClientToServer = packet.Reader.ReadNameList();
-            EncryptionServerToClient = packet.Reader.ReadNameList();
-            MacClientToServer = packet.Reader.ReadNameList();
-            MacServerToClient = packet.Reader.ReadNameList();
-            CompressionClientToServer = packet.Reader.ReadNameList();
-            CompressionServerToClient = packet.Reader.ReadNameList();
-            LanguagesClientToServer = packet.Reader.ReadNameList();
-            LanguagesServerToClient = packet.Reader.ReadNameList();
-            FirstKexPacketFollows = packet.Reader.ReadBoolean();
+            var startPosition = packet.PayloadReader.Position - 1;
+            RandomBytes = packet.PayloadReader.Read(16);
+            KexAlgorithms = packet.PayloadReader.ReadNameList();
+            ServerHostKeyAlgorithms = packet.PayloadReader.ReadNameList();
+            EncryptionClientToServer = packet.PayloadReader.ReadNameList();
+            EncryptionServerToClient = packet.PayloadReader.ReadNameList();
+            MacClientToServer = packet.PayloadReader.ReadNameList();
+            MacServerToClient = packet.PayloadReader.ReadNameList();
+            CompressionClientToServer = packet.PayloadReader.ReadNameList();
+            CompressionServerToClient = packet.PayloadReader.ReadNameList();
+            LanguagesClientToServer = packet.PayloadReader.ReadNameList();
+            LanguagesServerToClient = packet.PayloadReader.ReadNameList();
+            FirstKexPacketFollows = packet.PayloadReader.ReadBoolean();
             // Add 4 to end position to grab the last uint32 that is to be ignored.
-            _bytes = new ArraySegment<byte>(packet.Reader.Bytes, startPosition, packet.Reader.Position - startPosition + 4);
+            _bytes = new ArraySegment<byte>(packet.PayloadReader.Bytes, startPosition, packet.PayloadReader.Position - startPosition + 4);
         }
 
         public NameList CompressionClientToServer { get; }
@@ -81,18 +81,6 @@ namespace Surfus.Shell.Messages.KeyExchange
         public byte MessageId => (byte)Type;
 
         private ArraySegment<byte> _bytes { get; set; }
-
-        public byte[] GetBytes()
-        {
-            if(_bytes.Array != null)
-            {
-                return _bytes.ToArray();
-            }
-            var byteWriter = new ByteWriter(GetSize());
-            WriteBytes(byteWriter);
-            _bytes = new ArraySegment<byte>(byteWriter.Bytes);
-            return byteWriter.Bytes;
-        }
 
         public ByteWriter GetByteWriter()
         {

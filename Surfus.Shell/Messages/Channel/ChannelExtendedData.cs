@@ -12,9 +12,9 @@ namespace Surfus.Shell.Messages.Channel
 
         public ChannelExtendedData(SshPacket packet)
         {
-            RecipientChannel = packet.Reader.ReadUInt32();
-            DataTypeCode = (DataType)packet.Reader.ReadUInt32();
-            Data = packet.Reader.ReadBinaryString();
+            RecipientChannel = packet.PayloadReader.ReadUInt32();
+            DataTypeCode = (DataType)packet.PayloadReader.ReadUInt32();
+            Data = packet.PayloadReader.ReadBinaryString();
         }
 
         public ChannelExtendedData(uint recipientChannel, uint dataTypeCode, byte[] data)
