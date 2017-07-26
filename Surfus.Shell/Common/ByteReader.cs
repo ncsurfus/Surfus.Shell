@@ -155,20 +155,26 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Reads a BigInteger from the byte array. NOTE: The buffer may be mutated.
+        /// Reads a BigInteger from the byte array, potentially mutating the buffer.
         /// </summary>
         /// <returns></returns>
-        internal static BigInteger ReadBigInteger(byte[] buffer)
+        internal static BigInteger ReadBigIntegerUnsafe(byte[] buffer)
         {
             // If the buffer represents a negative format, add an additional piece at the end (which is initialized to 0), making our number positive.
-            if(buffer[buffer.Length - 1] <= 127)
+            if(buffer[buffer.Length - 1] <= 127) // Check to see if this is a negative 
             {
                 Array.Reverse(buffer);
                 return new BigInteger(buffer);
             }
-            Array.Resize(ref buffer, buffer.Length + 1);
 
-            return new BigInteger(buffer);
+            // The buffer needs to be bigger. Create a new buffer *and* copy the data in reverse.
+            var fixedBuffer = new byte[buffer.Length + 1];
+            for (var i = 0; i != buffer.Length; i++)
+            {
+                fixedBuffer[i] = buffer[buffer.Length - i - 1];
+            }
+
+            return new BigInteger(fixedBuffer);
         }
 
         /// <summary>

@@ -76,7 +76,7 @@ namespace Surfus.Shell
         {
             _buffer = payload.Bytes;
 
-            // Generate padding to make the packet perfectly divisiblie by the block size.
+            // Generate padding to make the packet perfectly divisible by the block size.
             var padding = new byte[(2 * blockSize) - ((5 + payload.DataLength) % blockSize)];
             RandomGenerator.GetBytes(padding);
 
@@ -84,7 +84,7 @@ namespace Surfus.Shell
             ByteWriter.WriteUint(_buffer, SequenceIndex, sequenceNumber); // Write sequence number
 
             _buffer[PaddingByteIndex] = (byte)padding.Length; // Write padding length
-            Array.Copy(padding, 0, _buffer, payload.PaddingIndex, padding.Length); // Write Padding into 'Raw'
+            Array.Copy(padding, 0, _buffer, payload.PaddingIndex, padding.Length); // Write padding
 
             // Payload offset skips (uint)sequence + (uint)size + (byte)padding length.
             // Payload length is the size of the compressedPayload.

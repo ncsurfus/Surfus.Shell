@@ -36,7 +36,7 @@ namespace Surfus.Shell.Signing
             using (var hashAlgorithm = SHA1.Create())
             {
                 var reader = new ByteReader(signature);
-                var hash = ByteReader.ReadBigInteger(hashAlgorithm.ComputeHash(data));
+                var hash = ByteReader.ReadBigIntegerUnsafe(hashAlgorithm.ComputeHash(data));
 
                 var header = reader.ReadString();
                 if (Name != header)

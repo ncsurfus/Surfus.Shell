@@ -26,7 +26,7 @@ namespace Surfus.Shell
         /// <summary>
         /// _channelCounter holds the current channel index used to derive new channel IDs.
         /// </summary>
-        private uint _channelCounter;
+        private uint _channelCounter = 0;
 
         /// <summary>
         /// _channels holds a list of the channels associated to this SshClient.

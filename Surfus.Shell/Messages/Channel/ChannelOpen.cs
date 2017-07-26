@@ -53,7 +53,7 @@ namespace Surfus.Shell.Messages.Channel
 
         protected ByteWriter GetByteWriter(int additionalSize)
         {
-            var writer = new ByteWriter(Type, 16 + ChannelType.GetAsciiStringSize() + additionalSize);
+            var writer = new ByteWriter(Type, 12 + ChannelType.GetAsciiStringSize() + additionalSize);
             writer.WriteAsciiString(ChannelType);
             writer.WriteUint(SenderChannel);
             writer.WriteUint(InitialWindowSize);

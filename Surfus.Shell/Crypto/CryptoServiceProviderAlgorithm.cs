@@ -93,10 +93,11 @@ namespace Surfus.Shell.Crypto
             // Read enough data until we have at least 1 block.
             while (bufferPosition != blockSize + packetStart)
             {
-                bufferPosition += await networkStream.ReadAsync(buffer, bufferPosition, blockSize + packetStart - bufferPosition, cancellationToken);
+                var bytesRead = await networkStream.ReadAsync(buffer, bufferPosition, blockSize + packetStart - bufferPosition, cancellationToken);
+                bufferPosition += bytesRead != 0 ? bytesRead : throw new SshException("The server sent no data when reading a packet and may have closed the connection.");
             }
-
-            _decryptor.TransformBlock(buffer, bufferPosition - blockSize, blockSize, buffer, bufferPosition - blockSize); // Decrypt the first block in the buffer.
+            
+            _decryptor.TransformBlock(buffer, bufferPosition - blockSize, blockSize, buffer, bufferPosition - blockSize);
 
             var sshPacketSize = ByteReader.ReadUInt32(buffer, 4); // Get the length of the packet.
             if (sshPacketSize > 35000) throw new SshException("Invalid message sent, packet was to large!");
@@ -109,7 +110,8 @@ namespace Surfus.Shell.Crypto
 
             while (bufferPosition != bufferLength) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
             {
-                bufferPosition += await networkStream.ReadAsync(buffer, bufferPosition, bufferLength - bufferPosition, cancellationToken);
+                var bytesRead = await networkStream.ReadAsync(buffer, bufferPosition, bufferLength - bufferPosition, cancellationToken);
+                bufferPosition += bytesRead != 0 ? bytesRead : throw new SshException("The server sent no data when reading a packet and may have closed the connection.");
             }
 
             if(sshPacketSize > blockSize) // Check if this was more than a single block..
