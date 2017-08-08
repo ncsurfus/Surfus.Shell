@@ -230,7 +230,32 @@ namespace Surfus.Shell
             _disposables.Add(terminal);
             _channelCounter++;
 
-            await terminal.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await terminal.OpenAsync(80, 24, cancellationToken).ConfigureAwait(false);
+            return terminal;
+        }
+
+        /// <summary>
+        /// Requests a terminal from the SSH server.
+        /// </summary>
+        /// <param name="cancellationToken">The cancellation token used to cancel the terminal request</param>
+        /// <returns>A task representing the state of the terminal request</returns>
+        public async Task<SshTerminal> CreateTerminalAsync(uint columns, uint rows, CancellationToken cancellationToken)
+        {
+            // Validate current state of SshClient
+            if (!IsConnected)
+            {
+                ThrowOnInvalidState();
+            }
+
+            // Setup the new terminal
+            var channel = new SshChannel(this, _channelCounter);
+            var terminal = new SshTerminal(this, channel);
+
+            _channels[_channelCounter] = channel;
+            _disposables.Add(terminal);
+            _channelCounter++;
+
+            await terminal.OpenAsync(columns, rows, cancellationToken).ConfigureAwait(false);
             return terminal;
         }
 
@@ -613,7 +638,7 @@ namespace Surfus.Shell
             // Get the packet.
             var sshPacket = new SshPacket(message.GetByteWriter(), ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, ConnectionInfo.OutboundPacketSequence);
             
-            // Produce the message authentication code.
+            // Produce the message authentication code. This must get called before encryption, as the encryption will mutate the byte array.
             byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(sshPacket);
 
             // Encrypt the packet. This will not produce a new array, but the entire packet's lifecycle is within this method.

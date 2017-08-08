@@ -107,7 +107,7 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task OpenAsync(CancellationToken cancellationToken)
+        internal async Task OpenAsync(uint columns, uint rows, CancellationToken cancellationToken)
         {
             if (_terminalState != State.Initial)
             {
@@ -118,7 +118,7 @@ namespace Surfus.Shell
             _terminalState = State.Errored;
 
             await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
-            await _channel.RequestAsync(new ChannelRequestPseudoTerminal(_channel.ServerId, true, "vt100", 80, 24), cancellationToken).ConfigureAwait(false);
+            await _channel.RequestAsync(new ChannelRequestPseudoTerminal(_channel.ServerId, true, "vt100", columns, rows), cancellationToken).ConfigureAwait(false);
             await _channel.RequestAsync(new ChannelRequestShell(_channel.ServerId, true), cancellationToken).ConfigureAwait(false);
 
             _terminalState = State.Opened;

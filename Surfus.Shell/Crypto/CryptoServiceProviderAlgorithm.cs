@@ -71,12 +71,12 @@ namespace Surfus.Shell.Crypto
 
             if (!_encryptor.CanTransformMultipleBlocks)
             {
-                throw new Exception("Encryptor: CanTransformMultipleBlocks is not true!");
+                throw new SshException("Encryptor: CanTransformMultipleBlocks is not true!");
             }
 
             if (!_decryptor.CanTransformMultipleBlocks)
             {
-                throw new Exception("Decryptor: CanTransformMultipleBlocks is not true!");
+                throw new SshException("Decryptor: CanTransformMultipleBlocks is not true!");
             }
         }
 
