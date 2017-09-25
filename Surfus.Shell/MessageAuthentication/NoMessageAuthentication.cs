@@ -1,4 +1,6 @@
-﻿namespace Surfus.Shell.MessageAuthentication
+﻿using System;
+
+namespace Surfus.Shell.MessageAuthentication
 {
     internal sealed class NoMessageAuthentication : MacAlgorithm
     {
@@ -11,6 +13,11 @@
         }
 
         public override byte[] ComputeHash(SshPacket sshPacket)
+        {
+            return null;
+        }
+
+        public override byte[] ComputeHash(ArraySegment<byte> data)
         {
             return null;
         }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text;
 using Surfus.Shell.Extensions;
+using Surfus.Shell.Messages;
 
 namespace Surfus.Shell
 {
@@ -24,10 +25,10 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="array"></param>
         /// <param name="index"></param>
-        public SshPacketByteWriter(byte[] array, int index)
+        public SshPacketByteWriter(byte[] array)
         {
             Array = array;
-            Index = index;
+            Index = 0;
         }
 
         /// <summary>
@@ -37,6 +38,71 @@ namespace Surfus.Shell
         internal void WriteByte(byte value)
         {
             Array[Index++] = value;
+        }
+
+        /// <summary>
+        /// Writes the message payload.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <returns>The th.</returns>
+        internal int WriteMessage(IClientMessage message)
+        {
+            Index = 9;
+            message.WriteMessage(this);
+            return Index - 9;
+        }
+
+        /// <summary>
+        /// Writes the padding size at index 8 without modifying the index.
+        /// </summary>
+        /// <param name="value"></param>
+        internal void WritePaddingSize(byte value)
+        {
+            Array[8] = value;
+        }
+
+        /// <summary>
+        /// Writes the packets size at indexes 4-7 without modifying the index.
+        /// </summary>
+        /// <param name="value"></param>
+        internal void WritePacketSize(uint value)
+        {
+            if (BitConverter.IsLittleEndian)
+            {
+                Array[4] = (byte)(value >> 24);
+                Array[5] = (byte)(value >> 16);
+                Array[6] = (byte)(value >> 8);
+                Array[7] = (byte)value;
+            }
+            else
+            {
+                Array[4] = (byte)value;
+                Array[5] = (byte)(value >> 8);
+                Array[6] = (byte)(value >> 16);
+                Array[7] = (byte)(value >> 24);
+            }
+        }
+
+        /// <summary>
+        /// Writes the packets size at indexes 0-3 without modifying the index.
+        /// </summary>
+        /// <param name="value"></param>
+        internal void WriteSequenceNumber(uint value)
+        {
+            if (BitConverter.IsLittleEndian)
+            {
+                Array[0] = (byte)(value >> 24);
+                Array[1] = (byte)(value >> 16);
+                Array[2] = (byte)(value >> 8);
+                Array[3] = (byte)value;
+            }
+            else
+            {
+                Array[0] = (byte)value;
+                Array[1] = (byte)(value >> 8);
+                Array[2] = (byte)(value >> 16);
+                Array[3] = (byte)(value >> 24);
+            }
         }
 
         /// <summary>
@@ -89,7 +155,7 @@ namespace Surfus.Shell
         internal void WriteByteBlob(byte[] byteBlob, int blobIndex, int length)
         {
             System.Array.Copy(byteBlob, blobIndex, Array, Index, length);
-            Index += length - blobIndex;
+            Index += length;
         }
 
         /// <summary>

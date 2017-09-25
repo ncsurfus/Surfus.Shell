@@ -5,6 +5,7 @@ using Surfus.Shell.Messages.UserAuth;
 using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +17,11 @@ namespace Surfus.Shell
     /// </summary>
     public class SshClient : IDisposable
     {
+        /// <summary>
+        /// A random number generator used to generate padding.
+        /// </summary>
+        private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
+
         /// <summary>
         /// _sshClientState holds the state of the SshClient.
         /// </summary>
@@ -64,7 +70,7 @@ namespace Surfus.Shell
         /// <summary>
         /// _netSocket is the socket for reading and writing SSH Packets.
         /// </summary>
-        private Socket _netSocket;
+        private Socket _netSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
         /// <summary>
         /// Determines if more data is available by checking the current index.
@@ -644,21 +650,29 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task WriteMessageAsync(IClientMessage message, CancellationToken cancellationToken)
         {
-            // Get the packet.
-            var sshPacket = new SshPacket(message.GetByteWriter(), ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, ConnectionInfo.OutboundPacketSequence);
-            
+            var packetWriter = new SshPacketByteWriter(_netWriteBuffer);
+            packetWriter.WriteSequenceNumber(ConnectionInfo.OutboundPacketSequence); // Write packet sequence number
+            var payloadSize = packetWriter.WriteMessage(message);
+
+            // Generate padding to make the packet divisible by the block size.
+            var paddingLength = (2 * ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize) - ((5 + payloadSize) % ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize);
+            RandomGenerator.GetBytes(packetWriter.Array, packetWriter.Index, paddingLength); // Generate and write padding
+            packetWriter.Index += paddingLength; // Increment Index.
+            packetWriter.WritePaddingSize((byte)paddingLength); // Write padding length byte
+            packetWriter.WritePacketSize((uint)(payloadSize + paddingLength + 1)); // Write packet size.  Add 1 for padding length byte.
+
             // Produce the message authentication code. This must get called before encryption, as the encryption will mutate the byte array.
-            byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(sshPacket);
+            byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(new ArraySegment<byte>(packetWriter.Array, 0, packetWriter.Index));
 
             // Encrypt the packet. This will not produce a new array, but the entire packet's lifecycle is within this method.
-            ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Packet.Array, sshPacket.Packet.Offset, sshPacket.Packet.Count);
+            ConnectionInfo.WriteCryptoAlgorithm.Encrypt(packetWriter.Array, 0, packetWriter.Index);
 
             // Write the packet to the server.
-            await _tcpStream.WriteAsync(sshPacket.Packet.Array, sshPacket.Packet.Offset, sshPacket.Packet.Count, cancellationToken).ConfigureAwait(false);
+            await _netSocket.SendAsync(new ArraySegment<byte>(packetWriter.Array, 0, packetWriter.Index), SocketFlags.None).ConfigureAwait(false);
 
             if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0) // Don't attempt to write the message authentication code if there is none...
             {
-                await _tcpStream.WriteAsync(macOutput, 0, ConnectionInfo.WriteMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
+                await _netSocket.SendAsync(new ArraySegment<byte>(macOutput, 0, macOutput.Length), SocketFlags.None).ConfigureAwait(false);
             }
 
             ConnectionInfo.OutboundPacketSequence = ConnectionInfo.OutboundPacketSequence != uint.MaxValue

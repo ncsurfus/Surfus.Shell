@@ -29,6 +29,11 @@ namespace Surfus.Shell.MessageAuthentication
             return _macProvider.ComputeHash(sshPacket.MacVerificationBytes.Array, sshPacket.MacVerificationBytes.Offset, sshPacket.MacVerificationBytes.Count);
         }
 
+        public override byte[] ComputeHash(ArraySegment<byte> data)
+        {
+            return _macProvider.ComputeHash(data.Array, data.Offset, data.Count);
+        }
+
         public override bool VerifyMac(SshPacket sshPacket)
         {
             var computedMac = ComputeHash(sshPacket);

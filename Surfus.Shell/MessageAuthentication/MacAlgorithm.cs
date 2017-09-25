@@ -10,6 +10,7 @@ namespace Surfus.Shell.MessageAuthentication
         public static string[] Supported => new[] { "hmac-sha2-512", "hmac-sha2-256", "hmac-sha1-96", "hmac-sha1" };
         public abstract void Initialize(byte[] key);
 
+        public abstract byte[] ComputeHash(ArraySegment<byte> data);
         public abstract byte[] ComputeHash(SshPacket sshPacket);
         public abstract bool VerifyMac(SshPacket sshPacket);
 
