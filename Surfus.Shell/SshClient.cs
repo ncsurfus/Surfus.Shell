@@ -47,19 +47,19 @@ namespace Surfus.Shell
         private bool _disconnectReceived;
 
         /// <summary>
-        /// _tcpConnection holds the underlying TCP Connection of the SshClient.
+        /// _netBuffer holds a buffer for reading SSH Packets.
         /// </summary>
-        private readonly TcpClient _tcpConnection = new TcpClient();
+        private byte[] _netReadBuffer = new byte[40000];
 
         /// <summary>
-        /// _tcpStream holds the underlying NetworkStream of the TCP Connection.
+        /// The index to write bytes in the buffer.
         /// </summary>
-        private NetworkStream _tcpStream;
+        private int _netReadIndex = 0;
 
         /// <summary>
-        /// _netBuffer holds a buffer for reading and writing SSH Packets.
+        /// _netBuffer holds a buffer for writing SSH Packets.
         /// </summary>
-        private byte[] _netBuffer = new byte[40000];
+        private byte[] _netWriteBuffer = new byte[40000];
 
         /// <summary>
         /// _netSocket is the socket for reading and writing SSH Packets.
@@ -67,9 +67,14 @@ namespace Surfus.Shell
         private Socket _netSocket;
 
         /// <summary>
+        /// Determines if more data is available by checking the current index.
+        /// </summary>
+        private bool DataIsAvailable => _netReadIndex == 0;
+
+        /// <summary>
         /// IsConnected determines if the SshClient is connected to the remote SSH server.
         /// </summary>
-        public bool IsConnected => _tcpConnection?.Connected == true && !_disconnectReceived && !_isDisposed && _sshClientState == State.Authenticated;
+        public bool IsConnected => !_disconnectReceived && !_isDisposed && _sshClientState == State.Authenticated;
 
         /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
@@ -303,7 +308,7 @@ namespace Surfus.Shell
             var timeout = new TaskCompletionSource<bool>();
             using (cancellationToken.Register(() => timeout.SetResult(true)))
             {
-                var connectTask = _tcpConnection.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port);
+                var connectTask = _netSocket.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port);
                 var connectResult = await Task.WhenAny(timeout.Task, connectTask).ConfigureAwait(false);
 
                 if (connectResult == timeout.Task)
@@ -312,9 +317,6 @@ namespace Surfus.Shell
                 }
 
                 await connectTask.ConfigureAwait(false);
-
-                // Attempt to get version..
-                _tcpStream = _tcpConnection.GetStream();
 
                 // Buffer to receive their version.
                 var buffer = new byte[255];
@@ -330,7 +332,7 @@ namespace Surfus.Shell
                     }
 
                     // It appears in some cases ReadAsync can get hung and not properly respond to the CancellationToken.
-                    var readTask = _tcpStream.ReadAsync(buffer, bufferPosition, buffer.Length - bufferPosition, cancellationToken);
+                    var readTask = _netSocket.ReceiveAsync(new ArraySegment<byte>(buffer, bufferPosition, buffer.Length - bufferPosition), SocketFlags.None);
                     var readResult = await Task.WhenAny(timeout.Task, readTask).ConfigureAwait(false);
 
                     if (readResult == timeout.Task)
@@ -402,8 +404,7 @@ namespace Surfus.Shell
                     throw new SshException("Server version is not supported.");
                 }
                 var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
-                await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken).ConfigureAwait(false);
-                await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                await _netSocket.SendAsync(new ArraySegment<byte>(clientVersionBytes, 0, clientVersionBytes.Length), SocketFlags.None).ConfigureAwait(false);
                 return version;
             }
         }
@@ -445,16 +446,16 @@ namespace Surfus.Shell
                 await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
 
                 // Wait if no data is yet available
-                if (!_tcpStream.DataAvailable)
+                if (!DataIsAvailable)
                 {
                     await Task.Delay(millisecondDelay, cancellationToken).ConfigureAwait(false);
                 }
 
                 // If data is available process those packets
-                while (_tcpStream.DataAvailable)
+                while (DataIsAvailable)
                 {
                     await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
-                    if (!_tcpStream.DataAvailable)
+                    if (!DataIsAvailable)
                     {
                         await Task.Delay(millisecondDelay, cancellationToken).ConfigureAwait(false);
                     }
@@ -660,7 +661,6 @@ namespace Surfus.Shell
                 await _tcpStream.WriteAsync(macOutput, 0, ConnectionInfo.WriteMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
             }
 
-            await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
             ConnectionInfo.OutboundPacketSequence = ConnectionInfo.OutboundPacketSequence != uint.MaxValue
                                                          ? ConnectionInfo.OutboundPacketSequence + 1
                                                          : 0;
@@ -732,15 +732,15 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessAdditionalAsync(int delay, CancellationToken cancellationToken)
         {
-            if (!_tcpStream.DataAvailable)
+            if (!DataIsAvailable)
             {
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
             }
 
-            while (_tcpStream.DataAvailable)
+            while (DataIsAvailable)
             {
                 await ReadMessageAsync(cancellationToken).ConfigureAwait(false);
-                if (!_tcpStream.DataAvailable)
+                if (!DataIsAvailable)
                 {
                     await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 }
@@ -764,8 +764,7 @@ namespace Surfus.Shell
                 _sshClientState = State.Closed;
                 ConnectionInfo.Authentication?.Dispose();
                 ConnectionInfo.Dispose();
-                _tcpStream?.Dispose();
-                _tcpConnection?.Dispose();
+                _netSocket?.Dispose();
             }
         }
 
