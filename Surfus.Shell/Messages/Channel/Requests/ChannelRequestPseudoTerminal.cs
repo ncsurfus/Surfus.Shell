@@ -37,5 +37,16 @@ namespace Surfus.Shell.Messages.Channel.Requests
             writer.WriteBinaryString(TerminalModes);
             return writer;
         }
+
+        public override void WriteMessage(SshPacketByteWriter writer)
+        {
+            base.WriteMessage(writer);
+            writer.WriteString(TermEnvironment);
+            writer.WriteUint(TerminalWidthCharacters);
+            writer.WriteUint(TerminalHeightRows);
+            writer.WriteUint(TerminalWidthPixels);
+            writer.WriteUint(TerminalHeightPixels);
+            writer.WriteBinaryString(TerminalModes);
+        }
     }
 }

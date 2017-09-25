@@ -57,5 +57,13 @@ namespace Surfus.Shell.Messages.Channel
             writer.WriteByte(WantReply ? (byte)1 : (byte)0);
             return writer;
         }
+
+        public virtual void WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+            writer.WriteUint(RecipientChannel);
+            writer.WriteAsciiString(RequestType);
+            writer.WriteByte(WantReply ? (byte)1 : (byte)0);
+        }
     }
 }

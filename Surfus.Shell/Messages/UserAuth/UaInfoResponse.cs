@@ -30,5 +30,15 @@ namespace Surfus.Shell.Messages.UserAuth
             }
             return writer;
         }
+
+        void IClientMessage.WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+            writer.WriteUint(PromptNumber);
+            for (int i = 0; i != PromptNumber; i++)
+            {
+                writer.WriteString(Responses[i]);
+            }
+        }
     }
 }

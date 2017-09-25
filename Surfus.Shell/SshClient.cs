@@ -5,12 +5,10 @@ using Surfus.Shell.Messages.UserAuth;
 using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-[assembly: InternalsVisibleTo("Surfus.Shell.Tests")]
 namespace Surfus.Shell
 {
     /// <summary>
@@ -57,6 +55,16 @@ namespace Surfus.Shell
         /// _tcpStream holds the underlying NetworkStream of the TCP Connection.
         /// </summary>
         private NetworkStream _tcpStream;
+
+        /// <summary>
+        /// _netBuffer holds a buffer for reading and writing SSH Packets.
+        /// </summary>
+        private byte[] _netBuffer = new byte[40000];
+
+        /// <summary>
+        /// _netSocket is the socket for reading and writing SSH Packets.
+        /// </summary>
+        private Socket _netSocket;
 
         /// <summary>
         /// IsConnected determines if the SshClient is connected to the remote SSH server.

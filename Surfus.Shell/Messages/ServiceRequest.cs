@@ -18,5 +18,11 @@ namespace Surfus.Shell.Messages
             writer.WriteString(ServiceName);
             return writer;
         }
+
+        void IClientMessage.WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+            writer.WriteString(ServiceName);
+        }
     }
 }

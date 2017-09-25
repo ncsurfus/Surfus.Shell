@@ -147,5 +147,23 @@ namespace Surfus.Shell.Messages.KeyExchange
             writer.WriteUint(0);
             _bytes = new ArraySegment<byte>(writer.Bytes, start, writer.Position - start);
         }
+
+        void IClientMessage.WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+            writer.WriteByteBlob(RandomBytes);
+            writer.WriteNameList(KexAlgorithms);
+            writer.WriteNameList(ServerHostKeyAlgorithms);
+            writer.WriteNameList(EncryptionClientToServer);
+            writer.WriteNameList(EncryptionServerToClient);
+            writer.WriteNameList(MacClientToServer);
+            writer.WriteNameList(MacServerToClient);
+            writer.WriteNameList(CompressionClientToServer);
+            writer.WriteNameList(CompressionServerToClient);
+            writer.WriteNameList(LanguagesClientToServer);
+            writer.WriteNameList(LanguagesServerToClient);
+            writer.WriteByte(FirstKexPacketFollows ? (byte)1 : (byte)0);
+            writer.WriteUint(0); 
+        }
     }
 }

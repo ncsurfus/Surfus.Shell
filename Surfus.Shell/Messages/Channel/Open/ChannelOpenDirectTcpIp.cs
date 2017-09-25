@@ -32,5 +32,14 @@
             writer.WriteUint(OriginatorPort);
             return writer;
         }
+
+        public override void WriteMessage(SshPacketByteWriter writer)
+        {
+            base.WriteMessage(writer);
+            writer.WriteString(Host);
+            writer.WriteUint(Port);
+            writer.WriteString(OriginatorAddress);
+            writer.WriteUint(OriginatorPort);
+        }
     }
 }

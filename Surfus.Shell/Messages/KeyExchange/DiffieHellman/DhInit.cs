@@ -18,5 +18,11 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
             writer.WriteBigInteger(E);
             return writer;
         }
+
+        void IClientMessage.WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+            writer.WriteBigInteger(E);
+        }
     }
 }

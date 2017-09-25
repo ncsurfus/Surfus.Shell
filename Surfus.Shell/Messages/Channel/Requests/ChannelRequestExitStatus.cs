@@ -20,5 +20,11 @@ namespace Surfus.Shell.Messages.Channel.Requests
             writer.WriteUint(ExitStatus);
             return writer;
         }
+
+        public override void WriteMessage(SshPacketByteWriter writer)
+        {
+            base.WriteMessage(writer);
+            writer.WriteUint(ExitStatus);
+        }
     }
 }

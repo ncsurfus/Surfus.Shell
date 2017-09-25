@@ -60,5 +60,14 @@ namespace Surfus.Shell.Messages.Channel
             writer.WriteUint(MaximumPacketSize);
             return writer;
         }
+
+        public virtual void WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+            writer.WriteAsciiString(ChannelType);
+            writer.WriteUint(SenderChannel);
+            writer.WriteUint(InitialWindowSize);
+            writer.WriteUint(MaximumPacketSize);
+        }
     }
 }

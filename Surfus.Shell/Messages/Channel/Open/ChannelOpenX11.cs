@@ -24,5 +24,12 @@ namespace Surfus.Shell.Messages.Channel.Open
             writer.WriteUint(OriginatorPort);
             return writer;
         }
+
+        public override void WriteMessage(SshPacketByteWriter writer)
+        {
+            base.WriteMessage(writer);
+            writer.WriteString(OriginatorAddress);
+            writer.WriteUint(OriginatorPort);
+        }
     }
 }

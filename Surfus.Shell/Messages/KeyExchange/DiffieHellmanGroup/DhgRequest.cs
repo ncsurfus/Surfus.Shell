@@ -24,5 +24,13 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
             writer.WriteUint(Max);
             return writer;
         }
+
+
+        void IClientMessage.WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteUint(Min);
+            writer.WriteUint(N);
+            writer.WriteUint(Max);
+        }
     }
 }

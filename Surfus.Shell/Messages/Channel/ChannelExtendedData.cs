@@ -4,7 +4,6 @@ namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelExtendedData : IClientMessage, IChannelRecipient
     {
-        [SuppressMessage("ReSharper", "InconsistentNaming")]
         public enum DataType : uint
         {
             SSH_EXTENDED_DATA_STDERR = 1
@@ -39,6 +38,14 @@ namespace Surfus.Shell.Messages.Channel
             writer.WriteUint((uint)DataTypeCode);
             writer.WriteBinaryString(Data);
             return writer;
+        }
+
+        void IClientMessage.WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+            writer.WriteUint(RecipientChannel);
+            writer.WriteUint((uint)DataTypeCode);
+            writer.WriteBinaryString(Data);
         }
     }
 }

@@ -4,7 +4,6 @@ namespace Surfus.Shell.Messages
 {
     internal class Disconnect : IClientMessage
     {
-        [SuppressMessage("ReSharper", "InconsistentNaming")]
         internal enum DisconnectReason : uint
         {
             SSH_DISCONNECT_HOST_NOT_ALLOWED_TO_CONNECT = 1, 
@@ -65,6 +64,14 @@ namespace Surfus.Shell.Messages
             writer.WriteString(LanguageTag);
 
             return writer;
+        }
+
+        void IClientMessage.WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+            writer.WriteUint(ReasonId);
+            writer.WriteString(Description);
+            writer.WriteString(LanguageTag);
         }
     }
 }

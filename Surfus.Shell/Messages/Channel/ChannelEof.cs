@@ -23,5 +23,11 @@ namespace Surfus.Shell.Messages.Channel
             writer.WriteUint(RecipientChannel);
             return writer;
         }
+
+        void IClientMessage.WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+            writer.WriteUint(RecipientChannel);
+        }
     }
 }

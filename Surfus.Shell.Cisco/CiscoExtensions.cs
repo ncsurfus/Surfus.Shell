@@ -12,7 +12,7 @@ namespace Surfus.Shell.Cisco
         public static async Task<CiscoTerminal> CiscoInitializeAndEnable(this SshTerminal terminal, string enablePassword, CancellationToken cancellationToken)
         {
             // Wait for the initial prompt.
-            await terminal.ReadGreedyAsync(cancellationToken);
+            await terminal.ReadAsync(cancellationToken);
 
             // Get the prompt
             var prompt = await terminal.GetPromptAsync(cancellationToken);

@@ -58,6 +58,25 @@ namespace Surfus.Shell.Messages.UserAuth
 
             return writer;
         }
+
+        void IClientMessage.WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+            writer.WriteString(Username);
+            writer.WriteAsciiString(ServiceName);
+            writer.WriteAsciiString(MethodName);
+            if (MethodName == "password")
+            {
+                writer.WriteByte(0);
+                writer.WriteString(Password);
+            }
+
+            if (MethodName == "keyboard-interactive")
+            {
+                writer.WriteString(Language);
+                writer.WriteString(Submethods);
+            }
+        }
     }
 }
 ;

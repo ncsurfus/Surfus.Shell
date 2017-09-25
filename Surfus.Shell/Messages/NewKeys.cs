@@ -10,5 +10,10 @@ namespace Surfus.Shell.Messages
             var writer = new ByteWriter(Type, 0);
             return writer;
         }
+
+        void IClientMessage.WriteMessage(SshPacketByteWriter writer)
+        {
+            writer.WriteByte(MessageId);
+        }
     }
 }
