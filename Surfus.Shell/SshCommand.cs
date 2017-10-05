@@ -81,21 +81,6 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Closes the command. 
-        /// </summary>
-        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
-        /// <returns></returns>
-        public async Task CloseAsync(CancellationToken cancellationToken)
-        {
-            if (_commandState == State.Opened)
-            {
-                await _channel.CloseAsync(cancellationToken).ConfigureAwait(false);
-            }
-            _commandState = State.Closed;
-            Close();
-        }
-
-        /// <summary>
         /// Closes the command.
         /// </summary>
         public void Close()
@@ -136,13 +121,39 @@ namespace Surfus.Shell
 
             await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken).ConfigureAwait(false);
             await _client.ReadWhileAsync(() => !eof && !closed, cancellationToken).ConfigureAwait(false);
-
+            await _channel.CloseAsync(cancellationToken).ConfigureAwait(false);
             _commandState = State.Completed;
 
             using (_memoryStream)
             {
                 return Encoding.UTF8.GetString(_memoryStream.ToArray());
             }
+        }
+
+        /// <summary>
+        /// Sends the command to the server and writes the result to the specifeid stream.
+        /// </summary>
+        /// <param name="command"></param>
+        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
+        /// <returns>The result of the command.</returns>
+        public async Task ExecuteAsync(string command, Stream outputStream, CancellationToken cancellationToken)
+        {
+            if (_commandState != State.Opened)
+            {
+                throw new Exception("Command request is not opened");
+            }
+
+            bool eof = false;
+            bool closed = false;
+
+            _channel.OnChannelEofReceived = (message) => { eof = true; };
+            _channel.OnChannelCloseReceived = (message) => { closed = true; };
+
+            _channel.OnDataReceived = (buffer, offset, length) => { outputStream.Write(buffer, offset, length); };
+            await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken).ConfigureAwait(false);
+            await _client.ReadWhileAsync(() => !eof && !closed, cancellationToken).ConfigureAwait(false);
+            await _channel.CloseAsync(cancellationToken).ConfigureAwait(false);
+            _commandState = State.Completed;
         }
 
         /// <summary>

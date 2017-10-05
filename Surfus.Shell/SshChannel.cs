@@ -24,7 +24,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The amount of data to increase by once the receive window is empty.
         /// </summary>
-        internal int WindowRefill { get; set; } = 50000;
+        internal int WindowRefill { get; set; } = 10240000;
 
         /// <summary>
         /// The amount of data we are allowed to send to the server.
