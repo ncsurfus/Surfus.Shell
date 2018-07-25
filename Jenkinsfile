@@ -10,5 +10,11 @@ pipeline {
         sh 'ls -la'
       }
     }
+    stage('Build') {
+      steps {
+        sh 'cd Surfus.Shell'
+        sh '..\\dotnet build'
+      }
+    }
   }
 }
