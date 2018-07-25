@@ -3,7 +3,9 @@ pipeline {
   stages {
     stage('Download .NET') {
       steps {
-        sh 'mkdir -p $dotnetPath & wget -q -O- $dotnetUrl | tar -xz -C $dotnetPath'
+        sh '''if [ ! -f $dotnetPath/dotnet ]; then
+  mkdir -p $dotnetPath & wget -q -O- $dotnetUrl | tar -xz -C $dotnetPath
+fi'''
       }
     }
     stage('Build') {
