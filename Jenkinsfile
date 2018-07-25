@@ -3,7 +3,7 @@ pipeline {
   stages {
     stage('Download .NET') {
       steps {
-        sh '''wget -nvc https://download.microsoft.com/download/4/0/9/40920432-3302-47a8-b13c-bbc4848ad114/dotnet-sdk-2.1.302-linux-x64.tar.gz
+        sh '''wget -nvc $dotnetUrl
 '''
         sh 'tar xfk dotnet-sdk-2.1.302-linux-x64.tar.gz'
       }
@@ -14,5 +14,9 @@ pipeline {
         archiveArtifacts(artifacts: 'artifacts/*', onlyIfSuccessful: true)
       }
     }
+  }
+  environment {
+    dotnetPath = '/tmp/dotnet-sdk-2.1.302-linux-x64'
+    dotnetUrl = 'https://download.microsoft.com/download/4/0/9/40920432-3302-47a8-b13c-bbc4848ad114/dotnet-sdk-2.1.302-linux-x64.tar.gz'
   }
 }
