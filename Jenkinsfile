@@ -3,9 +3,11 @@ pipeline {
   stages {
     stage('Download .NET') {
       steps {
-        sh '''wget https://download.microsoft.com/download/4/0/9/40920432-3302-47a8-b13c-bbc4848ad114/dotnet-sdk-2.1.302-linux-x64.tar.gz
-tar xf dotnet-sdk-2.1.302-linux-x64.tar.gz
-ls -la'''
+        sh 'ls -la'
+        sh '''wget -nvc https://download.microsoft.com/download/4/0/9/40920432-3302-47a8-b13c-bbc4848ad114/dotnet-sdk-2.1.302-linux-x64.tar.gz
+'''
+        sh 'tar xfk dotnet-sdk-2.1.302-linux-x64.tar.gz'
+        sh 'ls -la'
       }
     }
   }
