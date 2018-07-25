@@ -12,7 +12,7 @@ pipeline {
     }
     stage('Build') {
       steps {
-        sh './dotnet build Surfus.Shell'
+        sh 'DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true ./dotnet build Surfus.Shell'
       }
     }
   }
