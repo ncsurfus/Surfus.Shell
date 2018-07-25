@@ -17,7 +17,7 @@ fi'''
       steps {
         dir(path: 'artifacts') {
           sh 'ls'
-          archiveArtifacts(artifacts: './*', onlyIfSuccessful: true)
+          archiveArtifacts(artifacts: '*', onlyIfSuccessful: true)
         }
 
       }
