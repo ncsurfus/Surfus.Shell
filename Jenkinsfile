@@ -11,7 +11,7 @@ pipeline {
     stage('Build') {
       steps {
         sh 'DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true ./dotnet publish Surfus.Shell -c Release -o ../artifacts'
-        archiveArtifacts(artifacts: 'artifacts', onlyIfSuccessful: true)
+        archiveArtifacts(artifacts: 'artifacts/*', onlyIfSuccessful: true)
       }
     }
   }
