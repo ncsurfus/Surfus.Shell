@@ -3,14 +3,12 @@ pipeline {
   stages {
     stage('Download .NET') {
       steps {
-        sh '''wget -nvc $dotnetUrl
-'''
-        sh 'tar xfk dotnet-sdk-2.1.302-linux-x64.tar.gz'
+        sh 'wget -q -O- $dotnetUrl | tar -xz -C $dotnetPath'
       }
     }
     stage('Build') {
       steps {
-        sh 'DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true ./dotnet publish Surfus.Shell -c Release -o ../artifacts'
+        sh '$dotnetPath/dotnet publish Surfus.Shell -c Release -o ../artifacts'
         archiveArtifacts(artifacts: 'artifacts/*', onlyIfSuccessful: true)
       }
     }
