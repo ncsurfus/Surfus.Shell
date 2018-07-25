@@ -15,7 +15,7 @@ fi'''
     }
     stage('Archive') {
       steps {
-        dir(path: 'archive') {
+        dir(path: 'artifacts') {
           sh 'ls'
           archiveArtifacts(artifacts: './*', onlyIfSuccessful: true)
         }
