@@ -13,7 +13,7 @@ pipeline {
     stage('Build') {
       steps {
         sh 'cd Surfus.Shell'
-        sh '..\\dotnet build'
+        sh '../dotnet build'
       }
     }
   }
