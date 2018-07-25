@@ -11,7 +11,14 @@ fi'''
     stage('Build') {
       steps {
         sh '$dotnetPath/dotnet publish Surfus.Shell -c Release -o ../artifacts'
-        archiveArtifacts(artifacts: 'artifacts/*', onlyIfSuccessful: true)
+      }
+    }
+    stage('Archive') {
+      steps {
+        dir(path: 'archive') {
+          archiveArtifacts(artifacts: '*', onlyIfSuccessful: true)
+        }
+
       }
     }
   }
