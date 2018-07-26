@@ -1,7 +1,7 @@
 steps:
 
 - script: |
-    echo hello world from %MyName%
+    echo hello world 2 from %MyName%
     echo Agent.HomeDirectory is %CD%
   workingDirectory: $(Agent.HomeDirectory)
   env:
@@ -10,7 +10,7 @@ steps:
   displayName: Greeting from Windows machine
 
 - script: |
-    echo hello world from $MyName
+    echo hello world 2 from $MyName
     echo Agent.HomeDirectory is $PWD
   workingDirectory: $(Agent.HomeDirectory)
   env:
