@@ -46,6 +46,11 @@ namespace Surfus.Shell
         internal byte[] SessionIdentifier { get; private set; }
 
         /// <summary>
+        /// The last session identifier.
+        /// </summary>
+        internal byte[] LastSessionIdentifier { get; private set; }
+
+        /// <summary>
         /// Listens for and begins the key exchange process.
         /// </summary>
         /// <param name="client">The client that the key exchange will be performed for.</param>
@@ -123,6 +128,7 @@ namespace Surfus.Shell
                     }
                     await _client.WriteMessageAsync(new NewKeys(), cancellationToken).ConfigureAwait(false);
                     ApplyKeyExchange();
+                    LastSessionIdentifier = SessionIdentifier;
 
                     // Remove references.
                     _clientKexInit = null;

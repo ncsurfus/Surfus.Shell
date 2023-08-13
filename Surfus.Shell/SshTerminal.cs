@@ -78,9 +78,9 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="buffer">The data sent through the channel.</param>
         /// <returns></returns>
-        private void OnDataReceived(byte[] buffer, int offset, int length)
+        private void OnDataReceived(ReadOnlyMemory<byte> buffer)
         {
-            var data = Encoding.UTF8.GetString(buffer, offset, length);
+            var data = Encoding.UTF8.GetString(buffer.Span);
 
             if (DataReceivedCallback == null)
             {

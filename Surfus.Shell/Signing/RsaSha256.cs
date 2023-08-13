@@ -3,14 +3,16 @@ using System.Security.Cryptography;
 
 namespace Surfus.Shell.Signing
 {
-    public sealed class SshRsa : Signer
+    public sealed class RsaSha256 : Signer
     {
-        public SshRsa(ReadOnlyMemory<byte> publicCertificate)
+        private string certificateNameType = "ssh-rsa";
+
+        public RsaSha256(ReadOnlyMemory<byte> publicCertificate)
         {
             var reader = new ByteReader(publicCertificate);
-            if (Name != reader.ReadString())
+            if (certificateNameType != reader.ReadString())
             {
-                throw new Exception($"Expected {Name} signature type");
+                throw new Exception($"Expected {certificateNameType} signature type");
             }
 
             var exponent = reader.ReadRsaParameter();
@@ -26,12 +28,12 @@ namespace Surfus.Shell.Signing
         }
 
         public RSAParameters RsaParameters { get; }
-        public override string Name { get; } = "ssh-rsa";
+        public override string Name { get; } = "rsa-sha2-256";
         public override int KeySize { get; }
 
         public override bool VerifySignature(ReadOnlyMemory<byte> data, ReadOnlyMemory<byte> signature)
         {
-			using(var rsaService = RSA.Create())
+            using(var rsaService = RSA.Create())
             {
                 var reader = new ByteReader(signature);
                 rsaService.ImportParameters(RsaParameters);
@@ -40,7 +42,12 @@ namespace Surfus.Shell.Signing
                     throw new Exception($"Expected {Name} signature type");
                 }
 
-				return rsaService.VerifyData(data.Span, reader.ReadBinaryString().Span, HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
+                return rsaService.VerifyData(
+                    data.Span,
+                    reader.ReadBinaryString().Span,
+                    HashAlgorithmName.SHA256,
+                    RSASignaturePadding.Pkcs1
+                );
             }
         }
     }

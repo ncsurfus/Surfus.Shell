@@ -49,7 +49,7 @@ namespace Surfus.Shell
         /// <summary>
         /// A callback once data is received.
         /// </summary>
-        internal Action<byte[], int, int> OnDataReceived;
+        internal Action<ReadOnlyMemory<byte>> OnDataReceived;
 
         /// <summary>
         /// A callback when a channel end of file is received.
@@ -83,26 +83,17 @@ namespace Surfus.Shell
         /// <param name="buffer">The data to send over the channel.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task WriteDataAsync(byte[] buffer, CancellationToken cancellationToken)
+        internal async Task WriteDataAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
         {
-            var totalBytesLeft = buffer.Length;
-            while (totalBytesLeft > 0)
+            while (!buffer.IsEmpty)
             {
-                if (totalBytesLeft <= SendWindow)
-                {
-                    await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), cancellationToken).ConfigureAwait(false);
-                    SendWindow -= totalBytesLeft;
-                    totalBytesLeft = 0;
-                }
-                else
-                {
-                    var smallBuffer = new byte[SendWindow];
-                    Array.Copy(buffer, smallBuffer, smallBuffer.Length);
-                    await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), cancellationToken).ConfigureAwait(false);
-                    totalBytesLeft -= SendWindow;
-                    SendWindow = 0;
-                    await _client.ReadWhileAsync(() => SendWindow == 0, cancellationToken).ConfigureAwait(false);
-                }
+                // The max size here should come from configuration
+                var maxSize = Math.Min(32000, SendWindow);
+                await _client.ReadWhileAsync(() => SendWindow == 0, cancellationToken).ConfigureAwait(false);
+                var data = buffer[..Math.Min(buffer.Length, maxSize)];
+                buffer = buffer[data.Length..];
+                SendWindow -= data.Length;
+                await _client.WriteMessageAsync(new ChannelData(ServerId, data), cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -272,7 +263,7 @@ namespace Surfus.Shell
                 ReceiveWindow += WindowRefill;
             }
 
-            OnDataReceived?.Invoke(message.Data, 0, length);
+            OnDataReceived?.Invoke(message.Data.Slice(0, length));
         }
 
         /// <summary>

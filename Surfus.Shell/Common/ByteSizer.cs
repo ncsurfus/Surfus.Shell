@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages.KeyExchange;
 
@@ -37,6 +38,16 @@ namespace Surfus.Shell
         }
 
         internal static int GetBinaryStringSize(this byte[] bytes)
+        {
+            return 4 + bytes.Length;
+        }
+
+        internal static int GetBinaryStringSize(this ReadOnlySpan<byte> bytes)
+        {
+            return 4 + bytes.Length;
+        }
+
+        internal static int GetBinaryStringSize(this ReadOnlyMemory<byte> bytes)
         {
             return 4 + bytes.Length;
         }

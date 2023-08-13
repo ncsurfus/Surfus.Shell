@@ -1,3 +1,5 @@
+using System;
+
 namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelData : IClientMessage, IChannelRecipient
@@ -8,13 +10,13 @@ namespace Surfus.Shell.Messages.Channel
             Data = packet.Reader.ReadBinaryString();
         }
 
-        public ChannelData(uint recipientChannel, byte[] data)
+        public ChannelData(uint recipientChannel, ReadOnlyMemory<byte> data)
         {
             RecipientChannel = recipientChannel;
             Data = data;
         }
 
-        public byte[] Data { get; }
+        public ReadOnlyMemory<byte> Data { get; }
 
         public uint RecipientChannel { get; }
 

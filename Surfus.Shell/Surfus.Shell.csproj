@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <Version>1.1.0</Version>
-    <TargetFramework>netstandard1.4</TargetFramework>
+    <Version>2.0.0</Version>
+    <TargetFramework>net7.0</TargetFramework>
     <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
     <Authors>Nathan Surfus</Authors>
     <Description>Surfus.Shell is an SSH Client written in C#.</Description>

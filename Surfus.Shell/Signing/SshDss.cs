@@ -8,7 +8,7 @@ namespace Surfus.Shell.Signing
 {
     internal sealed class SshDss : Signer
     {
-        public SshDss(byte[] signature)
+        public SshDss(ReadOnlyMemory<byte> signature)
 		{
             var reader = new ByteReader(signature);
 		    if (Name != reader.ReadString())
@@ -31,12 +31,17 @@ namespace Surfus.Shell.Signing
         public override string Name { get; } = "ssh-dss";
         public override int KeySize { get; }
 
-        public override bool VerifySignature(byte[] data, byte[] signature)
+        public override bool VerifySignature(ReadOnlyMemory<byte> data, ReadOnlyMemory<byte> signature)
         {
             using (var hashAlgorithm = SHA1.Create())
             {
                 var reader = new ByteReader(signature);
-                var hash = ByteReader.ReadBigInteger(hashAlgorithm.ComputeHash(data));
+                var hashBytes = new byte[hashAlgorithm.HashSize / 8];
+                if (!hashAlgorithm.TryComputeHash(data.Span, hashBytes, out int _))
+                {
+                    throw new SshException("Failed to compute hash.");
+                }
+                var hash = ByteReader.ReadBigInteger(hashBytes);
 
                 var header = reader.ReadString();
                 if (Name != header)
@@ -44,8 +49,8 @@ namespace Surfus.Shell.Signing
                     throw new SshException("Invalid DSS Header.");
                 }
                 var blob = reader.ReadBinaryString();
-                var r = ByteReader.ReadBigInteger(blob, 0, 20);
-                var s = ByteReader.ReadBigInteger(blob, 20, 20);
+                var r = ByteReader.ReadBigInteger(blob.Span.Slice(0, 20));
+                var s = ByteReader.ReadBigInteger(blob.Span.Slice(20, 20));
 
                 if (r <= 0 || r >= Q.BigInteger)
                 {

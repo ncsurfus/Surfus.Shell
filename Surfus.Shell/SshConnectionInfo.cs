@@ -33,7 +33,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The server certificate.
         /// </summary>
-        public byte[] ServerCertificate { get; internal set; }
+        public ReadOnlyMemory<byte> ServerCertificate { get; internal set; }
 
         /// <summary>
         /// The bit count of the certificate.

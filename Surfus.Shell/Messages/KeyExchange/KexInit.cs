@@ -6,7 +6,6 @@ using Surfus.Shell.KeyExchange;
 using Surfus.Shell.MessageAuthentication;
 using Surfus.Shell.Signing;
 using System.Security.Cryptography;
-using System.Linq;
 
 namespace Surfus.Shell.Messages.KeyExchange
 {
@@ -49,7 +48,7 @@ namespace Surfus.Shell.Messages.KeyExchange
             LanguagesServerToClient = packet.Reader.ReadNameList();
             FirstKexPacketFollows = packet.Reader.ReadBoolean();
             // Add 4 to end position to grab the last uint32 that is to be ignored.
-            _bytes = new ArraySegment<byte>(packet.Reader.Bytes, startPosition, packet.Reader.Position - startPosition + 4);
+            _bytes = packet.Reader.Bytes.Slice(startPosition, packet.Reader.Position - startPosition + 4);
         }
 
         public NameList CompressionClientToServer { get; }
@@ -80,18 +79,18 @@ namespace Surfus.Shell.Messages.KeyExchange
 
         public byte MessageId => (byte)Type;
 
-        private ArraySegment<byte> _bytes { get; set; }
+        private ReadOnlyMemory<byte> _bytes { get; set; }
 
-        public byte[] GetBytes()
+        public ReadOnlyMemory<byte> GetBytes()
         {
-            if(_bytes.Array != null)
+            if(!_bytes.IsEmpty)
             {
-                return _bytes.ToArray();
+                return _bytes;
             }
             var byteWriter = new ByteWriter(GetSize());
             WriteBytes(byteWriter);
-            _bytes = new ArraySegment<byte>(byteWriter.Bytes);
-            return byteWriter.Bytes;
+            _bytes = byteWriter.Bytes.AsMemory();
+            return byteWriter.Bytes.AsMemory();
         }
 
         public ByteWriter GetByteWriter()
@@ -137,9 +136,9 @@ namespace Surfus.Shell.Messages.KeyExchange
 
         internal void WriteBytes(ByteWriter writer)
         {
-            if(_bytes.Array != null)
+            if(!_bytes.IsEmpty)
             {
-                writer.WriteByteBlob(_bytes);
+                writer.WriteByteBlob(_bytes.Span);
                 return;
             }
             var start = writer.Position;
@@ -157,7 +156,7 @@ namespace Surfus.Shell.Messages.KeyExchange
             writer.WriteNameList(LanguagesServerToClient);
             writer.WriteByte(FirstKexPacketFollows ? (byte)1 : (byte)0);
             writer.WriteUint(0);
-            _bytes = new ArraySegment<byte>(writer.Bytes, start, writer.Position - start);
+            _bytes = writer.Bytes.AsMemory(start, writer.Position - start);
         }
     }
 }

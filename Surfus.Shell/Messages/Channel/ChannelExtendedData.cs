@@ -1,10 +1,10 @@
+using System;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Surfus.Shell.Messages.Channel
 {
     public class ChannelExtendedData : IClientMessage, IChannelRecipient
     {
-        [SuppressMessage("ReSharper", "InconsistentNaming")]
         public enum DataType : uint
         {
             SSH_EXTENDED_DATA_STDERR = 1
@@ -25,7 +25,7 @@ namespace Surfus.Shell.Messages.Channel
         }
 
         public DataType DataTypeCode { get; }
-        public byte[] Data { get; }
+        public ReadOnlyMemory<byte> Data { get; }
 
         public uint RecipientChannel { get; }
 

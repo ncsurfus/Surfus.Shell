@@ -1,3 +1,5 @@
+using System;
+
 namespace Surfus.Shell.Messages.Channel.Requests
 {
     internal class ChannelRequestPseudoTerminal : ChannelRequest
@@ -24,7 +26,7 @@ namespace Surfus.Shell.Messages.Channel.Requests
         public uint TerminalHeightRows { get; }
         public uint TerminalWidthPixels { get; } = 640;
         public uint TerminalHeightPixels { get; } = 480;
-        public byte[] TerminalModes { get; } = {};
+        public ReadOnlyMemory<byte> TerminalModes { get; }
 
         public override ByteWriter GetByteWriter()
         {

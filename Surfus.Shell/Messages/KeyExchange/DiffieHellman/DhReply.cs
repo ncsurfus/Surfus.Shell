@@ -1,4 +1,6 @@
-﻿namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
+﻿using System;
+
+namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
 {
     internal class DhReply : IMessage
     {
@@ -11,9 +13,9 @@
 
         public BigInt F { get; }
 
-        public byte[] HSignature { get; }
+        public ReadOnlyMemory<byte> HSignature { get; }
 
-        public byte[] ServerPublicHostKeyAndCertificates { get; }
+        public ReadOnlyMemory<byte> ServerPublicHostKeyAndCertificates { get; }
 
         public MessageType Type => MessageType.SSH_MSG_KEX_Exchange_31;
 

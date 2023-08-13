@@ -152,6 +152,28 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Writes a binary string to the byte array.
+        /// </summary>
+        /// <param name="binaryString"></param>
+        internal void WriteBinaryString(ReadOnlySpan<byte> binaryString)
+        {
+            WriteUint((uint)binaryString.Length);
+            binaryString.CopyTo(Bytes.AsSpan(Position));
+            Position += binaryString.Length;
+        }
+
+        /// <summary>
+        /// Writes a binary string to the byte array.
+        /// </summary>
+        /// <param name="binaryString"></param>
+        internal void WriteBinaryString(ReadOnlyMemory<byte> binaryString)
+        {
+            WriteUint((uint)binaryString.Length);
+            binaryString.Span.CopyTo(Bytes.AsSpan(Position));
+            Position += binaryString.Length;
+        }
+
+        /// <summary>
         /// Writes a binary blob to the byte array.
         /// </summary>
         /// <param name="byteBlob"></param>
@@ -179,6 +201,16 @@ namespace Surfus.Shell
         {
             Array.Copy(byteBlob.Array, byteBlob.Offset, Bytes, Position, byteBlob.Count);
             Position += byteBlob.Count;
+        }
+
+        /// <summary>
+        /// Writes a binary blob to the byte array.
+        /// </summary>
+        /// <param name="byteBlob"></param>
+        internal void WriteByteBlob(ReadOnlySpan<byte> byteBlob)
+        {
+            byteBlob.CopyTo(Bytes.AsSpan(Position));
+            Position += byteBlob.Length;
         }
 
         /// <summary>

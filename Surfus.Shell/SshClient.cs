@@ -1,4 +1,5 @@
-﻿using Surfus.Shell.Exceptions;
+﻿using Surfus.Shell.Agent;
+using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
 using Surfus.Shell.Messages.UserAuth;
@@ -76,7 +77,7 @@ namespace Surfus.Shell
         /// <summary>
         /// When set, calls this callback function to determine if the host key is valid and if the connection should continue.
         /// </summary>
-        public Func<byte[], bool> HostKeyCallback = null;
+        public Func<ReadOnlyMemory<byte>, bool> HostKeyCallback = null;
 
         /// <summary>
         /// An SshClient that can connect designated hostname and port.
@@ -144,6 +145,35 @@ namespace Surfus.Shell
             ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
             await ConnectionInfo.KeyExchanger.AwaitKeyExchangeAsync(cancellationToken).ConfigureAwait(false);
             await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, cancellationToken).ConfigureAwait(false);
+            _sshClientState = State.Authenticated;
+        }
+
+        /// <summary>
+        /// ConnectAsync connects to the SSH server with the specific username and interactive login callback.
+        /// </summary>
+        /// <param name="username">The username to login as</param>
+        /// <param name="publicKey">The public key to login with</param>
+        /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
+        /// <returns>A task representing the state of the connection attempt</returns>
+        public async Task ConnectAsync(string username, SshAgentKey publicKey, CancellationToken cancellationToken)
+        {
+            // Validate current state of SshClient
+            if (_sshClientState != State.Intitial)
+            {
+                ThrowOnInvalidState();
+            }
+
+            // Set new state of SshClient
+            _sshClientState = State.Connecting;
+
+            // Set SshClient defaults
+            ConnectionInfo.KeyExchanger = new SshKeyExchanger(this);
+            ConnectionInfo.Authentication = new SshAuthentication(this);
+
+            // Perform version exchange and key exchange
+            ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
+            await ConnectionInfo.KeyExchanger.AwaitKeyExchangeAsync(cancellationToken).ConfigureAwait(false);
+            await ConnectionInfo.Authentication.LoginAsync(username, publicKey, cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
 

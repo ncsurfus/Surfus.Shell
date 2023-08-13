@@ -55,9 +55,9 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="buffer">The received data.</param>
         /// <returns></returns>
-        internal void OnDataReceived(byte[] buffer, int offset, int length)
+        internal void OnDataReceived(ReadOnlyMemory<byte> buffer)
         {
-            _memoryStream.Write(buffer, offset, length);
+            _memoryStream.Write(buffer.Span);
         }
 
         /// <summary>

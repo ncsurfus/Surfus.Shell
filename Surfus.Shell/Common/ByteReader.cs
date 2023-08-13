@@ -13,7 +13,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The internal byte array.
         /// </summary>
-        public byte[] Bytes { get; }
+        public ReadOnlyMemory<byte> Bytes { get; }
 
         /// <summary>
         /// The current position of the byte array.
@@ -25,6 +25,15 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="bytes">The byte array to be read.</param>
         internal ByteReader(byte[] bytes)
+        {
+            Bytes = bytes;
+        }
+
+        /// <summary>
+        /// Constructs the ByteReader from the memory.
+        /// </summary>
+        /// <param name="bytes">The byte array to be read.</param>
+        internal ByteReader(ReadOnlyMemory<byte> bytes)
         {
             Bytes = bytes;
         }
@@ -47,7 +56,7 @@ namespace Surfus.Shell
         internal byte[] Read(int amount)
         {
             var buffer = new byte[amount];
-            Array.Copy(Bytes, Position, buffer, 0, amount);
+            Bytes.Slice(Position, amount).CopyTo(buffer);
             Position += amount;
             return buffer;
         }
@@ -58,7 +67,7 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal byte ReadByte()
         {
-            return Bytes[Position++];
+            return Bytes.Span[Position++];
         }
 
         /// <summary>
@@ -67,7 +76,7 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal bool ReadBoolean()
         {
-            return Bytes[Position++] == 1;
+            return Bytes.Span[Position++] == 1;
         }
 
         /// <summary>
@@ -76,14 +85,15 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal uint ReadUInt32()
         {
+            var bytes = Bytes.Span;
             uint value;
             if (BitConverter.IsLittleEndian)
             {
-                value = (uint)(Bytes[Position + 0] << 24 | Bytes[Position + 1] << 16 | Bytes[Position + 2] << 8 | Bytes[Position + 3]);
+                value = (uint)(bytes[Position + 0] << 24 | bytes[Position + 1] << 16 | bytes[Position + 2] << 8 | bytes[Position + 3]);
             }
             else
             {
-                value = (uint)(Bytes[Position] | Bytes[Position + 1] << 8 | Bytes[Position + 2] << 16 | Bytes[Position + 3] << 24);
+                value = (uint)(bytes[Position] | bytes[Position + 1] << 8 | bytes[Position + 2] << 16 | bytes[Position + 3] << 24);
             }
             
             Position += 4;
@@ -122,16 +132,34 @@ namespace Surfus.Shell
             var length = (int)ReadUInt32();
 
             // If the buffer represents a negative format, add an additional piece at the end (which is initialized to 0), making our number positive.
-            var bigIntegerBuffer = Bytes[length + Position - 1] <= 127 ? new byte[length] : new byte[length + 1];
+            var bigIntegerBuffer = Bytes.Span[length + Position - 1] <= 127 ? new byte[length] : new byte[length + 1];
 
             // Copy to new buffer backwards.
             for (var i = 0; i != length; i++)
             {
-                bigIntegerBuffer[i] = Bytes[Position + length - i - 1];
+                bigIntegerBuffer[i] = Bytes.Span[Position + length - i - 1];
             }
 
             Position += length;
             return new BigInt(new BigInteger(bigIntegerBuffer), bigIntegerBuffer, length);
+        }
+
+        /// <summary>
+        /// Reads a BigInteger from the byte array.
+        /// </summary>
+        /// <returns></returns>
+        internal static BigInteger ReadBigInteger(ReadOnlySpan<byte> bytes)
+        {
+            // If the buffer represents a negative format, add an additional piece at the end (which is initialized to 0), making our number positive.
+            var bigIntegerBuffer = bytes[^1] <= 127 ? new byte[bytes.Length] : new byte[bytes.Length + 1];
+
+            // Copy to new buffer backwards.
+            for (var i = 0; i != bytes.Length; i++)
+            {
+                bigIntegerBuffer[i] = bytes[i];
+            }
+
+            return new BigInteger(bigIntegerBuffer);
         }
 
         /// <summary>
@@ -176,7 +204,7 @@ namespace Surfus.Shell
         internal string ReadString()
         {
             var length = (int)ReadUInt32();
-            var asciiString = length != 0 ? Encoding.UTF8.GetString(Bytes, Position, length) : null;
+            var asciiString = length != 0 ? Encoding.UTF8.GetString(Bytes.Span.Slice(Position, length)) : null;
             Position += length;
             return asciiString;
         }
@@ -188,9 +216,8 @@ namespace Surfus.Shell
         internal string ReadAsciiString()
         {
             var length = (int)ReadUInt32();
-            var asciiString = length != 0 ? Encoding.ASCII.GetString(Bytes, Position, length) : null;
+            var asciiString = length != 0 ? Encoding.ASCII.GetString(Bytes.Span.Slice(Position, length)) : null;
             Position += length;
-            Console.WriteLine(asciiString);
             return asciiString;
         }
 
@@ -198,11 +225,10 @@ namespace Surfus.Shell
         /// Reads a set of chunck of bytes from the array.
         /// </summary>
         /// <returns></returns>
-        internal byte[] ReadBinaryString()
+        internal ReadOnlyMemory<byte> ReadBinaryString()
         {
             var length = (int)ReadUInt32();
-            var binaryString = new byte[length];
-            Array.Copy(Bytes, Position, binaryString, 0, length);
+            var binaryString = Bytes.Slice(Position, length);
             Position += length;
             return binaryString;
         }
@@ -215,14 +241,13 @@ namespace Surfus.Shell
         {
             var length = (int)ReadUInt32();
             var offset = 0;
-            if (Bytes[Position] == 0)
+            if (Bytes.Span[Position] == 0)
             {
                 offset = 1;
             }
-            var binaryString = new byte[length - offset];
-            Array.Copy(Bytes, Position + offset, binaryString, 0, length - offset);
+            var binaryString = Bytes.Slice(Position + offset, length - offset);
             Position += length;
-            return binaryString;
+            return binaryString.ToArray();
         }
     }
 }

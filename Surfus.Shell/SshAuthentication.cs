@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Surfus.Shell.Agent;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.UserAuth;
@@ -36,6 +37,11 @@ namespace Surfus.Shell
         /// The provided password.
         /// </summary>
         private string _password;
+
+        /// <summary>
+        /// The provided public key.
+        /// </summary>
+        private SshAgentKey _publicKey;
 
         /// <summary>
         /// The interactive response callback.
@@ -104,6 +110,32 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Logs in a user.
+        /// </summary>
+        /// <param name="username">The username to login with.</param>
+        /// <param name="sshKey">The certificate to login with.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        internal async Task LoginAsync(string username, SshAgentKey publicKey, CancellationToken cancellationToken)
+        {
+            if(_loginState != State.Initial)
+            {
+                throw new SshAuthenticationException("An authentication request was already attempted.");
+            }
+
+            _username = username;
+            _publicKey = publicKey;
+            _loginType = LoginType.Certificate;
+
+            await Client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
+            _loginState = State.WaitingOnServiceAccept;
+
+            await Client.ReadWhileAsync(
+                () => _loginState != State.Completed && _loginState != State.Failed,
+                cancellationToken
+            ).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Processes an authentication message sent by the server.
         /// </summary>
         /// <param name="message">The message sent by the server.</param>
@@ -128,6 +160,19 @@ namespace Surfus.Shell
             {
                 await Client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken).ConfigureAwait(false);
                 _loginState = State.WaitingOnCredentialSuccessOrInteractive;
+            }
+
+            if (_loginType == LoginType.Certificate)
+            {
+                var signature = await UaRequest.CalculateSignatureAsync(
+                    _username, "ssh-connection",
+                    _publicKey,
+                    Client.ConnectionInfo.KeyExchanger.LastSessionIdentifier,
+                    cancellationToken
+                );
+                var request = new UaRequest(_username, "ssh-connection", _publicKey, signature);
+                await Client.WriteMessageAsync(request, cancellationToken).ConfigureAwait(false);
+                _loginState = State.WaitingOnCredentialSuccessOrInteractive; 
             }
         }
 
@@ -208,6 +253,7 @@ namespace Surfus.Shell
             {
                 _isDisposed = true;
                 _password = null;
+                _publicKey = null;
             }
         }
 
@@ -239,7 +285,8 @@ namespace Surfus.Shell
         {
             None,
             Password,
-            Interactive
+            Interactive,
+            Certificate
         }
     }
 }
