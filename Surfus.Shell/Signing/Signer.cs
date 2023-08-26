@@ -15,6 +15,8 @@ namespace Surfus.Shell.Signing
             {
                 case "ssh-rsa":
                     return new SshRsa(serverHostKey);
+                case "rsa-sha2-256":
+                    return new RsaSha256(serverHostKey);
                 case "ssh-dss":
                     return new SshDss(serverHostKey);
                 default:
