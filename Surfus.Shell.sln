@@ -7,10 +7,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Surfus.Shell", "Surfus.Shel
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Surfus.Shell.Cisco", "Surfus.Shell.Cisco\Surfus.Shell.Cisco.csproj", "{48DB198F-D867-44F4-8182-D79C45FBE271}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Surfus.Shell.Tests", "Surfus.Shell.Tests\Surfus.Shell.Tests.csproj", "{CCFA86C3-6F3B-4C08-BC8F-3D3D2AF93BEE}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Surfus.Shell.Console", "Surfus.Shell.Console\Surfus.Shell.Console.csproj", "{9DB61560-C4DA-4702-BCFC-884BC4992573}"
-EndProject
 Global
 	GlobalSection(Performance) = preSolution
 		HasPerformanceSessions = true
@@ -28,14 +24,6 @@ Global
 		{48DB198F-D867-44F4-8182-D79C45FBE271}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{48DB198F-D867-44F4-8182-D79C45FBE271}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{48DB198F-D867-44F4-8182-D79C45FBE271}.Release|Any CPU.Build.0 = Release|Any CPU
-		{CCFA86C3-6F3B-4C08-BC8F-3D3D2AF93BEE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{CCFA86C3-6F3B-4C08-BC8F-3D3D2AF93BEE}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{CCFA86C3-6F3B-4C08-BC8F-3D3D2AF93BEE}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CCFA86C3-6F3B-4C08-BC8F-3D3D2AF93BEE}.Release|Any CPU.Build.0 = Release|Any CPU
-		{9DB61560-C4DA-4702-BCFC-884BC4992573}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{9DB61560-C4DA-4702-BCFC-884BC4992573}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{9DB61560-C4DA-4702-BCFC-884BC4992573}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{9DB61560-C4DA-4702-BCFC-884BC4992573}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
