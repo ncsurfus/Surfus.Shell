@@ -65,7 +65,7 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task LoginAsync(string username, string password, CancellationToken cancellationToken)
         {
-            if(_loginState != State.Initial)
+            if (_loginState != State.Initial)
             {
                 throw new SshAuthenticationException("An authentication request was already attempted.");
             }
@@ -77,7 +77,9 @@ namespace Surfus.Shell
             await Client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
             _loginState = State.WaitingOnServiceAccept;
 
-            await Client.ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken).ConfigureAwait(false);
+            await Client
+                .ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         /// <summary>
@@ -87,7 +89,11 @@ namespace Surfus.Shell
         /// <param name="responseTask">The interactive callback.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task LoginAsync(string username, Func<string, CancellationToken, Task<string>> responseTask, CancellationToken cancellationToken)
+        internal async Task LoginAsync(
+            string username,
+            Func<string, CancellationToken, Task<string>> responseTask,
+            CancellationToken cancellationToken
+        )
         {
             if (_loginState != State.Initial)
             {
@@ -100,7 +106,9 @@ namespace Surfus.Shell
             await Client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
             _loginState = State.WaitingOnServiceAccept;
 
-            await Client.ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken).ConfigureAwait(false);
+            await Client
+                .ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         /// <summary>
@@ -111,22 +119,26 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task ProcessMessageAsync(ServiceAccept message, CancellationToken cancellationToken)
         {
-            if(_loginState != State.WaitingOnServiceAccept)
+            if (_loginState != State.WaitingOnServiceAccept)
             {
                 _loginState = State.Failed;
                 throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
             }
 
-            if(_loginType == LoginType.Password)
+            if (_loginType == LoginType.Password)
             {
-                await Client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "password", _password), cancellationToken).ConfigureAwait(false);
+                await Client
+                    .WriteMessageAsync(new UaRequest(_username, "ssh-connection", "password", _password), cancellationToken)
+                    .ConfigureAwait(false);
                 _password = null;
                 _loginState = State.WaitingOnCredentialSuccess;
             }
 
             if (_loginType == LoginType.Interactive)
             {
-                await Client.WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken).ConfigureAwait(false);
+                await Client
+                    .WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken)
+                    .ConfigureAwait(false);
                 _loginState = State.WaitingOnCredentialSuccessOrInteractive;
             }
         }
@@ -204,7 +216,7 @@ namespace Surfus.Shell
         /// </summary>
         internal void Close()
         {
-            if(!_isDisposed)
+            if (!_isDisposed)
             {
                 _isDisposed = true;
                 _password = null;

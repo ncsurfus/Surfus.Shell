@@ -17,10 +17,7 @@ namespace Surfus.Shell.MessageAuthentication
                 Array.Resize(ref key, KeySize);
             }
 
-            _macProvider = new HMACSHA1
-            {
-                Key = key
-            };
+            _macProvider = new HMACSHA1 { Key = key };
             _macProvider.Initialize();
         }
 

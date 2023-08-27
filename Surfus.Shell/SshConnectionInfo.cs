@@ -90,7 +90,6 @@ namespace Surfus.Shell
         /// </summary>
         internal MacAlgorithm WriteMacAlgorithm { get; set; } = new NoMessageAuthentication();
 
-
         // TODO: Move all internal items into a separate class and get rid of this dispose method.
         /// <summary>
         /// Disposes the ConnectionInfo.

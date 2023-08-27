@@ -12,15 +12,12 @@ namespace Surfus.Shell.MessageAuthentication
 
         public override void Initialize(byte[] key)
         {
-            if(key.Length != KeySize)
+            if (key.Length != KeySize)
             {
                 Array.Resize(ref key, KeySize);
             }
 
-            _macProvider = new HMACSHA1
-            {
-                Key = key
-            };
+            _macProvider = new HMACSHA1 { Key = key };
             _macProvider.Initialize();
         }
 

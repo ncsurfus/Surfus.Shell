@@ -16,6 +16,7 @@ namespace Surfus.Shell.Messages.UserAuth
                 Echo[i] = packet.Reader.ReadBoolean();
             }
         }
+
         public string Name { get; }
         public string Instruction { get; }
         public string Language { get; }

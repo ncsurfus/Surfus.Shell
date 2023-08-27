@@ -62,7 +62,7 @@ namespace Surfus.Shell
         internal async Task AwaitKeyExchangeAsync(CancellationToken cancellationToken)
         {
             // If the key exchange is already State.Initial it means it hasn't started yet.
-            if(_keyExchangeState == State.Initial)
+            if (_keyExchangeState == State.Initial)
             {
                 // Wait until we get started.
                 await _client.ReadWhileAsync(() => _keyExchangeState == State.Initial, cancellationToken);
@@ -81,7 +81,6 @@ namespace Surfus.Shell
         {
             switch (message.Type)
             {
-
                 case MessageType.SSH_MSG_KEXINIT:
                     if (_keyExchangeState == State.Initial)
                     {
@@ -111,7 +110,6 @@ namespace Surfus.Shell
                     if (_keyExchangeState != State.WaitingOnKeyExchangeProtocol)
                     {
                         throw new SshException("Received unexpected key exchange message.");
-
                     }
                     await ApplyKeyExchangeAlgorithmMessageAsync(message, cancellationToken).ConfigureAwait(false);
                     break;
@@ -145,7 +143,7 @@ namespace Surfus.Shell
             switch (message.Type)
             {
                 case MessageType.SSH_MSG_KEX_Exchange_30:
-                    if(await KeyExchangeAlgorithm.ProcessMessage30Async(message, cancellationToken).ConfigureAwait(false))
+                    if (await KeyExchangeAlgorithm.ProcessMessage30Async(message, cancellationToken).ConfigureAwait(false))
                     {
                         _keyExchangeState = State.WaitingOnNewKeys;
                     }
@@ -198,8 +196,16 @@ namespace Surfus.Shell
             connectionInfo.WriteMacAlgorithm = MacAlgorithm.Create(KeyExchangeResult.MessageAuthenticationClientToServer);
 
             // Get Keys
-            var writeIv = KeyExchangeAlgorithm.GenerateKey('A', SessionIdentifier, connectionInfo.WriteCryptoAlgorithm.InitializationVectorSize);
-            var readIv = KeyExchangeAlgorithm.GenerateKey('B', SessionIdentifier, connectionInfo.ReadCryptoAlgorithm.InitializationVectorSize);
+            var writeIv = KeyExchangeAlgorithm.GenerateKey(
+                'A',
+                SessionIdentifier,
+                connectionInfo.WriteCryptoAlgorithm.InitializationVectorSize
+            );
+            var readIv = KeyExchangeAlgorithm.GenerateKey(
+                'B',
+                SessionIdentifier,
+                connectionInfo.ReadCryptoAlgorithm.InitializationVectorSize
+            );
             var writeEncryptionKey = KeyExchangeAlgorithm.GenerateKey('C', SessionIdentifier, connectionInfo.WriteCryptoAlgorithm.KeySize);
             var readEncryptionKey = KeyExchangeAlgorithm.GenerateKey('D', SessionIdentifier, connectionInfo.ReadCryptoAlgorithm.KeySize);
             var writeIntegrityKey = KeyExchangeAlgorithm.GenerateKey('E', SessionIdentifier, connectionInfo.WriteMacAlgorithm.KeySize);

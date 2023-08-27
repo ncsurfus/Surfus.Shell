@@ -4,10 +4,11 @@ namespace Surfus.Shell.Exceptions
 {
     public class SshDisconnectException : SshException
     {
-        internal SshDisconnectException(Disconnect.DisconnectReason reason) : base(reason.ToString())
+        internal SshDisconnectException(Disconnect.DisconnectReason reason)
+            : base(reason.ToString())
         {
             Reason = reason.ToString();
-            ReasonCode = (uint) reason;
+            ReasonCode = (uint)reason;
             if (reason == Disconnect.DisconnectReason.SSH_DISCONNECT_BY_APPLICATION)
             {
                 Graceful = true;

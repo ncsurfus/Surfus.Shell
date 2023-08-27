@@ -48,7 +48,7 @@ namespace Surfus.Shell
 
         internal static int GetAsciiStringSize(this string asciiString)
         {
-            if(asciiString == null)
+            if (asciiString == null)
             {
                 return 4;
             }
@@ -57,7 +57,7 @@ namespace Surfus.Shell
 
         internal static int GetStringSize(this string utf8String)
         {
-            if(utf8String == null)
+            if (utf8String == null)
             {
                 return 4;
             }

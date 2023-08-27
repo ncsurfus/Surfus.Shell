@@ -2,12 +2,14 @@ namespace Surfus.Shell.Messages.Channel.Requests
 {
     internal class ChannelRequestExec : ChannelRequest
     {
-        public ChannelRequestExec(SshPacket packet, uint recipientChannel) : base(packet, "exec", recipientChannel)
+        public ChannelRequestExec(SshPacket packet, uint recipientChannel)
+            : base(packet, "exec", recipientChannel)
         {
             Command = packet.Reader.ReadString();
         }
 
-        public ChannelRequestExec(uint recipientChannel, bool wantReply, string command) : base(recipientChannel, "exec", wantReply)
+        public ChannelRequestExec(uint recipientChannel, bool wantReply, string command)
+            : base(recipientChannel, "exec", wantReply)
         {
             Command = command;
         }

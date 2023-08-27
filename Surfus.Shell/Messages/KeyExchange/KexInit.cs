@@ -84,7 +84,7 @@ namespace Surfus.Shell.Messages.KeyExchange
 
         public byte[] GetBytes()
         {
-            if(_bytes.Array != null)
+            if (_bytes.Array != null)
             {
                 return _bytes.ToArray();
             }
@@ -116,28 +116,28 @@ namespace Surfus.Shell.Messages.KeyExchange
         public int GetSize()
         {
             //if(_bytes.Array != null)
-           // {
+            // {
             //    return _bytes.Count;
-           // }
-            return ByteSizer.GetByteSize() +
-                   RandomBytes.GetByteBlobSize() +
-                   KexAlgorithms.GetNameListSize() +
-                   ServerHostKeyAlgorithms.GetNameListSize() +
-                   EncryptionClientToServer.GetNameListSize() +
-                   EncryptionServerToClient.GetNameListSize() +
-                   MacClientToServer.GetNameListSize() +
-                   MacServerToClient.GetNameListSize() +
-                   CompressionClientToServer.GetNameListSize() +
-                   CompressionServerToClient.GetNameListSize() +
-                   LanguagesClientToServer.GetNameListSize() +
-                   LanguagesServerToClient.GetNameListSize() +
-                   ByteSizer.GetByteSize() + 
-                   ByteSizer.GetIntSize();
+            // }
+            return ByteSizer.GetByteSize()
+                + RandomBytes.GetByteBlobSize()
+                + KexAlgorithms.GetNameListSize()
+                + ServerHostKeyAlgorithms.GetNameListSize()
+                + EncryptionClientToServer.GetNameListSize()
+                + EncryptionServerToClient.GetNameListSize()
+                + MacClientToServer.GetNameListSize()
+                + MacServerToClient.GetNameListSize()
+                + CompressionClientToServer.GetNameListSize()
+                + CompressionServerToClient.GetNameListSize()
+                + LanguagesClientToServer.GetNameListSize()
+                + LanguagesServerToClient.GetNameListSize()
+                + ByteSizer.GetByteSize()
+                + ByteSizer.GetIntSize();
         }
 
         internal void WriteBytes(ByteWriter writer)
         {
-            if(_bytes.Array != null)
+            if (_bytes.Array != null)
             {
                 writer.WriteByteBlob(_bytes);
                 return;

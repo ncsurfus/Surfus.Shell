@@ -15,7 +15,8 @@ namespace Surfus.Shell.Crypto
         /// <summary>
         /// Supported crypto algorithms.
         /// </summary>
-        internal static string[] Supported => new[] { "aes256-ctr", "aes192-ctr", "aes128-ctr", "aes256-cbc", "aes192-cbc", "aes128-cbc", "3des-cbc" };
+        internal static string[] Supported =>
+            new[] { "aes256-ctr", "aes192-ctr", "aes128-ctr", "aes256-cbc", "aes192-cbc", "aes128-cbc", "3des-cbc" };
 
         /// <summary>
         /// Gets the size of the cipher block.
@@ -50,12 +51,12 @@ namespace Surfus.Shell.Crypto
                     return new AesCryptoAlgorithm(192, CipherMode.CBC);
                 case "aes256-cbc":
                     return new AesCryptoAlgorithm(256, CipherMode.CBC);
-				case "aes128-ctr":
-					return new AesCtrCryptoAlgorithm(128);
-				case "aes192-ctr":
-					return new AesCtrCryptoAlgorithm(192);
-				case "aes256-ctr":
-					return new AesCtrCryptoAlgorithm(256);
+                case "aes128-ctr":
+                    return new AesCtrCryptoAlgorithm(128);
+                case "aes192-ctr":
+                    return new AesCtrCryptoAlgorithm(192);
+                case "aes256-ctr":
+                    return new AesCtrCryptoAlgorithm(256);
                 default:
                     throw new SshException("Crypto algorithm not supported");
             }
@@ -94,6 +95,11 @@ namespace Surfus.Shell.Crypto
         /// <returns>
         /// The SSH Packet.
         /// </returns>
-        internal abstract Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, uint packetSequenceNumber, int hmacSize, CancellationToken cancellationToken);
+        internal abstract Task<SshPacket> ReadPacketAsync(
+            NetworkStream networkStream,
+            uint packetSequenceNumber,
+            int hmacSize,
+            CancellationToken cancellationToken
+        );
     }
 }

@@ -118,7 +118,9 @@ namespace Surfus.Shell
             _terminalState = State.Errored;
 
             await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
-            await _channel.RequestAsync(new ChannelRequestPseudoTerminal(_channel.ServerId, true, "vt100", 80, 24), cancellationToken).ConfigureAwait(false);
+            await _channel
+                .RequestAsync(new ChannelRequestPseudoTerminal(_channel.ServerId, true, "vt100", 80, 24), cancellationToken)
+                .ConfigureAwait(false);
             await _channel.RequestAsync(new ChannelRequestShell(_channel.ServerId, true), cancellationToken).ConfigureAwait(false);
 
             _terminalState = State.Opened;
@@ -306,7 +308,7 @@ namespace Surfus.Shell
         /// </summary>
         public void Close()
         {
-            if(!_isDisposed)
+            if (!_isDisposed)
             {
                 _isDisposed = true;
             }

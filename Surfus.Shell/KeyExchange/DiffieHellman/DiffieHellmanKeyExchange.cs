@@ -81,7 +81,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// </exception>
         internal override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
         {
-            if(_keyExchangeAlgorithmState != State.Initial)
+            if (_keyExchangeAlgorithmState != State.Initial)
             {
                 throw new SshException("Unexpected key exchange algorithm state");
             }
@@ -140,7 +140,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
         internal override async Task<bool> ProcessMessage31Async(MessageEvent message, CancellationToken cancellationToken)
         {
-            if(_keyExchangeAlgorithmState != State.WaitingOnDhReply)
+            if (_keyExchangeAlgorithmState != State.WaitingOnDhReply)
             {
                 throw new SshException("Unexpected key exchange algorithm message");
             }
@@ -159,25 +159,27 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             // Prepare the signing algorithm from the servers public key.
             _signingAlgorithm = Signer.CreateSigner(
                 _kexInitExchangeResult.ServerHostKeyAlgorithm,
-                reply.ServerPublicHostKeyAndCertificates);
+                reply.ServerPublicHostKeyAndCertificates
+            );
 
             _client.ConnectionInfo.ServerCertificate = reply.ServerPublicHostKeyAndCertificates;
             _client.ConnectionInfo.ServerCertificateSize = _signingAlgorithm.KeySize;
 
-            if(_client.HostKeyCallback != null && !_client.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates))
+            if (_client.HostKeyCallback != null && !_client.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates))
             {
                 throw new SshException("Rejected Host Key.");
             }
 
             // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.s
-            var totalBytes = _client.ConnectionInfo.ClientVersion.GetStringSize() +
-                             _client.ConnectionInfo.ServerVersion.GetStringSize() +
-                             _kexInitExchangeResult.Client.GetKexInitBinaryStringSize() + 
-                             _kexInitExchangeResult.Server.GetKexInitBinaryStringSize() +
-                             reply.ServerPublicHostKeyAndCertificates.GetBinaryStringSize() + 
-                             E.GetBigIntegerSize() + 
-                             reply.F.GetBigIntegerSize() +
-                             K.GetBigIntegerSize();
+            var totalBytes =
+                _client.ConnectionInfo.ClientVersion.GetStringSize()
+                + _client.ConnectionInfo.ServerVersion.GetStringSize()
+                + _kexInitExchangeResult.Client.GetKexInitBinaryStringSize()
+                + _kexInitExchangeResult.Server.GetKexInitBinaryStringSize()
+                + reply.ServerPublicHostKeyAndCertificates.GetBinaryStringSize()
+                + E.GetBigIntegerSize()
+                + reply.F.GetBigIntegerSize()
+                + K.GetBigIntegerSize();
 
             var byteWriter = new ByteWriter(totalBytes);
             byteWriter.WriteString(_client.ConnectionInfo.ClientVersion);

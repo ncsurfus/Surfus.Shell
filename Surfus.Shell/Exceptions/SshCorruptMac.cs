@@ -2,7 +2,8 @@
 {
     public class SshCorruptMac : SshException
     {
-        internal SshCorruptMac(uint packetSequence) : base("Corrupted message authentication code from server.")
+        internal SshCorruptMac(uint packetSequence)
+            : base("Corrupted message authentication code from server.")
         {
             PacketSequence = packetSequence;
         }

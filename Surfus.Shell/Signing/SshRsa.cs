@@ -16,11 +16,7 @@ namespace Surfus.Shell.Signing
             var exponent = reader.ReadRsaParameter();
             var modulus = reader.ReadRsaParameter();
 
-            RsaParameters = new RSAParameters
-            {
-                Exponent = exponent,
-                Modulus = modulus
-            };
+            RsaParameters = new RSAParameters { Exponent = exponent, Modulus = modulus };
 
             KeySize = modulus.Length * 8;
         }
@@ -31,7 +27,7 @@ namespace Surfus.Shell.Signing
 
         public override bool VerifySignature(byte[] data, byte[] signature)
         {
-			using(var rsaService = RSA.Create())
+            using (var rsaService = RSA.Create())
             {
                 var reader = new ByteReader(signature);
                 rsaService.ImportParameters(RsaParameters);
@@ -40,7 +36,7 @@ namespace Surfus.Shell.Signing
                     throw new Exception($"Expected {Name} signature type");
                 }
 
-				return rsaService.VerifyData(data, reader.ReadBinaryString(), HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
+                return rsaService.VerifyData(data, reader.ReadBinaryString(), HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
             }
         }
     }

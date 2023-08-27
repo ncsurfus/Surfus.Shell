@@ -10,17 +10,18 @@ namespace Surfus.Shell.Crypto
         /// </summary>
         /// <param name="keySize">The AES key size.</param>
         /// <returns></returns>
-		private static SymmetricAlgorithm CreateAesCtr(int keySize)
-		{
-			var aes = new AesCtrMode(keySize);
-			return aes;
-		}
+        private static SymmetricAlgorithm CreateAesCtr(int keySize)
+        {
+            var aes = new AesCtrMode(keySize);
+            return aes;
+        }
 
         /// <summary>
-        /// Creates an AES CTR crypto algorhtm. 
+        /// Creates an AES CTR crypto algorhtm.
         /// </summary>
         /// <param name="keySizeBits">The AES key size in bits.</param>
-		internal AesCtrCryptoAlgorithm(int keySizeBits) : base (CreateAesCtr(keySizeBits))
+        internal AesCtrCryptoAlgorithm(int keySizeBits)
+            : base(CreateAesCtr(keySizeBits))
         {
             KeySize = keySizeBits / 8;
         }

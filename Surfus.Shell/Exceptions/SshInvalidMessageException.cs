@@ -5,13 +5,15 @@ namespace Surfus.Shell.Exceptions
 {
     public class SshInvalidMessageException : SshException
     {
-        internal SshInvalidMessageException(MessageType messageType) : base($"Server sent corrupt '{messageType}' message.")
+        internal SshInvalidMessageException(MessageType messageType)
+            : base($"Server sent corrupt '{messageType}' message.")
         {
             MessageType = messageType.ToString();
-            MessageCode = (byte) messageType;
+            MessageCode = (byte)messageType;
         }
 
-        public SshInvalidMessageException(MessageType messageType, Exception innerException) : base($"Server sent corrupt '{messageType}' message.", innerException)
+        public SshInvalidMessageException(MessageType messageType, Exception innerException)
+            : base($"Server sent corrupt '{messageType}' message.", innerException)
         {
             MessageType = messageType.ToString();
             MessageCode = (byte)messageType;

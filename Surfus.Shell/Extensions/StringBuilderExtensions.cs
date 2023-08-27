@@ -1,4 +1,5 @@
 ﻿using System.Text;
+
 // See https://www.codeproject.com/Tips/129369/StringBuilder-Extensions
 // Phi Nguyen
 
@@ -6,7 +7,6 @@ namespace Surfus.Shell.Extensions
 {
     public static class StringBuilderExtensions
     {
-
         /// <summary>
         /// Get index of a string
         /// </summary>

@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 [assembly: InternalsVisibleTo("Surfus.Shell.Tests")]
+
 namespace Surfus.Shell
 {
     /// <summary>
@@ -61,7 +62,8 @@ namespace Surfus.Shell
         /// <summary>
         /// IsConnected determines if the SshClient is connected to the remote SSH server.
         /// </summary>
-        public bool IsConnected => _tcpConnection?.Connected == true && !_disconnectReceived && !_isDisposed && _sshClientState == State.Authenticated;
+        public bool IsConnected =>
+            _tcpConnection?.Connected == true && !_disconnectReceived && !_isDisposed && _sshClientState == State.Authenticated;
 
         /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
@@ -125,7 +127,11 @@ namespace Surfus.Shell
         /// <param name="interactiveResponse">interactiveResponse is a callback to a method for interactive login</param>
         /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
         /// <returns>A task representing the state of the connection attempt</returns>
-        public async Task ConnectAsync(string username, Func<string, CancellationToken, Task<string>> interactiveResponse, CancellationToken cancellationToken)
+        public async Task ConnectAsync(
+            string username,
+            Func<string, CancellationToken, Task<string>> interactiveResponse,
+            CancellationToken cancellationToken
+        )
         {
             // Validate current state of SshClient
             if (_sshClientState != State.Intitial)
@@ -155,7 +161,12 @@ namespace Surfus.Shell
         /// <param name="password">The password to login with</param>
         /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
         /// <returns>A task representing the state of the connection attempt</returns>
-        public static async Task<SshClient> ConnectAsync(string hostname, string username, string password, CancellationToken cancellationToken)
+        public static async Task<SshClient> ConnectAsync(
+            string hostname,
+            string username,
+            string password,
+            CancellationToken cancellationToken
+        )
         {
             var sshClient = new SshClient(hostname);
             await sshClient.ConnectAsync(username, password, cancellationToken);
@@ -170,7 +181,12 @@ namespace Surfus.Shell
         /// <param name="interactiveResponse">interactiveResponse is a callback to a method for interactive login</param>
         /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
         /// <returns>A task representing the state of the connection attempt</returns>
-        public static async Task<SshClient> ConnectAsync(string hostname, string username, Func<string, CancellationToken, Task<string>> interactiveResponse, CancellationToken cancellationToken)
+        public static async Task<SshClient> ConnectAsync(
+            string hostname,
+            string username,
+            Func<string, CancellationToken, Task<string>> interactiveResponse,
+            CancellationToken cancellationToken
+        )
         {
             var sshClient = new SshClient(hostname);
             await sshClient.ConnectAsync(username, interactiveResponse, cancellationToken);
@@ -186,7 +202,13 @@ namespace Surfus.Shell
         /// <param name="password">The password to login with</param>
         /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
         /// <returns>A task representing the state of the connection attempt</returns>
-        public static async Task<SshClient> ConnectAsync(string hostname, uint port, string username, string password, CancellationToken cancellationToken)
+        public static async Task<SshClient> ConnectAsync(
+            string hostname,
+            uint port,
+            string username,
+            string password,
+            CancellationToken cancellationToken
+        )
         {
             var sshClient = new SshClient(hostname);
             await sshClient.ConnectAsync(username, password, cancellationToken);
@@ -202,7 +224,13 @@ namespace Surfus.Shell
         /// <param name="interactiveResponse">interactiveResponse is a callback to a method for interactive login</param>
         /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
         /// <returns>A task representing the state of the connection attempt</returns>
-        public static async Task<SshClient> ConnectAsync(string hostname, uint port, string username, Func<string, CancellationToken, Task<string>> interactiveResponse, CancellationToken cancellationToken)
+        public static async Task<SshClient> ConnectAsync(
+            string hostname,
+            uint port,
+            string username,
+            Func<string, CancellationToken, Task<string>> interactiveResponse,
+            CancellationToken cancellationToken
+        )
         {
             var sshClient = new SshClient(hostname);
             await sshClient.ConnectAsync(username, interactiveResponse, cancellationToken);
@@ -302,7 +330,10 @@ namespace Surfus.Shell
 
                     if (readResult == timeout.Task)
                     {
-                        throw new OperationCanceledException("The operation was cancelled when reading the server version.", cancellationToken);
+                        throw new OperationCanceledException(
+                            "The operation was cancelled when reading the server version.",
+                            cancellationToken
+                        );
                     }
 
                     var readAmount = await readTask.ConfigureAwait(false);
@@ -363,7 +394,10 @@ namespace Surfus.Shell
                     }
                 }
 
-                var version = buffer[bufferPosition - 2] == '\r' ? Encoding.ASCII.GetString(buffer, 0, bufferPosition - 2) : Encoding.ASCII.GetString(buffer, 0, bufferPosition - 1);
+                var version =
+                    buffer[bufferPosition - 2] == '\r'
+                        ? Encoding.ASCII.GetString(buffer, 0, bufferPosition - 2)
+                        : Encoding.ASCII.GetString(buffer, 0, bufferPosition - 1);
                 if (!version.StartsWith("SSH-1.99-") && !version.StartsWith("SSH-2.0-"))
                 {
                     throw new SshException("Server version is not supported.");
@@ -439,12 +473,20 @@ namespace Surfus.Shell
             var cancelRead = new TaskCompletionSource<bool>();
             using (cancellationToken.Register(() => cancelRead.SetResult(true)))
             {
-                var sshPacketTask = ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(_tcpStream, ConnectionInfo.InboundPacketSequence, ConnectionInfo.ReadMacAlgorithm.OutputSize, cancellationToken);
+                var sshPacketTask = ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(
+                    _tcpStream,
+                    ConnectionInfo.InboundPacketSequence,
+                    ConnectionInfo.ReadMacAlgorithm.OutputSize,
+                    cancellationToken
+                );
                 var readPacket = await Task.WhenAny(cancelRead.Task, sshPacketTask).ConfigureAwait(false);
 
-                if(readPacket == cancelRead.Task)
+                if (readPacket == cancelRead.Task)
                 {
-                    throw new OperationCanceledException("The operation was cancelled when waiting for a message from the server.", cancellationToken);
+                    throw new OperationCanceledException(
+                        "The operation was cancelled when waiting for a message from the server.",
+                        cancellationToken
+                    );
                 }
 
                 var sshPacket = await sshPacketTask.ConfigureAwait(false);
@@ -457,7 +499,8 @@ namespace Surfus.Shell
                     }
                 }
 
-                ConnectionInfo.InboundPacketSequence = ConnectionInfo.InboundPacketSequence != uint.MaxValue ? ConnectionInfo.InboundPacketSequence + 1 : 0;
+                ConnectionInfo.InboundPacketSequence =
+                    ConnectionInfo.InboundPacketSequence != uint.MaxValue ? ConnectionInfo.InboundPacketSequence + 1 : 0;
                 var messageEvent = new MessageEvent(sshPacket);
 
                 // Key Exchange Messages
@@ -534,7 +577,9 @@ namespace Surfus.Shell
             switch (messageEvent.Type)
             {
                 case MessageType.SSH_MSG_SERVICE_ACCEPT:
-                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken).ConfigureAwait(false);
+                    await ConnectionInfo.Authentication
+                        .ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken)
+                        .ConfigureAwait(false);
                     break;
                 case MessageType.SSH_MSG_REQUEST_FAILURE:
                     ConnectionInfo.Authentication.ProcessRequestFailureMessage();
@@ -546,7 +591,9 @@ namespace Surfus.Shell
                     ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure);
                     break;
                 case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                    await ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken).ConfigureAwait(false);
+                    await ConnectionInfo.Authentication
+                        .ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken)
+                        .ConfigureAwait(false);
                     break;
                 case MessageType.SSH_MSG_USERAUTH_BANNER:
                     Banner = (messageEvent.Message as UaBanner)?.Message;
@@ -565,7 +612,7 @@ namespace Surfus.Shell
             // Runs on background thread
             if (messageEvent.Message is IChannelRecipient channelMessage)
             {
-               if(!_channels.ContainsKey(channelMessage.RecipientChannel))
+                if (!_channels.ContainsKey(channelMessage.RecipientChannel))
                 {
                     throw new SshException("Server sent a message for a invalid recipient channel.");
                 }
@@ -621,13 +668,14 @@ namespace Surfus.Shell
 
             if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
             {
-                await _tcpStream.WriteAsync(macOutput, 0, ConnectionInfo.WriteMacAlgorithm.OutputSize, cancellationToken).ConfigureAwait(false);
+                await _tcpStream
+                    .WriteAsync(macOutput, 0, ConnectionInfo.WriteMacAlgorithm.OutputSize, cancellationToken)
+                    .ConfigureAwait(false);
             }
 
             await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
-            ConnectionInfo.OutboundPacketSequence = ConnectionInfo.OutboundPacketSequence != uint.MaxValue
-                                                         ? ConnectionInfo.OutboundPacketSequence + 1
-                                                         : 0;
+            ConnectionInfo.OutboundPacketSequence =
+                ConnectionInfo.OutboundPacketSequence != uint.MaxValue ? ConnectionInfo.OutboundPacketSequence + 1 : 0;
         }
 
         /// <summary>

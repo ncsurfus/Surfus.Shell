@@ -10,9 +10,7 @@
         /// <summary>
         /// An exception thrown when there is an authentication issue.
         /// </summary>
-        public SshAuthenticationException(string message) : base(message)
-        {
-
-        }
+        public SshAuthenticationException(string message)
+            : base(message) { }
     }
 }

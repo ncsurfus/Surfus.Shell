@@ -20,12 +20,14 @@ namespace Surfus.Shell.KeyExchange
         /// <summary>
         /// Supported key exchange algorithms.
         /// </summary>
-        internal static string[] Supported
-            =>
-                new[]
-                    {
-                        "diffie-hellman-group14-sha1", "diffie-hellman-group1-sha1", "diffie-hellman-group-exchange-sha1", "diffie-hellman-group-exchange-sha256"
-                    };
+        internal static string[] Supported =>
+            new[]
+            {
+                "diffie-hellman-group14-sha1",
+                "diffie-hellman-group1-sha1",
+                "diffie-hellman-group-exchange-sha1",
+                "diffie-hellman-group-exchange-sha256"
+            };
 
         /// <summary>
         /// Gets the hash created from the key exchange algorithm.
@@ -54,7 +56,7 @@ namespace Surfus.Shell.KeyExchange
                     return new DiffieHellmanGroupKeyExchange(client, exchangeResult, "SHA256");
                 case "diffie-hellman-group-exchange-sha1":
                     return new DiffieHellmanGroupKeyExchange(client, exchangeResult, "SHA1");
-                 case "diffie-hellman-group14-sha1":
+                case "diffie-hellman-group14-sha1":
                     return new DiffieHellmanGroup14Sha1(client, exchangeResult);
                 case "diffie-hellman-group1-sha1":
                     return new DiffieHellmanGroup1Sha1(client, exchangeResult);
@@ -82,7 +84,7 @@ namespace Surfus.Shell.KeyExchange
             {
                 var keySize = hashAlgorithm.HashSize / 8;
 
-                while(keySize < requiredBytes)
+                while (keySize < requiredBytes)
                 {
                     keySize += hashAlgorithm.HashSize / 8;
                 }
@@ -96,7 +98,7 @@ namespace Surfus.Shell.KeyExchange
                 firstHashWriter.WriteByteBlob(sessionId);
                 keyWriter.WriteByteBlob(hashAlgorithm.ComputeHash(firstHashWriter.Bytes));
 
-                while(keyWriter.Position < requiredBytes)
+                while (keyWriter.Position < requiredBytes)
                 {
                     var repeatHashWriter = new ByteWriter(K.GetBigIntegerSize() + H.GetByteBlobSize() + keyWriter.Position);
                     repeatHashWriter.WriteBigInteger(K);
@@ -121,8 +123,7 @@ namespace Surfus.Shell.KeyExchange
                 RandomGenerator.GetBytes(randomBytes);
                 randomBytes[randomBytes.Length - 1] = 0;
                 randomValue = new BigInteger(randomBytes);
-            }
-            while (randomValue < minValue || randomValue > maxValue);
+            } while (randomValue < minValue || randomValue > maxValue);
             return randomValue;
         }
 

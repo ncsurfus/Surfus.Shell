@@ -54,7 +54,7 @@ namespace Surfus.Shell.Crypto
         /// <returns></returns>
         internal override void Encrypt(byte[] byteArray, int offset, int length)
         {
-             _encryptor.TransformBlock(byteArray, offset, length, byteArray, offset);
+            _encryptor.TransformBlock(byteArray, offset, length, byteArray, offset);
         }
 
         /// <summary>
@@ -80,11 +80,16 @@ namespace Surfus.Shell.Crypto
             }
         }
 
-        internal override async Task<SshPacket> ReadPacketAsync(NetworkStream networkStream, uint packetSequenceNumber, int hmacSize, CancellationToken cancellationToken)
+        internal override async Task<SshPacket> ReadPacketAsync(
+            NetworkStream networkStream,
+            uint packetSequenceNumber,
+            int hmacSize,
+            CancellationToken cancellationToken
+        )
         {
             var blockSize = _decryptor.InputBlockSize; // This code was made assuming the decryption and encryption block sizes are the same!
             var expectedPacketSize = 128; // We're going to initialize the buffer to the average expected packet length.
-            var buffer = new byte[4 + blockSize + expectedPacketSize + hmacSize];// Array Length: uint (packetSequenceNumber) + uint (packet size) + expectedPacketSize + hmac size
+            var buffer = new byte[4 + blockSize + expectedPacketSize + hmacSize]; // Array Length: uint (packetSequenceNumber) + uint (packet size) + expectedPacketSize + hmac size
 
             ByteWriter.WriteUint(buffer, 0, packetSequenceNumber); // Write first uint, which is the packet sequence number.
             var packetStart = 4; // This is where we actually start adding packet data, skipping the provided packet sequence number..
@@ -93,13 +98,19 @@ namespace Surfus.Shell.Crypto
             // Read enough data until we have at least 1 block.
             while (bufferPosition != blockSize + packetStart)
             {
-                bufferPosition += await networkStream.ReadAsync(buffer, bufferPosition, blockSize + packetStart - bufferPosition, cancellationToken);
+                bufferPosition += await networkStream.ReadAsync(
+                    buffer,
+                    bufferPosition,
+                    blockSize + packetStart - bufferPosition,
+                    cancellationToken
+                );
             }
 
             _decryptor.TransformBlock(buffer, bufferPosition - blockSize, blockSize, buffer, bufferPosition - blockSize); // Decrypt the first block in the buffer.
 
             var sshPacketSize = ByteReader.ReadUInt32(buffer, 4); // Get the length of the packet.
-            if (sshPacketSize > 35000) throw new SshException("Invalid message sent, packet was to large!");
+            if (sshPacketSize > 35000)
+                throw new SshException("Invalid message sent, packet was to large!");
             int bufferLength = (int)(4 + 4 + sshPacketSize + hmacSize); // Calculate the full size of what our buffer *should* be. uint (packetSequenceNumber) + uint (packet size) + packet + hmac size
 
             if (buffer.Length < bufferLength) // Check to see if we need a bigger buffer and should allocate additional data.
@@ -112,7 +123,7 @@ namespace Surfus.Shell.Crypto
                 bufferPosition += await networkStream.ReadAsync(buffer, bufferPosition, bufferLength - bufferPosition, cancellationToken);
             }
 
-            if(sshPacketSize > blockSize) // Check if this was more than a single block..
+            if (sshPacketSize > blockSize) // Check if this was more than a single block..
             {
                 // Decrypt everything except the first block as that was already decrypted!
                 _decryptor.TransformBlock(buffer, 4 + blockSize, bufferLength - 4 - blockSize - hmacSize, buffer, 4 + blockSize);

@@ -8,9 +8,7 @@
         /// <summary>
         /// An exception thrown when the server rejects the supplied credentials.
         /// </summary>
-        public SshInvalidCredentials() : base("The credentials were rejected.")
-        {
-
-        }
+        public SshInvalidCredentials()
+            : base("The credentials were rejected.") { }
     }
 }

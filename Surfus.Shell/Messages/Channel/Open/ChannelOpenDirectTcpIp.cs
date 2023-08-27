@@ -2,7 +2,8 @@
 {
     internal class ChannelOpenDirectTcpIp : ChannelOpen
     {
-        internal ChannelOpenDirectTcpIp(SshPacket packet) : base(packet, "direct-tcpip")
+        internal ChannelOpenDirectTcpIp(SshPacket packet)
+            : base(packet, "direct-tcpip")
         {
             Host = packet.Reader.ReadString();
             Port = packet.Reader.ReadUInt32();
@@ -10,7 +11,8 @@
             OriginatorPort = packet.Reader.ReadUInt32();
         }
 
-        public ChannelOpenDirectTcpIp(string host, uint port, string originatorAddress, uint originatorPort, uint senderChannel) : base("direct-tcpip", senderChannel)
+        public ChannelOpenDirectTcpIp(string host, uint port, string originatorAddress, uint originatorPort, uint senderChannel)
+            : base("direct-tcpip", senderChannel)
         {
             Host = host;
             Port = port;

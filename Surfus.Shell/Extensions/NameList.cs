@@ -9,8 +9,8 @@ namespace Surfus.Shell.Extensions
         {
             if (names == null || names.Length == 0)
             {
-                AsBytes = new byte[] {};
-                Names = new string[] {};
+                AsBytes = new byte[] { };
+                Names = new string[] { };
                 AsString = string.Empty;
                 IsEmpty = true;
                 return;

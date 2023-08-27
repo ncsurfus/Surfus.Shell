@@ -14,9 +14,7 @@ namespace Surfus.Shell.Exceptions
         /// The message.
         /// </param>
         public ChannelRequestFailedException(string message)
-            : base(message)
-        {
-        }
+            : base(message) { }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ChannelRequestFailedException"/> class.
@@ -28,9 +26,6 @@ namespace Surfus.Shell.Exceptions
         /// The inner exception.
         /// </param>
         public ChannelRequestFailedException(string message, Exception innerException)
-            : base(message, innerException)
-        {
-        }
-
+            : base(message, innerException) { }
     }
 }

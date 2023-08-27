@@ -105,7 +105,9 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             }
 
             // Send the request message to begin the Diffie-Hellman Group Key Exchange.
-            await _client.WriteMessageAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken).ConfigureAwait(false);
+            await _client
+                .WriteMessageAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken)
+                .ConfigureAwait(false);
 
             _keyExchangeAlgorithmState = State.WaitingonDhgGroup;
         }
@@ -233,23 +235,30 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             K = new BigInt(BigInteger.ModPow(replyMessage.F.BigInteger, _x, _dhgGroupMessage.P.BigInteger));
 
             // Prepare the signing algorithm from the servers public key.
-            _signingAlgorithm = Signer.CreateSigner(_kexInitExchangeResult.ServerHostKeyAlgorithm, replyMessage.ServerPublicHostKeyAndCertificates);
+            _signingAlgorithm = Signer.CreateSigner(
+                _kexInitExchangeResult.ServerHostKeyAlgorithm,
+                replyMessage.ServerPublicHostKeyAndCertificates
+            );
 
             _client.ConnectionInfo.ServerCertificate = replyMessage.ServerPublicHostKeyAndCertificates;
             _client.ConnectionInfo.ServerCertificateSize = _signingAlgorithm.KeySize;
 
             // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.
-            var totalBytes = _client.ConnectionInfo.ClientVersion.GetStringSize() +
-                             _client.ConnectionInfo.ServerVersion.GetStringSize() +
-                             _kexInitExchangeResult.Client.GetKexInitBinaryStringSize() + 
-                             _kexInitExchangeResult.Server.GetKexInitBinaryStringSize() +
-                             replyMessage.ServerPublicHostKeyAndCertificates.GetBinaryStringSize() +
-                             4 + 4 + 4 + // Min/Desired/Max Sizes
-                             _dhgGroupMessage.P.GetBigIntegerSize() +
-                             _dhgGroupMessage.G.GetBigIntegerSize() +
-                             _e.GetBigIntegerSize() +
-                             replyMessage.F.GetBigIntegerSize() +
-                             K.GetBigIntegerSize();
+            var totalBytes =
+                _client.ConnectionInfo.ClientVersion.GetStringSize()
+                + _client.ConnectionInfo.ServerVersion.GetStringSize()
+                + _kexInitExchangeResult.Client.GetKexInitBinaryStringSize()
+                + _kexInitExchangeResult.Server.GetKexInitBinaryStringSize()
+                + replyMessage.ServerPublicHostKeyAndCertificates.GetBinaryStringSize()
+                + 4
+                + 4
+                + 4
+                + // Min/Desired/Max Sizes
+                _dhgGroupMessage.P.GetBigIntegerSize()
+                + _dhgGroupMessage.G.GetBigIntegerSize()
+                + _e.GetBigIntegerSize()
+                + replyMessage.F.GetBigIntegerSize()
+                + K.GetBigIntegerSize();
 
             var byteWriter = new ByteWriter(totalBytes);
             byteWriter.WriteString(_client.ConnectionInfo.ClientVersion);
@@ -286,7 +295,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
         internal override Task<bool> ProcessMessage34Async(MessageEvent message, CancellationToken cancellationToken)
         {
-			throw new SshUnexpectedMessage(MessageType.SSH_MSG_KEX_Exchange_34);
+            throw new SshUnexpectedMessage(MessageType.SSH_MSG_KEX_Exchange_34);
         }
 
         /// <summary>

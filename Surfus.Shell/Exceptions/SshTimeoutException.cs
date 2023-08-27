@@ -5,14 +5,16 @@ namespace Surfus.Shell.Exceptions
 {
     public class SshTimeoutException : SshException
     {
-        internal SshTimeoutException(MessageType messageType) : base($"Server failed to respond to {messageType} in a timely manner.")
+        internal SshTimeoutException(MessageType messageType)
+            : base($"Server failed to respond to {messageType} in a timely manner.")
         {
             MessageType = messageType.ToString();
-            MessageCode = (byte) messageType;
+            MessageCode = (byte)messageType;
         }
 
-        public SshTimeoutException(MessageType messageType, Exception innerException) : base($"Server failed to respond to {messageType} in a timely manner.", innerException)
-        {  
+        public SshTimeoutException(MessageType messageType, Exception innerException)
+            : base($"Server failed to respond to {messageType} in a timely manner.", innerException)
+        {
             MessageType = messageType.ToString();
             MessageCode = (byte)messageType;
         }

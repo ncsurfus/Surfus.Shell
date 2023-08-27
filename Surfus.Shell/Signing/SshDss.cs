@@ -9,19 +9,19 @@ namespace Surfus.Shell.Signing
     internal sealed class SshDss : Signer
     {
         public SshDss(byte[] signature)
-		{
+        {
             var reader = new ByteReader(signature);
-		    if (Name != reader.ReadString())
-		    {
-		        throw new Exception($"Expected {Name} signature type");
+            if (Name != reader.ReadString())
+            {
+                throw new Exception($"Expected {Name} signature type");
             }
 
-		    P = reader.ReadBigInteger();
-		    Q = reader.ReadBigInteger();
-		    G = reader.ReadBigInteger();
-		    Y = reader.ReadBigInteger();
+            P = reader.ReadBigInteger();
+            Q = reader.ReadBigInteger();
+            G = reader.ReadBigInteger();
+            Y = reader.ReadBigInteger();
             KeySize = Y.Buffer.Length * 8;
-		}
+        }
 
         public BigInt P { get; }
         public BigInt Q { get; }
@@ -71,11 +71,14 @@ namespace Surfus.Shell.Signing
 
         BigInteger ModInverse(BigInteger a, BigInteger n)
         {
-            BigInteger i = n, v = 0, d = 1;
+            BigInteger i = n,
+                v = 0,
+                d = 1;
 
             while (a > 0)
             {
-                BigInteger t = i / a, x = a;
+                BigInteger t = i / a,
+                    x = a;
                 a = i % x;
                 i = x;
                 x = d;

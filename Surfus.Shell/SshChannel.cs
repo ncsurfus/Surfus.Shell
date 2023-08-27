@@ -241,7 +241,8 @@ namespace Surfus.Shell
                 throw new SshException("Received unexpected channel message.");
             }
 
-            SendWindow += (int)message.BytesToAdd;        }
+            SendWindow += (int)message.BytesToAdd;
+        }
 
         /// <summary>
         /// Processes a channel message that was sent by the server.
@@ -268,7 +269,9 @@ namespace Surfus.Shell
 
             if (ReceiveWindow <= 0)
             {
-                await _client.WriteMessageAsync(new ChannelWindowAdjust(ServerId, (uint)WindowRefill), cancellationToken).ConfigureAwait(false);
+                await _client
+                    .WriteMessageAsync(new ChannelWindowAdjust(ServerId, (uint)WindowRefill), cancellationToken)
+                    .ConfigureAwait(false);
                 ReceiveWindow += WindowRefill;
             }
 

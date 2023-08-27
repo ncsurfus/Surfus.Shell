@@ -8,9 +8,7 @@
         /// <summary>
         /// Disposes the CompressionAlgorithm.
         /// </summary>
-        public override void Dispose()
-        {
-        }
+        public override void Dispose() { }
 
         /// <summary>
         /// Compresses the data.

@@ -2,12 +2,14 @@ namespace Surfus.Shell.Messages.Channel.Requests
 {
     internal class ChannelRequestSubsystem : ChannelRequest
     {
-        public ChannelRequestSubsystem(SshPacket packet, uint recipientChannel) : base(packet, "subsystem", recipientChannel)
+        public ChannelRequestSubsystem(SshPacket packet, uint recipientChannel)
+            : base(packet, "subsystem", recipientChannel)
         {
             Subsystem = packet.Reader.ReadString();
         }
 
-        public ChannelRequestSubsystem(uint recipientChannel, bool wantReply, string subsystem) : base(recipientChannel, "subsysem", wantReply)
+        public ChannelRequestSubsystem(uint recipientChannel, bool wantReply, string subsystem)
+            : base(recipientChannel, "subsysem", wantReply)
         {
             Subsystem = subsystem;
         }

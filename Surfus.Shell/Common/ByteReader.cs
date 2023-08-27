@@ -85,7 +85,7 @@ namespace Surfus.Shell
             {
                 value = (uint)(Bytes[Position] | Bytes[Position + 1] << 8 | Bytes[Position + 2] << 16 | Bytes[Position + 3] << 24);
             }
-            
+
             Position += 4;
             return value;
         }
@@ -98,10 +98,9 @@ namespace Surfus.Shell
         {
             if (BitConverter.IsLittleEndian)
             {
-                return (uint) (buffer[index + 0] << 24 | buffer[index + 1] << 16 | buffer[index + 2] << 8 | buffer[index + 3]);
+                return (uint)(buffer[index + 0] << 24 | buffer[index + 1] << 16 | buffer[index + 2] << 8 | buffer[index + 3]);
             }
-            return (uint) (buffer[index] | buffer[index + 1] << 8 | buffer[index + 2] << 16 | buffer[index + 3] << 24);
-
+            return (uint)(buffer[index] | buffer[index + 1] << 8 | buffer[index + 2] << 16 | buffer[index + 3] << 24);
         }
 
         /// <summary>
@@ -159,7 +158,7 @@ namespace Surfus.Shell
         internal static BigInteger ReadBigInteger(byte[] buffer)
         {
             // If the buffer represents a negative format, add an additional piece at the end (which is initialized to 0), making our number positive.
-            if(buffer[buffer.Length - 1] <= 127)
+            if (buffer[buffer.Length - 1] <= 127)
             {
                 Array.Reverse(buffer);
                 return new BigInteger(buffer);

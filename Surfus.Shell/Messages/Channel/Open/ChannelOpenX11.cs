@@ -2,13 +2,15 @@ namespace Surfus.Shell.Messages.Channel.Open
 {
     internal class ChannelOpenX11 : ChannelOpen
     {
-        public ChannelOpenX11(SshPacket packet) : base(packet, "x11")
+        public ChannelOpenX11(SshPacket packet)
+            : base(packet, "x11")
         {
             OriginatorAddress = packet.Reader.ReadString();
             OriginatorPort = packet.Reader.ReadUInt32();
         }
 
-        public ChannelOpenX11(string originatorAddress, uint originatorPort, uint senderChannel) : base("x11", senderChannel)
+        public ChannelOpenX11(string originatorAddress, uint originatorPort, uint senderChannel)
+            : base("x11", senderChannel)
         {
             OriginatorAddress = originatorAddress;
             OriginatorPort = originatorPort;

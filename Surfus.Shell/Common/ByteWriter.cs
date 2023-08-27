@@ -187,7 +187,7 @@ namespace Surfus.Shell
         /// <param name="utf8String"></param>
         internal void WriteString(string utf8String)
         {
-            if(utf8String == null)
+            if (utf8String == null)
             {
                 WriteUint(0);
                 return;

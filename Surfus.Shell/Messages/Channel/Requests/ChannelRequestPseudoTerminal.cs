@@ -2,7 +2,8 @@ namespace Surfus.Shell.Messages.Channel.Requests
 {
     internal class ChannelRequestPseudoTerminal : ChannelRequest
     {
-        public ChannelRequestPseudoTerminal(SshPacket packet, uint recipientChannel) : base(packet, "pty-req", recipientChannel)
+        public ChannelRequestPseudoTerminal(SshPacket packet, uint recipientChannel)
+            : base(packet, "pty-req", recipientChannel)
         {
             TermEnvironment = packet.Reader.ReadString();
             TerminalWidthCharacters = packet.Reader.ReadUInt32();
@@ -12,7 +13,14 @@ namespace Surfus.Shell.Messages.Channel.Requests
             TerminalModes = packet.Reader.ReadBinaryString();
         }
 
-        public ChannelRequestPseudoTerminal(uint recipientChannel, bool wantReply, string terminalEnvironment, uint terminalCharacters, uint terminalRows) : base(recipientChannel, "pty-req", wantReply)
+        public ChannelRequestPseudoTerminal(
+            uint recipientChannel,
+            bool wantReply,
+            string terminalEnvironment,
+            uint terminalCharacters,
+            uint terminalRows
+        )
+            : base(recipientChannel, "pty-req", wantReply)
         {
             TermEnvironment = terminalEnvironment;
             TerminalWidthCharacters = terminalCharacters;
@@ -24,7 +32,7 @@ namespace Surfus.Shell.Messages.Channel.Requests
         public uint TerminalHeightRows { get; }
         public uint TerminalWidthPixels { get; } = 640;
         public uint TerminalHeightPixels { get; } = 480;
-        public byte[] TerminalModes { get; } = {};
+        public byte[] TerminalModes { get; } = { };
 
         public override ByteWriter GetByteWriter()
         {

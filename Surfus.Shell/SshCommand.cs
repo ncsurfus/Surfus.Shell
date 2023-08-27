@@ -81,7 +81,7 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Closes the command. 
+        /// Closes the command.
         /// </summary>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
         /// <returns></returns>
@@ -131,8 +131,14 @@ namespace Surfus.Shell
             bool eof = false;
             bool closed = false;
 
-            _channel.OnChannelEofReceived = (message) => { eof = true; };
-            _channel.OnChannelCloseReceived = (message) => { closed = true; };
+            _channel.OnChannelEofReceived = (message) =>
+            {
+                eof = true;
+            };
+            _channel.OnChannelCloseReceived = (message) =>
+            {
+                closed = true;
+            };
 
             await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken).ConfigureAwait(false);
             await _client.ReadWhileAsync(() => !eof && !closed, cancellationToken).ConfigureAwait(false);

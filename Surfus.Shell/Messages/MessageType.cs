@@ -47,7 +47,11 @@ namespace Surfus.Shell.Messages
         /// <summary>
         /// New Keys Message. After this message is sent both parties will switchover to the new crypto as determiend
         /// </summary>
-        [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1650:ElementDocumentationMustBeSpelledCorrectly", Justification = "Reviewed. Suppression is OK here.")]
+        [SuppressMessage(
+            "StyleCop.CSharp.DocumentationRules",
+            "SA1650:ElementDocumentationMustBeSpelledCorrectly",
+            Justification = "Reviewed. Suppression is OK here."
+        )]
         SSH_MSG_NEWKEYS = 21,
 
         /// <summary>
@@ -113,18 +117,18 @@ namespace Surfus.Shell.Messages
         /// <summary>
         /// The ss h_ ms g_ reques t_ success.
         /// </summary>
-        SSH_MSG_REQUEST_SUCCESS = 81, 
-        SSH_MSG_REQUEST_FAILURE = 82, 
-        SSH_MSG_CHANNEL_OPEN = 90, 
-        SSH_MSG_CHANNEL_OPEN_CONFIRMATION = 91, 
-        SSH_MSG_CHANNEL_OPEN_FAILURE = 92, 
-        SSH_MSG_CHANNEL_WINDOW_ADJUST = 93, 
-        SSH_MSG_CHANNEL_DATA = 94, 
-        SSH_MSG_CHANNEL_EXTENDED_DATA = 95, 
-        SSH_MSG_CHANNEL_EOF = 96, 
-        SSH_MSG_CHANNEL_CLOSE = 97, 
-        SSH_MSG_CHANNEL_REQUEST = 98, 
-        SSH_MSG_CHANNEL_SUCCESS = 99, 
+        SSH_MSG_REQUEST_SUCCESS = 81,
+        SSH_MSG_REQUEST_FAILURE = 82,
+        SSH_MSG_CHANNEL_OPEN = 90,
+        SSH_MSG_CHANNEL_OPEN_CONFIRMATION = 91,
+        SSH_MSG_CHANNEL_OPEN_FAILURE = 92,
+        SSH_MSG_CHANNEL_WINDOW_ADJUST = 93,
+        SSH_MSG_CHANNEL_DATA = 94,
+        SSH_MSG_CHANNEL_EXTENDED_DATA = 95,
+        SSH_MSG_CHANNEL_EOF = 96,
+        SSH_MSG_CHANNEL_CLOSE = 97,
+        SSH_MSG_CHANNEL_REQUEST = 98,
+        SSH_MSG_CHANNEL_SUCCESS = 99,
         SSH_MSG_CHANNEL_FAILURE = 100
     }
 }

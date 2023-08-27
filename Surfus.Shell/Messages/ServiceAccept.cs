@@ -6,6 +6,7 @@ namespace Surfus.Shell.Messages
         {
             ServiceName = packet.Reader.ReadString();
         }
+
         public string ServiceName { get; }
 
         public MessageType Type { get; } = MessageType.SSH_MSG_SERVICE_ACCEPT;
