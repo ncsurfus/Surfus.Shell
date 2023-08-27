@@ -46,14 +46,28 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// </param>
         protected DiffieHellmanKeyExchange(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult)
         {
+            var e = BigInteger.Zero;
+            var x = BigInteger.Zero;
+            while (e < 1 || e > P.BigInteger - 1)
+            {
+                x = GenerateRandomBigInteger(Bits, Bits * 2);
+                e = BigInteger.ModPow(G.BigInteger, x, P.BigInteger);
+            }
+            E = new BigInt(e);
+            X = new BigInt(x);
             _client = sshClient;
             _kexInitExchangeResult = kexInitExchangeResult;
         }
 
         /// <summary>
+        /// MODP Group Bit Length
+        /// </summary>
+        protected abstract uint Bits { get; }
+
+        /// <summary>
         /// E = g^x mod p
         /// </summary>
-        protected abstract BigInt E { get; }
+        protected BigInt E { get; }
 
         /// <summary>
         /// Gets the generator for the subgroup.
@@ -68,7 +82,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// <summary>
         /// A random number between [1, q]
         /// </summary>
-        protected abstract BigInt X { get; }
+        protected BigInt X { get; }
 
         /// <summary>
         /// This method conducts the Diffie-Hellman Key Exchange with the remote party.

@@ -9,31 +9,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
     internal sealed class DiffieHellmanGroup1Sha1 : DiffieHellmanKeyExchange
     {
         internal DiffieHellmanGroup1Sha1(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult)
-            : base(sshClient, kexInitExchangeResult)
-        {
-            var e = BigInteger.Zero;
-            var x = BigInteger.Zero;
-            while (e < 1 || e > P.BigInteger - 1)
-            {
-                if (!sshClient.ConnectionInfo.ServerVersion.Contains("OpenSSH"))
-                {
-                    x = GenerateRandomBigInteger(1, 2048);
-                    e = BigInteger.ModPow(G.BigInteger, x, P.BigInteger);
-                }
-                else
-                {
-                    x = GenerateRandomBigInteger(1024, 2048);
-                    e = BigInteger.ModPow(G.BigInteger, x, P.BigInteger);
-                }
-            }
-            E = new BigInt(e);
-            X = new BigInt(x);
-        }
-
-        /// <summary>
-        /// E = g^x mod p
-        /// </summary>
-        protected override BigInt E { get; }
+            : base(sshClient, kexInitExchangeResult) { }
 
         /// <summary>
         /// A large predefined safe prime number.
@@ -46,9 +22,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
                 )
             );
 
-        /// <summary>
-        /// A random number between [1, q]
-        /// </summary>
-        protected override BigInt X { get; }
+        protected override uint Bits => 1024;
     }
 }
