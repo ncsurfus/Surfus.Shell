@@ -14,7 +14,7 @@ namespace Surfus.Shell.Signing
             switch (name)
             {
                 case "ecdsa-sha2-nistp256":
-                    return new EcdsaSha2Nistp256(serverHostKey);
+                    return new ECDsaSha2Nistp256(serverHostKey);
                 case "ssh-rsa":
                     return new SshRsa(serverHostKey);
                 case "rsa-sha2-256":
