@@ -12,7 +12,3 @@ Surfus.Shell is an SSH library for .NET designed to be super quick! It's been pr
         var terminal = await client.CreateTerminalAsync(CancellationToken.None);
         terminal.WriteAsync("Hello World!", CancellationToken.None);
     }
-	
-## Todo
- - Create a callback function for host key validation.
- - Provide support for certificate authentication.

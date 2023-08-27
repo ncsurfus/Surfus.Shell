@@ -11,6 +11,15 @@
     <PackageTags>C# SSH .NET</PackageTags>
     <Title>Surfus.Shell</Title>
     <PackOnBuild>true</PackOnBuild>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageProjectUrl>https://github.com/ncsurfus/Surfus.Shell</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ncsurfus/Surfus.Shell</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <Version Condition=" '$(Configuration)' == 'Debug' ">$(Version)-Debug</Version>
   </PropertyGroup>
+    <ItemGroup>
+        <None Include="..\README.md" Pack="true" PackagePath="/"/>
+        <None Include="..\LICENSE" Pack="true" PackagePath="/"/>
+    </ItemGroup>
 </Project>
