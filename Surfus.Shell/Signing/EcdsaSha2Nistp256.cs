@@ -19,7 +19,8 @@ namespace Surfus.Shell.Signing
             }
 
             // https://www.rfc-editor.org/rfc/rfc5656#section-3.1
-            // TODO: Point Compression, I think?
+            // TODO: Point Compression. This is not implemented in OpenSSH and I am
+            // also ignoring it here.
             var qBytes = reader.ReadBinaryString().AsMemory();
             var x = qBytes.Slice(1, (qBytes.Length - 1) / 2);
             var y = qBytes.Slice(1 + x.Length, x.Length);
