@@ -1,13 +1,11 @@
-using System;
 using System.Security.Cryptography;
 
 namespace Surfus.Shell.Signing
 {
     public sealed class ECDsaSha2Nistp256 : ECDsaBase
     {
-        public ECDsaSha2Nistp256(byte[] publicCertificate) : base(publicCertificate)
-        {
-        }
+        public ECDsaSha2Nistp256(byte[] publicCertificate)
+            : base(publicCertificate) { }
 
         public override string Name { get; } = "ecdsa-sha2-nistp256";
 
