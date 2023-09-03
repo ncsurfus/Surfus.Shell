@@ -120,7 +120,7 @@ namespace Surfus.Shell.Messages.KeyExchange
             //    return _bytes.Count;
             // }
             return ByteSizer.GetByteSize()
-                + RandomBytes.GetByteBlobSize()
+                + RandomBytes.AsMemory().GetByteBlobSize()
                 + KexAlgorithms.GetNameListSize()
                 + ServerHostKeyAlgorithms.GetNameListSize()
                 + EncryptionClientToServer.GetNameListSize()

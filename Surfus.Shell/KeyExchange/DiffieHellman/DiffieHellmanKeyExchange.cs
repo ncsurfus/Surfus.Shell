@@ -15,25 +15,8 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
     /// </summary>
     internal abstract class DiffieHellmanKeyExchange : KeyExchangeAlgorithm
     {
-        /// <summary>
-        /// The state of the Key Exchange Algorithm
-        /// </summary>
-        private State _keyExchangeAlgorithmState = State.Initial;
-
-        /// <summary>
-        /// The result of the KexInit exchange.
-        /// </summary>
+        private readonly SshClient _sshClient;
         private readonly KexInitExchangeResult _kexInitExchangeResult;
-
-        /// <summary>
-        /// The SshClient representing the SSH connection.
-        /// </summary>
-        private readonly SshClient _client;
-
-        /// <summary>
-        /// The signing algorithm.
-        /// </summary>
-        private Signer _signingAlgorithm;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DiffieHellmanKeyExchange"/> class.
@@ -55,7 +38,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             }
             E = new BigInt(e);
             X = new BigInt(x);
-            _client = sshClient;
+            _sshClient = sshClient;
             _kexInitExchangeResult = kexInitExchangeResult;
         }
 
@@ -85,26 +68,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         protected BigInt X { get; }
 
         /// <summary>
-        /// This method conducts the Diffie-Hellman Key Exchange with the remote party.
-        /// </summary>
-        /// <returns>
-        /// The <see cref="Task"/>.
-        /// </returns>
-        /// <exception cref="SshException">
-        /// Throws an SshException if the key exchange fails.
-        /// </exception>
-        internal override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
-        {
-            if (_keyExchangeAlgorithmState != State.Initial)
-            {
-                throw new SshException("Unexpected key exchange algorithm state");
-            }
-
-            await _client.WriteMessageAsync(new DhInit(E), cancellationToken).ConfigureAwait(false);
-            _keyExchangeAlgorithmState = State.WaitingOnDhReply;
-        }
-
-        /// <summary>
         /// Hashes the data with the hash algorithm specified in the constructor.
         /// </summary>
         /// <param name="data">
@@ -115,10 +78,8 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// </returns>
         public byte[] Hash(byte[] data)
         {
-            using (var shaGenerator = CreateHashAlgorithm())
-            {
-                return shaGenerator.ComputeHash(data);
-            }
+            using var shaGenerator = CreateHashAlgorithm();
+            return shaGenerator.ComputeHash(data);
         }
 
         /// <summary>
@@ -135,31 +96,16 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             return SHA1.Create();
         }
 
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal override Task<bool> ProcessMessage30Async(MessageEvent message, CancellationToken cancellationToken)
+        public override async Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
-        }
+            // Send the DHReply message after we've sent the DH Init.
+            var dhReplyMessage = await _sshClient.ReadUntilAsync(
+                async () => await _sshClient.WriteMessageAsync(new DhInit(E), cancellationToken).ConfigureAwait(false),
+                m => KexThrowIfNotMessageType(m, MessageType.SSH_MSG_KEX_Exchange_31),
+                cancellationToken
+            );
 
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal override async Task<bool> ProcessMessage31Async(MessageEvent message, CancellationToken cancellationToken)
-        {
-            if (_keyExchangeAlgorithmState != State.WaitingOnDhReply)
-            {
-                throw new SshException("Unexpected key exchange algorithm message");
-            }
-
-            var reply = new DhReply(message.Packet);
+            var reply = new DhReply(dhReplyMessage.Packet);
 
             // Verify 'F' is in the range of [1, p-1]
             if (reply.F.BigInteger < 1 || reply.F.BigInteger > P.BigInteger - 1)
@@ -168,96 +114,52 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             }
 
             // Generate the shared secret 'K'
-            K = new BigInt(BigInteger.ModPow(reply.F.BigInteger, X.BigInteger, P.BigInteger));
+            var k = new BigInt(BigInteger.ModPow(reply.F.BigInteger, X.BigInteger, P.BigInteger));
 
             // Prepare the signing algorithm from the servers public key.
-            _signingAlgorithm = Signer.CreateSigner(
+            var signingAlgorithm = Signer.CreateSigner(
                 _kexInitExchangeResult.ServerHostKeyAlgorithm,
                 reply.ServerPublicHostKeyAndCertificates
             );
 
-            _client.ConnectionInfo.ServerCertificate = reply.ServerPublicHostKeyAndCertificates;
-            _client.ConnectionInfo.ServerCertificateSize = _signingAlgorithm.KeySize;
+            _sshClient.ConnectionInfo.ServerCertificate = reply.ServerPublicHostKeyAndCertificates;
+            _sshClient.ConnectionInfo.ServerCertificateSize = signingAlgorithm.KeySize;
 
-            if (_client.HostKeyCallback != null && !_client.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates))
+            if (_sshClient.HostKeyCallback != null && !_sshClient.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates))
             {
                 throw new SshException("Rejected Host Key.");
             }
 
             // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.s
             var totalBytes =
-                _client.ConnectionInfo.ClientVersion.GetStringSize()
-                + _client.ConnectionInfo.ServerVersion.GetStringSize()
+                _sshClient.ConnectionInfo.ClientVersion.GetStringSize()
+                + _sshClient.ConnectionInfo.ServerVersion.GetStringSize()
                 + _kexInitExchangeResult.Client.GetKexInitBinaryStringSize()
                 + _kexInitExchangeResult.Server.GetKexInitBinaryStringSize()
                 + reply.ServerPublicHostKeyAndCertificates.GetBinaryStringSize()
                 + E.GetBigIntegerSize()
                 + reply.F.GetBigIntegerSize()
-                + K.GetBigIntegerSize();
+                + k.GetBigIntegerSize();
 
             var byteWriter = new ByteWriter(totalBytes);
-            byteWriter.WriteString(_client.ConnectionInfo.ClientVersion);
-            byteWriter.WriteString(_client.ConnectionInfo.ServerVersion);
+            byteWriter.WriteString(_sshClient.ConnectionInfo.ClientVersion);
+            byteWriter.WriteString(_sshClient.ConnectionInfo.ServerVersion);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Client);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Server);
             byteWriter.WriteBinaryString(reply.ServerPublicHostKeyAndCertificates);
             byteWriter.WriteBigInteger(E);
             byteWriter.WriteBigInteger(reply.F);
-            byteWriter.WriteBigInteger(K);
+            byteWriter.WriteBigInteger(k);
 
-            H = Hash(byteWriter.Bytes);
+            var h = Hash(byteWriter.Bytes);
 
             // Use the signing algorithm to verify the data sent by the server is correct.
-            if (!_signingAlgorithm.VerifySignature(H, reply.HSignature))
+            if (!signingAlgorithm.VerifySignature(h, reply.HSignature))
             {
                 throw new SshException("Invalid Host Signature.");
             }
 
-            _keyExchangeAlgorithmState = State.Complete;
-            return await Task.FromResult(true);
-        }
-
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal override Task<bool> ProcessMessage32Async(MessageEvent message, CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal override Task<bool> ProcessMessage33Async(MessageEvent message, CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal override Task<bool> ProcessMessage34Async(MessageEvent message, CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// The states of the DiffieHellmanKeyExchange.
-        /// </summary>
-        internal enum State
-        {
-            Initial,
-            WaitingOnDhReply,
-            Complete
+            return new KeyExchangeResult(h, k);
         }
     }
 }

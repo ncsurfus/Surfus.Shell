@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,11 +15,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
     /// </summary>
     internal class DiffieHellmanGroupKeyExchange : KeyExchangeAlgorithm
     {
-        /// <summary>
-        /// The state of the Key Exchange Algorithm
-        /// </summary>
-        private State _keyExchangeAlgorithmState = State.Initial;
-
         /// <summary>
         /// The maximum group size.
         /// </summary>
@@ -55,21 +51,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         private Signer _signingAlgorithm;
 
         /// <summary>
-        /// The signing algorithm.
-        /// </summary>
-        private BigInt _e;
-
-        /// <summary>
-        /// The signing algorithm.
-        /// </summary>
-        private BigInteger _x;
-
-        /// <summary>
-        /// The DhgGroup Message
-        /// </summary>
-        private DhgGroup _dhgGroupMessage;
-
-        /// <summary>
         /// Initializes a new instance of the <see cref="DiffieHellmanGroupKeyExchange"/> class.
         /// </summary>
         /// <param name="sshClient">
@@ -89,30 +70,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         }
 
         /// <summary>
-        /// This method conducts the Diffie-Hellman Group Key Exchange with the remote party.
-        /// </summary>
-        /// <returns>
-        /// The <see cref="Task"/>.
-        /// </returns>
-        /// <exception cref="SshException">
-        /// Throws an SshException if the key exchange fails.
-        /// </exception>
-        internal override async Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken)
-        {
-            if (_keyExchangeAlgorithmState != State.Initial)
-            {
-                throw new SshException("Unexpected key exchange algorithm state");
-            }
-
-            // Send the request message to begin the Diffie-Hellman Group Key Exchange.
-            await _client
-                .WriteMessageAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken)
-                .ConfigureAwait(false);
-
-            _keyExchangeAlgorithmState = State.WaitingonDhgGroup;
-        }
-
-        /// <summary>
         /// Creates the appropriate hashing algorithm.
         /// </summary>
         /// <returns>
@@ -123,15 +80,12 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// </exception>
         protected override HashAlgorithm CreateHashAlgorithm()
         {
-            switch (_shaVersion)
+            return _shaVersion switch
             {
-                case "SHA1":
-                    return SHA1.Create();
-                case "SHA256":
-                    return SHA256.Create();
-                default:
-                    throw new SshException("Invalid SHA Specified");
-            }
+                "SHA1" => SHA1.Create(),
+                "SHA256" => SHA256.Create(),
+                _ => throw new SshException("Invalid SHA Specified"),
+            };
         }
 
         /// <summary>
@@ -145,94 +99,49 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// </returns>
         private byte[] Hash(byte[] data)
         {
-            using (var shaGenerator = CreateHashAlgorithm())
-            {
-                return shaGenerator.ComputeHash(data);
-            }
+            using var shaGenerator = CreateHashAlgorithm();
+            return shaGenerator.ComputeHash(data);
         }
 
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal override Task<bool> ProcessMessage30Async(MessageEvent message, CancellationToken cancellationToken)
+        public override async Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken)
         {
-            throw new SshUnexpectedMessage(MessageType.SSH_MSG_KEX_Exchange_30);
-        }
+            var dhgGroupMessage = await _client.ReadUntilAsync(
+                async () =>
+                {
+                    await _client
+                        .WriteMessageAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken)
+                        .ConfigureAwait(false);
+                },
+                m => KexThrowIfNotMessageType(m, MessageType.SSH_MSG_KEX_Exchange_31),
+                cancellationToken
+            );
 
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal override async Task<bool> ProcessMessage31Async(MessageEvent message, CancellationToken cancellationToken)
-        {
-            if (_keyExchangeAlgorithmState != State.WaitingonDhgGroup)
-            {
-                throw new SshException("Unexpected key exchange algorithm message");
-            }
-
-            _dhgGroupMessage = new DhgGroup(message.Packet);
-            if (_dhgGroupMessage == null)
-            {
-                throw new SshException("Invalid key exchange algorithm message");
-            }
+            var dhgGroup = new DhgGroup(dhgGroupMessage.Packet);
 
             // Generate random number 'x'.
-            _x = GenerateRandomBigInteger(1, (_dhgGroupMessage.P.BigInteger - 1) / 2);
+            var x = GenerateRandomBigInteger(1, (dhgGroup.P.BigInteger - 1) / 2);
 
             // Generate 'e'.
-            _e = new BigInt(BigInteger.ModPow(_dhgGroupMessage.G.BigInteger, _x, _dhgGroupMessage.P.BigInteger));
+            var e = new BigInt(BigInteger.ModPow(dhgGroup.G.BigInteger, x, dhgGroup.P.BigInteger));
+
+            var dhgReplyMessage = await _client.ReadUntilAsync(
+                async () => await _client.WriteMessageAsync(new DhgInit(e), cancellationToken).ConfigureAwait(false),
+                m => KexThrowIfNotMessageType(m, MessageType.SSH_MSG_KEX_Exchange_33),
+                cancellationToken
+            );
 
             // Send 'e' to the server with the 'Init' message.
-            await _client.WriteMessageAsync(new DhgInit(_e), cancellationToken).ConfigureAwait(false);
-
-            _keyExchangeAlgorithmState = State.WaitingOnDhgReply;
-            return false;
-        }
-
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal override Task<bool> ProcessMessage32Async(MessageEvent message, CancellationToken cancellationToken)
-        {
-            throw new SshUnexpectedMessage(MessageType.SSH_MSG_KEX_Exchange_32);
-        }
-
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal override async Task<bool> ProcessMessage33Async(MessageEvent message, CancellationToken cancellationToken)
-        {
-            if (_keyExchangeAlgorithmState != State.WaitingOnDhgReply)
-            {
-                throw new SshException("Unexpected key exchange algorithm message");
-            }
-
-            var replyMessage = new DhgReply(message.Packet);
-            if (replyMessage == null)
-            {
-                throw new SshException("Invalid key exchange algorithm message");
-            }
+            var replyMessage = new DhgReply(dhgReplyMessage.Packet);
 
             // Verify 'F' is in the range of [1, p-1]
-            if (replyMessage.F.BigInteger < 1 || replyMessage.F.BigInteger > _dhgGroupMessage.P.BigInteger - 1)
+            if (replyMessage.F.BigInteger < 1 || replyMessage.F.BigInteger > dhgGroup.P.BigInteger - 1)
             {
                 // await _sshClient.Log("Invalid 'F' from server!");
                 throw new SshException("Invalid 'F' from server!");
             }
 
             // Generate the shared secret 'K'
-            K = new BigInt(BigInteger.ModPow(replyMessage.F.BigInteger, _x, _dhgGroupMessage.P.BigInteger));
+            var k = new BigInt(BigInteger.ModPow(replyMessage.F.BigInteger, x, dhgGroup.P.BigInteger));
 
             // Prepare the signing algorithm from the servers public key.
             _signingAlgorithm = Signer.CreateSigner(
@@ -254,11 +163,11 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
                 + 4
                 + 4
                 + // Min/Desired/Max Sizes
-                _dhgGroupMessage.P.GetBigIntegerSize()
-                + _dhgGroupMessage.G.GetBigIntegerSize()
-                + _e.GetBigIntegerSize()
+                dhgGroup.P.GetBigIntegerSize()
+                + dhgGroup.G.GetBigIntegerSize()
+                + e.GetBigIntegerSize()
                 + replyMessage.F.GetBigIntegerSize()
-                + K.GetBigIntegerSize();
+                + k.GetBigIntegerSize();
 
             var byteWriter = new ByteWriter(totalBytes);
             byteWriter.WriteString(_client.ConnectionInfo.ClientVersion);
@@ -269,44 +178,21 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             byteWriter.WriteUint(1024);
             byteWriter.WriteUint(2048);
             byteWriter.WriteUint(8192);
-            byteWriter.WriteBigInteger(_dhgGroupMessage.P);
-            byteWriter.WriteBigInteger(_dhgGroupMessage.G);
-            byteWriter.WriteBigInteger(_e);
+            byteWriter.WriteBigInteger(dhgGroup.P);
+            byteWriter.WriteBigInteger(dhgGroup.G);
+            byteWriter.WriteBigInteger(e);
             byteWriter.WriteBigInteger(replyMessage.F);
-            byteWriter.WriteBigInteger(K);
+            byteWriter.WriteBigInteger(k);
 
-            H = Hash(byteWriter.Bytes);
+            var h = Hash(byteWriter.Bytes);
 
             // Use the signing algorithm to verify the data sent by the server is correct.
-            if (!_signingAlgorithm.VerifySignature(H, replyMessage.HSignature))
+            if (!_signingAlgorithm.VerifySignature(h, replyMessage.HSignature))
             {
                 throw new SshException("Invalid Host Signature.");
             }
 
-            _keyExchangeAlgorithmState = State.Complete;
-            return await Task.FromResult(true);
-        }
-
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal override Task<bool> ProcessMessage34Async(MessageEvent message, CancellationToken cancellationToken)
-        {
-            throw new SshUnexpectedMessage(MessageType.SSH_MSG_KEX_Exchange_34);
-        }
-
-        /// <summary>
-        /// The states of the diffie hellman group key exchange.
-        /// </summary>
-        internal enum State
-        {
-            Initial,
-            WaitingonDhgGroup,
-            WaitingOnDhgReply,
-            Complete
+            return new KeyExchangeResult(h, k);
         }
     }
 }

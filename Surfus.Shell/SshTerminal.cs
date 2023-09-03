@@ -199,28 +199,6 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Reads as much text from the server until there are no more incoming messages..
-        /// </summary>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Text from the server.</returns>
-        public async Task<string> ReadGreedyAsync(CancellationToken cancellationToken)
-        {
-            if (_terminalState != State.Opened)
-            {
-                throw new Exception("Terminal not opened.");
-            }
-
-            if (_readBuffer.Length == 0)
-            {
-                await _client.ReadWhileAsync(() => _readBuffer.Length == 0, cancellationToken).ConfigureAwait(false);
-            }
-            await _client.ProcessAdditionalAsync(100, cancellationToken).ConfigureAwait(false);
-            var text = _readBuffer.ToString();
-            _readBuffer.Clear();
-            return text;
-        }
-
-        /// <summary>
         /// Reads a single character from the server.
         /// </summary>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
@@ -253,7 +231,7 @@ namespace Surfus.Shell
             while ((index = _readBuffer.IndexOf(plainText)) == -1)
             {
                 var currentBufferSize = _readBuffer.Length;
-                await _client.GreedyReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
+                await _client.ReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
             }
             index = index + plainText.Length;
             var result = _readBuffer.ToString().Substring(0, index);
@@ -285,7 +263,7 @@ namespace Surfus.Shell
             while (!(regexMatch = Regex.Match(_readBuffer.ToString(), regexText, regexOptions)).Success)
             {
                 var currentBufferSize = _readBuffer.Length;
-                await _client.GreedyReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
+                await _client.ReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
             }
             var index = regexMatch.Index + regexMatch.Length;
             _readBuffer.Remove(0, index);

@@ -155,9 +155,9 @@ namespace Surfus.Shell
         /// Writes a binary blob to the byte array.
         /// </summary>
         /// <param name="byteBlob"></param>
-        internal void WriteByteBlob(byte[] byteBlob)
+        internal void WriteByteBlob(Memory<byte> byteBlob)
         {
-            Array.Copy(byteBlob, 0, Bytes, Position, byteBlob.Length);
+            byteBlob.CopyTo(Bytes.AsMemory(Position));
             Position += byteBlob.Length;
         }
 

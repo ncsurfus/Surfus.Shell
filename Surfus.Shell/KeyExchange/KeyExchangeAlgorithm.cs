@@ -33,16 +33,6 @@ namespace Surfus.Shell.KeyExchange
             };
 
         /// <summary>
-        /// Gets the hash created from the key exchange algorithm.
-        /// </summary>
-        internal byte[] H { get; set; }
-
-        /// <summary>
-        /// Gets the shared secret exchanged by the key exchange algorithm.
-        /// </summary>
-        internal BigInt K { get; set; }
-
-        /// <summary>
         /// Creates the specified key exchange algorithm.
         /// </summary>
         /// <param name="client">
@@ -74,19 +64,34 @@ namespace Surfus.Shell.KeyExchange
             }
         }
 
-        /// <summary>
-        /// Conducts the key exchange.
-        /// </summary>
-        internal abstract Task InitiateKeyExchangeAlgorithmAsync(CancellationToken cancellationToken);
+        public abstract Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken);
+
+        protected static bool KexThrowIfNotMessageType(MessageEvent messageEvent, MessageType expectedMessageType)
+        {
+            if (messageEvent.Type == expectedMessageType)
+            {
+                return true;
+            }
+            return messageEvent.Type switch
+            {
+                MessageType.SSH_MSG_KEX_Exchange_30
+                or MessageType.SSH_MSG_KEX_Exchange_31
+                or MessageType.SSH_MSG_KEX_Exchange_32
+                or MessageType.SSH_MSG_KEX_Exchange_33
+                or MessageType.SSH_MSG_KEX_Exchange_34
+                    => throw new NotImplementedException(),
+                _ => false,
+            };
+        }
 
         /// <summary>
         /// Generates the appropriate key used by each cipher.
         /// </summary>
-        internal byte[] GenerateKey(char letter, byte[] sessionId, int requiredBytes)
+        internal byte[] GenerateKey(Memory<byte> h, BigInt k, char letter, Memory<byte> sessionId, int requiredBytes)
         {
             if (letter != 'A' && letter != 'B' && letter != 'C' && letter != 'D' && letter != 'E' && letter != 'F')
             {
-                throw new ArgumentException(nameof(letter));
+                throw new ArgumentException(null, nameof(letter));
             }
 
             using (var hashAlgorithm = CreateHashAlgorithm())
@@ -100,18 +105,18 @@ namespace Surfus.Shell.KeyExchange
 
                 var keyWriter = new ByteWriter(keySize);
 
-                var firstHashWriter = new ByteWriter(K.GetBigIntegerSize() + H.GetByteBlobSize() + 1 + sessionId.GetByteBlobSize());
-                firstHashWriter.WriteBigInteger(K);
-                firstHashWriter.WriteByteBlob(H);
+                var firstHashWriter = new ByteWriter(k.GetBigIntegerSize() + h.GetByteBlobSize() + 1 + sessionId.GetByteBlobSize());
+                firstHashWriter.WriteBigInteger(k);
+                firstHashWriter.WriteByteBlob(h);
                 firstHashWriter.WriteByte((byte)letter);
                 firstHashWriter.WriteByteBlob(sessionId);
                 keyWriter.WriteByteBlob(hashAlgorithm.ComputeHash(firstHashWriter.Bytes));
 
                 while (keyWriter.Position < requiredBytes)
                 {
-                    var repeatHashWriter = new ByteWriter(K.GetBigIntegerSize() + H.GetByteBlobSize() + keyWriter.Position);
-                    repeatHashWriter.WriteBigInteger(K);
-                    repeatHashWriter.WriteByteBlob(H);
+                    var repeatHashWriter = new ByteWriter(k.GetBigIntegerSize() + h.GetByteBlobSize() + keyWriter.Position);
+                    repeatHashWriter.WriteBigInteger(k);
+                    repeatHashWriter.WriteByteBlob(h);
                     repeatHashWriter.WriteByteBlob(keyWriter.Bytes, 0, keyWriter.Position);
                     keyWriter.WriteByteBlob(hashAlgorithm.ComputeHash(repeatHashWriter.Bytes));
                 }
@@ -140,45 +145,5 @@ namespace Surfus.Shell.KeyExchange
         /// Supported key exchanges.
         /// </summary>
         protected abstract HashAlgorithm CreateHashAlgorithm();
-
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal abstract Task<bool> ProcessMessage30Async(MessageEvent message, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal abstract Task<bool> ProcessMessage31Async(MessageEvent message, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal abstract Task<bool> ProcessMessage32Async(MessageEvent message, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal abstract Task<bool> ProcessMessage33Async(MessageEvent message, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Processes a key exchange message.
-        /// </summary>
-        /// <param name="message">The key exchange message to be processed.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>Returns true if the exchange is completed and a new keys should be expected/sent.</returns>
-        internal abstract Task<bool> ProcessMessage34Async(MessageEvent message, CancellationToken cancellationToken);
     }
 }

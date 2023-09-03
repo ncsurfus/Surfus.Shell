@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages.KeyExchange;
 
@@ -31,7 +32,7 @@ namespace Surfus.Shell
             return GetAsciiStringSize(nameList.AsString);
         }
 
-        internal static int GetByteBlobSize(this byte[] bytes)
+        internal static int GetByteBlobSize(this Memory<byte> bytes)
         {
             return bytes.Length;
         }
