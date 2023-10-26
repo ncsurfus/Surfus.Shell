@@ -1,0 +1,6 @@
+services:
+  ssh_ubuntu_2004:
+    build: ssh_ubuntu_2004
+    hostname: ssh_ubuntu_2004
+    ports:
+      - 40022:22
