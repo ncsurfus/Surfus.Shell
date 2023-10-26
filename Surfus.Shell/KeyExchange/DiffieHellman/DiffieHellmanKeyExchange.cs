@@ -2,6 +2,7 @@
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
@@ -96,15 +97,14 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             return SHA1.Create();
         }
 
-        public override async Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken)
+        public override async Task<KeyExchangeResult> ExchangeAsync(
+            ChannelReader<MessageEvent> channelReader,
+            CancellationToken cancellationToken
+        )
         {
             // Send the DHReply message after we've sent the DH Init.
-            var dhReplyMessage = await _sshClient.ReadUntilAsync(
-                async () => await _sshClient.WriteMessageAsync(new DhInit(E), cancellationToken).ConfigureAwait(false),
-                m => KexThrowIfNotMessageType(m, MessageType.SSH_MSG_KEX_Exchange_31),
-                cancellationToken
-            );
-
+            await _sshClient.WriteMessageAsync(new DhInit(E), cancellationToken).ConfigureAwait(false);
+            var dhReplyMessage = await channelReader.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_31, cancellationToken);
             var reply = new DhReply(dhReplyMessage.Packet);
 
             // Verify 'F' is in the range of [1, p-1]

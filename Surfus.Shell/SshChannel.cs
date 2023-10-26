@@ -1,70 +1,51 @@
 ﻿using System;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
-using Surfus.Shell.Exceptions;
+using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
 
 namespace Surfus.Shell
 {
-    /// <summary>
-    /// Repesents an SSH Channel. Once the SSH connections is setup channels are created and data can be passed.
-    /// </summary>
-    internal class SshChannel
+    public enum ExtendedDataHandling
     {
-        /// <summary>
-        /// The state of the channel.
-        /// </summary>
-        private State _channelState = State.Initial;
+        IGNORE,
+        MERGE,
+        QUEUE,
+    }
 
-        /// <summary>
-        /// The SshClient that owns the channel.
-        /// </summary>
+    public class SshChannel : IAsyncDisposable
+    {
         private readonly SshClient _client;
+        private readonly TaskCompletionSource _close = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _eof = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        /// <summary>
-        /// The amount of data to increase by once the receive window is empty.
-        /// </summary>
-        internal int WindowRefill { get; set; } = 50000;
+        private readonly CancellationTokenSource _cts = new();
+        private readonly Task _backgroundTask;
+        private readonly Exception _ex;
 
-        /// <summary>
-        /// The amount of data we are allowed to send to the server.
-        /// </summary>
-        internal int SendWindow { get; set; }
+        private readonly SemaphoreSlim _readSemaphore = new(1, 1);
+        private readonly SemaphoreSlim _sendSemaphore = new(1, 1);
 
-        /// <summary>
-        /// The amount of data that can be sent to us.
-        /// </summary>
-        internal int ReceiveWindow { get; set; }
+        private int _sendWindow = 0;
+        private int _receiveWindow = 0;
+        private int _queuedBytes = 0;
 
-        /// <summary>
-        /// The id assigned to us by the server that represents this channel.
-        /// </summary>
-        internal uint ServerId { get; set; }
+        private readonly object _lock = new();
+        private readonly Channel<Memory<byte>> DataReceived = Channel.CreateUnbounded<Memory<byte>>(new UnboundedChannelOptions
+        {
+            SingleWriter = true,
+        });
+        private readonly Channel<(Memory<byte> Data, uint Stream)> ExtendedDataReceived = Channel.CreateUnbounded<(Memory<byte> Data, uint Stream)>(new UnboundedChannelOptions
+        {
+            SingleWriter = true,
+        });
 
-        /// <summary>
-        /// The id we've assigned to the server that represents this channel.
-        /// </summary>
-        internal uint ClientId { get; set; }
-
-        /// <summary>
-        /// A callback once data is received.
-        /// </summary>
-        internal Action<byte[], int, int> OnDataReceived;
-
-        /// <summary>
-        /// A callback when a channel end of file is received.
-        /// </summary>
-        internal Action<ChannelEof> OnChannelEofReceived;
-
-        /// <summary>
-        /// A callback when a channel close is received.
-        /// </summary>
-        internal Action<ChannelClose> OnChannelCloseReceived;
-
-        /// <summary>
-        /// Returns the open/close state of the channel.
-        /// </summary>
-        internal bool IsOpen => _channelState != State.Initial && _channelState != State.Errored && _channelState != State.Closed;
+        private readonly Channel<int> WindowAdjust = Channel.CreateUnbounded<int>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = true,
+        });
 
         /// <summary>
         /// A channel used to pass data, open terminals, and run commands.
@@ -75,6 +56,160 @@ namespace Surfus.Shell
         {
             _client = client;
             ClientId = channelId;
+            _backgroundTask = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.WhenAll(HandleAsync(_cts.Token), ProcessWindowMessageAsync(_cts.Token));
+                }
+                catch (Exception ex)
+                {
+                    _eof.TrySetException(ex);
+                    _close.TrySetException(ex);
+                    DataReceived.Writer.TryComplete(ex);
+                    WindowAdjust.Writer.TryComplete(ex);
+                    throw;
+                }
+                finally
+                {
+                    _cts.Cancel();
+                }
+            });
+        }
+
+        public TimeSpan CloseTimeout { get; init; } = TimeSpan.FromSeconds(10);
+
+        public int Window { get; init; } = 2_097_152;
+
+        public ExtendedDataHandling ExtendedDataHandling { get; init; } = ExtendedDataHandling.MERGE;
+
+        /// <summary>
+        /// The server's channel id.
+        /// </summary>
+        public uint ServerId { get; private set; }
+
+        /// <summary>
+        /// The client's channel id.
+        /// </summary>
+        public uint ClientId { get; private set; }
+
+        /// <summary>
+        /// Completes when the channel is closed.
+        /// </summary>
+        public Task ChannelClosed => _close.Task;
+
+        /// <summary>
+        /// Completes when the channel is closed or remote end indicates no more data will be sent.
+        /// </summary>
+        public Task ChannelEof => _eof.Task;
+
+        private async Task ProcessWindowMessageAsync(CancellationToken cancellationToken)
+        {
+            // Maybe handle this logic in the "switch", but just have a "Window Adjust indicator"?
+            // Perhaps a 1 buffer channel?
+            while (true)
+            {
+                await WindowAdjust.Reader.WaitToReadAsync(CancellationToken.None).ConfigureAwait(false);
+                await _sendSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    while (WindowAdjust.Reader.TryRead(out var windowSizeIncrease))
+                    {
+                        _sendWindow += windowSizeIncrease;
+                    }
+                }
+                finally
+                {
+                    _sendSemaphore.Release();
+                }
+            }
+        }
+
+        private async Task UpdateWindow(int length, CancellationToken cancellationToken)
+        {
+            if (length == 0)
+            {
+                return;
+            }
+
+            await _readSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                if (length > _receiveWindow)
+                {
+                    throw new Exception("Server exceeded ReceiveWindow!");
+                }
+                _receiveWindow -= length;
+                _queuedBytes += length;
+            }
+            finally
+            {
+                _readSemaphore.Release();
+            }
+        }
+
+        private async Task HandleAsync(CancellationToken cancellationToken)
+        {
+            bool FilterMessage(MessageEvent message)
+            {
+                if (message.Message is not IChannelRecipient msg || msg.RecipientChannel != ClientId)
+                {
+                    return false;
+                }
+
+                return message.Type switch
+                {
+                    MessageType.SSH_MSG_CHANNEL_EOF
+                    or MessageType.SSH_MSG_CHANNEL_CLOSE
+                    or MessageType.SSH_MSG_CHANNEL_DATA
+                    or MessageType.SSH_MSG_CHANNEL_EXTENDED_DATA
+                    or MessageType.SSH_MSG_CHANNEL_WINDOW_ADJUST
+                        => true,
+                    _ => false,
+                };
+            }
+
+            var channelReader = _client.RegisterMessageHandler(FilterMessage);
+            try
+            {
+                while (true)
+                {
+                    var message = await channelReader.ReadAsync(cancellationToken);
+                    switch (message.Message)
+                    {
+                        case ChannelEof eof:
+                            _eof.TrySetResult();
+                            DataReceived.Writer.TryComplete();
+                            ExtendedDataReceived.Writer.TryComplete();
+                            break;
+                        case ChannelClose close:
+                            _close.TrySetResult();
+                            throw new Exception("Channel closed!");
+                        case ChannelExtendedData data when ExtendedDataHandling == ExtendedDataHandling.IGNORE:
+                            await UpdateWindow(data.Data.Length, cancellationToken).ConfigureAwait(false);
+                            break;
+                        case ChannelExtendedData data when ExtendedDataHandling == ExtendedDataHandling.QUEUE:
+                            await UpdateWindow(data.Data.Length, cancellationToken).ConfigureAwait(false);
+                            await ExtendedDataReceived.Writer.WriteAsync((data.Data, (uint)data.DataTypeCode), cancellationToken).ConfigureAwait(false);
+                            break;
+                        case ChannelExtendedData data when ExtendedDataHandling == ExtendedDataHandling.MERGE:
+                            await UpdateWindow(data.Data.Length, cancellationToken).ConfigureAwait(false);
+                            await DataReceived.Writer.WriteAsync(data.Data, cancellationToken).ConfigureAwait(false);
+                            break;
+                        case ChannelData data:
+                            await UpdateWindow(data.Data.Length, cancellationToken).ConfigureAwait(false);
+                            await DataReceived.Writer.WriteAsync(data.Data, cancellationToken).ConfigureAwait(false);
+                            break;
+                        case ChannelWindowAdjust windowAdjust:
+                            await WindowAdjust.Writer.WriteAsync((int)windowAdjust.BytesToAdd, cancellationToken);
+                            break;
+                    }
+                }
+            }
+            finally
+            {
+                _client.DeregisterMessageHandler(channelReader);
+            }
         }
 
         /// <summary>
@@ -82,28 +217,107 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="buffer">The data to send over the channel.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns></returns>
-        internal async Task WriteDataAsync(byte[] buffer, CancellationToken cancellationToken)
+        public async Task WriteDataAsync(byte[] buffer, CancellationToken cancellationToken)
         {
-            var totalBytesLeft = buffer.Length;
-            while (totalBytesLeft > 0)
+            await _sendSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                if (totalBytesLeft <= SendWindow)
+                var totalBytesLeft = buffer.Length;
+                while (totalBytesLeft > 0)
                 {
-                    await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), cancellationToken).ConfigureAwait(false);
-                    SendWindow -= totalBytesLeft;
-                    totalBytesLeft = 0;
-                }
-                else
-                {
-                    var smallBuffer = new byte[SendWindow];
-                    Array.Copy(buffer, smallBuffer, smallBuffer.Length);
-                    await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), cancellationToken).ConfigureAwait(false);
-                    totalBytesLeft -= SendWindow;
-                    SendWindow = 0;
-                    await _client.ReadWhileAsync(() => SendWindow == 0, cancellationToken).ConfigureAwait(false);
+                    if (totalBytesLeft <= _sendWindow)
+                    {
+                        await _client.WriteMessageAsync(new ChannelData(ServerId, buffer), cancellationToken).ConfigureAwait(false);
+                        _sendWindow -= totalBytesLeft;
+                        totalBytesLeft = 0;
+                    }
+                    else
+                    {
+                        if (_sendWindow > 0)
+                        {
+                            // TODO: Simplify with Memory<byte>
+                            var smallBuffer = new byte[_sendWindow];
+                            Array.Copy(buffer, smallBuffer, smallBuffer.Length);
+                            await _client.WriteMessageAsync(new ChannelData(ServerId, smallBuffer), cancellationToken).ConfigureAwait(false);
+                            totalBytesLeft -= _sendWindow;
+                            _sendWindow = 0;
+                        }
+                        _sendWindow += await WindowAdjust.Reader.ReadAsync(cancellationToken);
+                    }
                 }
             }
+            finally
+            {
+                _sendSemaphore.Release();
+            }
+        }
+
+        /// <summary>
+        /// Writes extended data over the SSH channel.
+        /// </summary>
+        public async Task WriteExtendedDataAsync(byte[] buffer, uint stream, CancellationToken cancellationToken)
+        {
+            await _sendSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var totalBytesLeft = buffer.Length;
+                while (totalBytesLeft > 0)
+                {
+                    if (totalBytesLeft <= _sendWindow)
+                    {
+                        await _client.WriteMessageAsync(new ChannelExtendedData(ServerId, stream, buffer), cancellationToken).ConfigureAwait(false);
+                        _sendWindow -= totalBytesLeft;
+                        totalBytesLeft = 0;
+                    }
+                    else
+                    {
+                        if (_sendWindow > 0)
+                        {
+                            // TODO: Simplify with Memory<byte>
+                            var smallBuffer = new byte[_sendWindow];
+                            Array.Copy(buffer, smallBuffer, smallBuffer.Length);
+                            await _client.WriteMessageAsync(new ChannelExtendedData(ServerId, stream, smallBuffer), cancellationToken).ConfigureAwait(false);
+                            totalBytesLeft -= _sendWindow;
+                            _sendWindow = 0;
+                        }
+                        _sendWindow += await WindowAdjust.Reader.ReadAsync(cancellationToken);
+                    }
+                }
+            }
+            finally
+            {
+                _sendSemaphore.Release();
+            }
+        }
+
+        public async Task<Memory<byte>> ReadDataAsync(CancellationToken cancellationToken)
+        {
+            Memory<byte> data;
+            try
+            {
+                data = await DataReceived.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (ChannelClosedException)
+            {
+                return Memory<byte>.Empty;
+            }
+
+            await _readSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                _queuedBytes -= data.Length;
+                if (_receiveWindow + _queuedBytes == 0)
+                {
+                    await _client.WriteMessageAsync(new ChannelWindowAdjust(ServerId, (uint)Window), cancellationToken);
+                    _receiveWindow += Window;
+                }
+            }
+            finally
+            {
+                _readSemaphore.Release();
+            }
+
+            return data;
         }
 
         /// <summary>
@@ -114,14 +328,39 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task RequestAsync(ChannelRequest requestMessage, CancellationToken cancellationToken)
         {
-            if (_channelState != State.ChannelIsOpen)
+            bool FilterMessage(MessageEvent message)
             {
-                throw new Exception("Channel is not ready for request.");
+                if (message.Message is not IChannelRecipient msg || msg.RecipientChannel != ClientId)
+                {
+                    return false;
+                }
+
+                return message.Type switch
+                {
+                    MessageType.SSH_MSG_CHANNEL_SUCCESS
+                    or MessageType.SSH_MSG_CHANNEL_FAILURE
+                        => true,
+                    _ => false,
+                };
             }
 
-            await _client.WriteMessageAsync(requestMessage, cancellationToken).ConfigureAwait(false);
-            _channelState = State.WaitingOnRequestResponse;
-            await _client.ReadWhileAsync(() => _channelState == State.WaitingOnRequestResponse, cancellationToken).ConfigureAwait(false);
+            var channelReader = _client.RegisterMessageHandler(FilterMessage);
+            try
+            {
+                // Send request message...
+                await _client.WriteMessageAsync(requestMessage, cancellationToken).ConfigureAwait(false);
+
+                // Check if this was allowed..
+                var message = await channelReader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                if (message.Type == MessageType.SSH_MSG_CHANNEL_FAILURE)
+                {
+                    throw new Exception("Failed to request channel message: ...!");
+                }
+            }
+            finally
+            {
+                _client.DeregisterMessageHandler(channelReader);
+            }
         }
 
         /// <summary>
@@ -132,195 +371,83 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal async Task OpenAsync(ChannelOpen openMessage, CancellationToken cancellationToken)
         {
-            if (_channelState != State.Initial)
+            bool FilterMessage(MessageEvent message)
             {
-                throw new Exception("Channel is already open");
+                if (message.Message is not IChannelRecipient msg || msg.RecipientChannel != ClientId)
+                {
+                    return false;
+                }
+
+                return message.Type switch
+                {
+                    MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION
+                    or MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE
+                        => true,
+                    _ => false,
+                };
             }
 
-            ReceiveWindow = (int)openMessage.InitialWindowSize;
-            await _client.WriteMessageAsync(openMessage, cancellationToken).ConfigureAwait(false);
-            _channelState = State.WaitingOnOpenConfirmation;
-            await _client.ReadWhileAsync(() => _channelState == State.WaitingOnOpenConfirmation, cancellationToken).ConfigureAwait(false);
+            var channelReader = _client.RegisterMessageHandler(FilterMessage);
+            try
+            {
+                // TODO: We should just accept the channel type, and let the other variables be init properties on this class.
+                _receiveWindow = (int)openMessage.InitialWindowSize;
+                await _client.WriteMessageAsync(openMessage, cancellationToken).ConfigureAwait(false);
+
+                // Check if this was allowed..
+                var message = await channelReader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                if (message.Message is not ChannelOpenConfirmation confirmation)
+                {
+                    throw new Exception("Failed to open channel!");
+                }
+                ServerId = confirmation.SenderChannel;
+                _sendWindow = (int)confirmation.InitialWindowSize;
+            }
+            finally
+            {
+                _client.DeregisterMessageHandler(channelReader);
+            }
         }
 
         /// <summary>
         /// Closes the channel.
         /// </summary>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns></returns>
-        internal async Task CloseAsync(CancellationToken cancellationToken)
+        public async Task CloseAsync(CancellationToken cancellationToken)
         {
-            if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
+            try
             {
-                await _client.WriteMessageAsync(new ChannelClose(ServerId), cancellationToken).ConfigureAwait(false);
-                _channelState = State.Closed;
+                // Mark the channel as closed on our end if there wasn't some other related error.
+                _close.TrySetResult();
+
+                _cts.Cancel();
+                try
+                {
+                    await _client.WriteMessageAsync(new ChannelClose(ServerId), cancellationToken).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // The connection might have failed. Let's not throw during a dispose operation.
+                }
+
+                try
+                {
+                    await _backgroundTask.ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Errors bubble up to other Public APIs and we want to ignore these errors.
+                }
+            }
+            finally
+            {
+                _cts.Dispose();
             }
         }
 
-        /// <summary>
-        /// Processes a channel message that was sent by the server.
-        /// </summary>
-        /// <param name="message">The open confirmation message that was sent by the server.</param>
-        /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelOpenConfirmation message)
+        public async ValueTask DisposeAsync()
         {
-            if (_channelState != State.WaitingOnOpenConfirmation)
-            {
-                _channelState = State.Errored;
-                throw new SshException("Received unexpected channel message.");
-            }
-
-            ServerId = message.SenderChannel;
-            SendWindow = (int)message.InitialWindowSize;
-            _channelState = State.ChannelIsOpen;
-        }
-
-        /// <summary>
-        /// Processes a channel message that was sent by the server.
-        /// </summary>
-        /// <param name="message">The open failure message that was sent by the server.</param>
-        /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelOpenFailure message)
-        {
-            if (_channelState != State.WaitingOnOpenConfirmation)
-            {
-                _channelState = State.Errored;
-                throw new SshException("Received unexpected channel message.");
-            }
-
-            var exception = new SshException("Server refused to open channel.");
-            _channelState = State.Errored;
-            throw exception;
-        }
-
-        /// <summary>
-        /// Processes a channel message that was sent by the server.
-        /// </summary>
-        /// <param name="message">The channel success message that was sent by the server.</param>
-        /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelSuccess message)
-        {
-            if (_channelState != State.WaitingOnRequestResponse)
-            {
-                _channelState = State.Errored;
-                throw new SshException("Received unexpected channel message.");
-            }
-
-            // Reset state to ChannelIsOpen
-            _channelState = State.ChannelIsOpen;
-        }
-
-        /// <summary>
-        /// Processes a channel message that was sent by the server.
-        /// </summary>
-        /// <param name="message">The channel failure message that was sent by the server.</param>
-        /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelFailure message)
-        {
-            if (_channelState != State.WaitingOnRequestResponse)
-            {
-                _channelState = State.Errored;
-                throw new SshException("Received unexpected channel message.");
-            }
-
-            var exception = new SshException("Server had channel request failure.");
-            _channelState = State.Errored;
-            throw exception;
-        }
-
-        /// <summary>
-        /// Processes a channel message that was sent by the server.
-        /// </summary>
-        /// <param name="message">The channel window adjust sent by the server. Once this is sent to us we can send more data.</param>
-        /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelWindowAdjust message)
-        {
-            if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
-            {
-                _channelState = State.Errored;
-                throw new SshException("Received unexpected channel message.");
-            }
-
-            SendWindow += (int)message.BytesToAdd;
-        }
-
-        /// <summary>
-        /// Processes a channel message that was sent by the server.
-        /// </summary>
-        /// <param name="message">The channel data sent by the server. This contains data that we will send in the callback method.</param>
-        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
-        /// <returns></returns>
-        internal async Task ProcessMessageAsync(ChannelData message, CancellationToken cancellationToken)
-        {
-            if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
-            {
-                _channelState = State.Errored;
-                throw new SshException("Received unexpected channel message.");
-            }
-
-            if (ReceiveWindow <= 0)
-            {
-                return;
-            }
-
-            var length = message.Data.Length > ReceiveWindow ? ReceiveWindow : message.Data.Length;
-
-            ReceiveWindow -= length;
-
-            if (ReceiveWindow <= 0)
-            {
-                await _client
-                    .WriteMessageAsync(new ChannelWindowAdjust(ServerId, (uint)WindowRefill), cancellationToken)
-                    .ConfigureAwait(false);
-                ReceiveWindow += WindowRefill;
-            }
-
-            OnDataReceived?.Invoke(message.Data, 0, length);
-        }
-
-        /// <summary>
-        /// Processes a channel message that was sent by the server.
-        /// </summary>
-        /// <param name="message">The channel end of file sent by the server. We could still send data, but the server has stopped.</param>
-        /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelEof message)
-        {
-            if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
-            {
-                _channelState = State.Errored;
-                throw new SshException("Received unexpected channel message.");
-            }
-
-            OnChannelEofReceived?.Invoke(message);
-        }
-
-        /// <summary>
-        /// Processes a channel message that was sent by the server.
-        /// </summary>
-        /// <param name="message">The channel close message sent by the server.</param>
-        /// <returns></returns>
-        internal void ProcessMessageAsync(ChannelClose message)
-        {
-            if (_channelState == State.Initial || _channelState == State.Errored || _channelState == State.Closed)
-            {
-                _channelState = State.Errored;
-                throw new SshException("Received unexpected channel message.");
-            }
-
-            OnChannelCloseReceived?.Invoke(message);
-        }
-
-        /// <summary>
-        /// The states the channel can be in.
-        /// </summary>
-        internal enum State
-        {
-            Initial,
-            WaitingOnOpenConfirmation,
-            ChannelIsOpen,
-            WaitingOnRequestResponse,
-            Closed,
-            Errored
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await CloseAsync(cts.Token);
         }
     }
 }

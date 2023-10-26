@@ -7,7 +7,7 @@ namespace Surfus.Shell.Messages
     /// <summary>
     /// Holds the buffer containing the message and provides support to cast the message into the appropriate IMessage.
     /// </summary>
-    internal class MessageEvent
+    public class MessageEvent
     {
         /// <summary>
         /// Caches the message for property Message.

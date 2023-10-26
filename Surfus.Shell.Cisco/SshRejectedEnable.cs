@@ -10,9 +10,7 @@ namespace Surfus.Shell.Cisco.Exceptions
         /// <summary>
         /// An exception thrown when the server rejected the enable password.
         /// </summary>
-        public SshRejectedEnable(string message) : base(message)
-        {
-
-        }
+        public SshRejectedEnable(string message)
+            : base(message) { }
     }
 }

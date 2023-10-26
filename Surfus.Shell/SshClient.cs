@@ -1,7 +1,7 @@
-﻿using Surfus.Shell.Exceptions;
+﻿using Surfus.Shell.Authentication;
+using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
-using Surfus.Shell.Messages.UserAuth;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -9,12 +9,15 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 [assembly: InternalsVisibleTo("Surfus.Shell.Tests")]
 
 namespace Surfus.Shell
 {
+    public record Handler(Predicate<MessageEvent> Filter, Channel<MessageEvent> Channel);
+
     /// <summary>
     /// SshClient is an SSH client that can be used to connect to an SSH server.
     /// </summary>
@@ -65,11 +68,8 @@ namespace Surfus.Shell
         /// </summary>
         private NetworkStream _tcpStream;
 
-        /// <summary>
-        /// A list of callbacks that are invoked anytime a new message is received. If they return
-        /// True, then the callback is removed.
-        /// </summary>
-        private ImmutableList<Func<MessageEvent, Task>> _callbacks = ImmutableList.Create<Func<MessageEvent, Task>>();
+        private readonly object _handlerLock = new();
+        private ImmutableList<Handler> _handlers = ImmutableList.Create<Handler>();
 
         /// <summary>
         /// A task that reads messages from the incoming SSH server.
@@ -80,6 +80,8 @@ namespace Surfus.Shell
         /// A semaphore that coordinates messages being sent to the SSH server.
         /// </summary>
         private readonly SemaphoreSlim _writeSemaphore = new(1, 1);
+
+        private Task _currentKeyExchange = null;
 
         /// <summary>
         /// IsConnected determines if the SshClient is connected to the remote SSH server.
@@ -130,27 +132,44 @@ namespace Surfus.Shell
             _sshClientState = State.Connecting;
 
             // Set SshClient defaults
+            // TODO just set these in the constructor?
             ConnectionInfo.KeyExchanger = new SshKeyExchanger(this);
             ConnectionInfo.Authentication = new SshAuthentication(this);
 
             // Perform version exchange and key exchange
             ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
 
-            var keyExchangeTask = ConnectionInfo.KeyExchanger.HandleKeyExchangeAsync(cancellationToken);
-            await ConnectionInfo.KeyExchanger.Ready.ConfigureAwait(false);
+            // Start Key Exchange
+            _currentKeyExchange = ConnectionInfo.KeyExchanger.StartKeyExchangeAsync(cancellationToken);
+            var currentKeyExchange = _currentKeyExchange;
 
             // Start the read loop
             async Task readLoop()
             {
-                while (true)
+                async Task readLoopAsync()
                 {
-                    await ReadMessageAsync(_closeCts.Token);
+                    try
+                    {
+                        while (true)
+                        {
+                            await ReadMessageAsync(_closeCts.Token);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        CleanupHandlers(ex);
+                    }
+                    finally
+                    {
+                        CleanupHandlers(null);
+                    }
                 }
+                await readLoopAsync();
+                _closeCts.Cancel();
             }
-            ;
             _readLoop = readLoop();
 
-            await ConnectionInfo.KeyExchanger.InitialKeyExchangeComplete.ConfigureAwait(false);
+            await currentKeyExchange.ConfigureAwait(false);
             _sshClientState = State.Authenticating;
         }
 
@@ -161,39 +180,37 @@ namespace Surfus.Shell
         /// <param name="password">The password to login with</param>
         /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
         /// <returns>A task representing the state of the connection attempt</returns>
-        public async Task AuthenticateAsync(string username, string password, CancellationToken cancellationToken)
+        public async Task<bool> AuthenticateAsync(string username, string password, CancellationToken cancellationToken)
         {
-            // Validate current state of SshClient
-            if (_sshClientState != State.Authenticating)
+            var handler = new PasswordAuthenticationHandler(this, username, password);
+            var result = await ConnectionInfo.Authentication.LoginAsync(handler, cancellationToken).ConfigureAwait(false);
+            if (result)
             {
-                ThrowOnInvalidState();
+                _sshClientState = State.Authenticated;
             }
-
-            await ConnectionInfo.Authentication.LoginAsync(username, password, cancellationToken).ConfigureAwait(false);
-            _sshClientState = State.Authenticated;
+            return result;
         }
 
         /// <summary>
         /// AuthenticateAsync authenticates to the SSH server with the specific username and interactive login callback.
         /// </summary>
         /// <param name="username">The username to login as</param>
-        /// <param name="interactiveResponse">interactiveResponse is a callback to a method for interactive login</param>
+        /// <param name="interactiveCallback">interactiveCallback is a callback to a method for interactive login</param>
         /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
         /// <returns>A task representing the state of the connection attempt</returns>
-        public async Task AuthenticateAsync(
+        public async Task<bool> AuthenticateAsync(
             string username,
-            Func<string, CancellationToken, Task<string>> interactiveResponse,
+            InteractiveCallback interactiveCallback,
             CancellationToken cancellationToken
         )
         {
-            // Validate current state of SshClient
-            if (_sshClientState != State.Authenticating)
+            var handler = new InteractiveAuthenticationHandler(this, username, interactiveCallback);
+            var result = await ConnectionInfo.Authentication.LoginAsync(handler, cancellationToken).ConfigureAwait(false);
+            if (result)
             {
-                ThrowOnInvalidState();
+                _sshClientState = State.Authenticated;
             }
-
-            await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, cancellationToken).ConfigureAwait(false);
-            _sshClientState = State.Authenticated;
+            return result;
         }
 
         /// <summary>
@@ -201,7 +218,7 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="cancellationToken">The cancellation token used to cancel the terminal request</param>
         /// <returns>A task representing the state of the terminal request</returns>
-        public async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken)
+        internal async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken)
         {
             // Validate current state of SshClient
             if (!IsConnected)
@@ -369,168 +386,6 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal async Task<MessageEvent> ReadUntilAsync(
-            Func<Task> onReading,
-            Func<MessageEvent, ValueTask<bool>> condition,
-            CancellationToken cancellationToken
-        )
-        {
-            // Create a TaskCompletionSource that completes once the message is spotted.
-            var tcs = new TaskCompletionSource<MessageEvent>();
-
-            // The TaskCompletionSource should be cleaned up if the SSH Client is disposed.
-            using (_closeCts.Token.Register(() => tcs.TrySetCanceled()))
-            {
-                async Task callbackAsync(MessageEvent messageEvent)
-                {
-                    try
-                    {
-                        if (await condition(messageEvent))
-                        {
-                            tcs.TrySetResult(messageEvent);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        tcs.TrySetException(ex);
-                    }
-                }
-
-                // Add our callback into the read loop
-                lock (_callbacks)
-                {
-                    _callbacks = _callbacks.Add(callbackAsync);
-                }
-
-                // Run any code, like sending a message
-                if (onReading is not null)
-                {
-                    await onReading();
-                }
-
-                // Wait for the task to complete, and then perform cleanup
-                try
-                {
-                    return await tcs.Task;
-                }
-                finally
-                {
-                    lock (_callbacks)
-                    {
-                        _callbacks = _callbacks.Remove(callbackAsync);
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal Task<MessageEvent> ReadUntilAsync(
-            Func<Task> onReading,
-            Func<MessageEvent, bool> condition,
-            CancellationToken cancellationToken
-        )
-        {
-            ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(condition(messageEvent));
-            }
-            return ReadUntilAsync(onReading, conditionWrapper, cancellationToken);
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal Task<MessageEvent> ReadUntilAsync(Func<MessageEvent, bool> condition, CancellationToken cancellationToken)
-        {
-            ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(condition(messageEvent));
-            }
-            return ReadUntilAsync(null, conditionWrapper, cancellationToken);
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal Task<MessageEvent> ReadUntilAsync(Func<Task> onReading, MessageType messageType, CancellationToken cancellationToken)
-        {
-            ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(messageEvent.Type == messageType);
-            }
-            return ReadUntilAsync(onReading, conditionWrapper, cancellationToken);
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal Task<MessageEvent> ReadUntilAsync(MessageType messageType, CancellationToken cancellationToken)
-        {
-            ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(messageEvent.Type == messageType);
-            }
-            return ReadUntilAsync(null, conditionWrapper, cancellationToken);
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal async Task<T> ReadUntilAsync<T>(Func<Task> onReading, CancellationToken cancellationToken)
-            where T : class, IMessage
-        {
-            static ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(messageEvent.Message is T);
-            }
-            var result = await ReadUntilAsync(onReading, conditionWrapper, cancellationToken);
-            return result.Message as T;
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal async Task<T> ReadUntilAsync<T>(CancellationToken cancellationToken)
-            where T : class, IMessage
-        {
-            static ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(messageEvent.Message is T);
-            }
-            var result = await ReadUntilAsync(null, conditionWrapper, cancellationToken);
-            return result.Message as T;
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal async Task ReadWhileAsync(Func<bool> condition, CancellationToken cancellationToken)
-        {
-            await ReadUntilAsync(null, (_) => !condition(), cancellationToken);
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal async Task ReadWhileAsync(Func<Task<bool>> condition, CancellationToken cancellationToken)
-        {
-            await ReadUntilAsync(null, async (_) => !await condition(), cancellationToken);
-        }
-
-        /// <summary>
         /// Reads a message from the server
         /// </summary>
         /// <param name="cancellationToken">The cancellation token is used to cancel the ReadMessage request</param>
@@ -564,114 +419,71 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_DISCONNECT:
                     _disconnectReceived = true;
                     break;
-                case MessageType.SSH_MSG_SERVICE_ACCEPT:
-                case MessageType.SSH_MSG_REQUEST_FAILURE:
-                case MessageType.SSH_MSG_USERAUTH_SUCCESS:
-                case MessageType.SSH_MSG_USERAUTH_FAILURE:
-                case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                case MessageType.SSH_MSG_USERAUTH_BANNER:
-                    await ProcessAuthenticationMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
-                    break;
-                case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
-                case MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE:
-                case MessageType.SSH_MSG_CHANNEL_SUCCESS:
-                case MessageType.SSH_MSG_CHANNEL_FAILURE:
-                case MessageType.SSH_MSG_CHANNEL_WINDOW_ADJUST:
-                case MessageType.SSH_MSG_CHANNEL_DATA:
-                case MessageType.SSH_MSG_CHANNEL_CLOSE:
-                case MessageType.SSH_MSG_CHANNEL_EOF:
-                    await ProcessChannelMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
-                    break;
             }
 
-            // Get a local reference of the current callbacks
-            var callbacks = _callbacks;
-            foreach (var callback in callbacks)
+            if (ConnectionInfo.KeyExchanger.IsKeyExchangeStart(messageEvent))
             {
-                await callback(messageEvent);
+                if (_currentKeyExchange == null)
+                {
+                    _currentKeyExchange = Task.Run(() => ConnectionInfo.KeyExchanger.StartKeyExchangeAsync(cancellationToken));
+                }
+            }
+
+            foreach (var handler in _handlers)
+            {
+                if (handler.Filter(messageEvent))
+                {
+                    await handler.Channel.Writer.WriteAsync(messageEvent, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            if (ConnectionInfo.KeyExchanger.IsKeyExchangeEnd(messageEvent))
+            {
+                if (_currentKeyExchange == null)
+                {
+                    throw new Exception("Received end of key exchange, but key exchange not in progress!");
+                }
+                await _currentKeyExchange.ConfigureAwait(false);
+                _currentKeyExchange = null;
             }
         }
 
-        /// <summary>
-        /// Forwards a message from the server to the the SshAuthentication
-        /// </summary>
-        /// <param name="messageEvent">The message to be processed</param>
-        /// <param name="cancellationToken">The cancellation token is used to cancel the process request</param>
-        /// <returns></returns>
-        private async Task ProcessAuthenticationMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
+        internal ChannelReader<MessageEvent> RegisterMessageHandler(Predicate<MessageEvent> filter, int capacity = 1)
         {
-            switch (messageEvent.Type)
+            var channel = Channel.CreateBounded<MessageEvent>(capacity);
+            lock (_handlerLock)
             {
-                case MessageType.SSH_MSG_SERVICE_ACCEPT:
-                    await ConnectionInfo.Authentication
-                        .ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken)
-                        .ConfigureAwait(false);
-                    break;
-                case MessageType.SSH_MSG_REQUEST_FAILURE:
-                    ConnectionInfo.Authentication.ProcessRequestFailureMessage();
-                    break;
-                case MessageType.SSH_MSG_USERAUTH_SUCCESS:
-                    ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess);
-                    break;
-                case MessageType.SSH_MSG_USERAUTH_FAILURE:
-                    ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure);
-                    break;
-                case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                    await ConnectionInfo.Authentication
-                        .ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken)
-                        .ConfigureAwait(false);
-                    break;
-                case MessageType.SSH_MSG_USERAUTH_BANNER:
-                    Banner = (messageEvent.Message as UaBanner)?.Message;
-                    break;
+                // Check if closed?
+                _handlers = _handlers.Add(new Handler(filter, channel));
+            }
+            return channel.Reader;
+        }
+
+        internal void DeregisterMessageHandler(ChannelReader<MessageEvent> channelReader)
+        {
+            lock (_handlerLock)
+            {
+                foreach (var handler in _handlers)
+                {
+                    if (handler.Channel.Reader == channelReader)
+                    {
+                        _handlers = _handlers.Remove(handler);
+                    }
+                    return;
+                }
             }
         }
 
-        /// <summary>
-        /// Forwards a message from the server to the the SshChannel
-        /// </summary>
-        /// <param name="messageEvent">The message to be processed</param>
-        /// <param name="cancellationToken">The cancellation token is used to cancel the process request</param>
-        /// <returns></returns>
-        private async Task ProcessChannelMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
+        internal void CleanupHandlers(Exception ex)
         {
-            // Runs on background thread
-            if (messageEvent.Message is IChannelRecipient channelMessage)
+            lock (_handlers)
             {
-                if (!_channels.ContainsKey(channelMessage.RecipientChannel))
+                foreach (var handler in _handlers)
                 {
-                    throw new SshException("Server sent a message for a invalid recipient channel.");
+                    handler.Channel.Writer.Complete(ex);
                 }
-
-                var channel = _channels[channelMessage.RecipientChannel];
-
-                switch (messageEvent.Message)
-                {
-                    case ChannelSuccess success:
-                        channel.ProcessMessageAsync(success);
-                        break;
-                    case ChannelFailure failure:
-                        channel.ProcessMessageAsync(failure);
-                        break;
-                    case ChannelOpenConfirmation openConfirmation:
-                        channel.ProcessMessageAsync(openConfirmation);
-                        break;
-                    case ChannelOpenFailure openFailure:
-                        channel.ProcessMessageAsync(openFailure);
-                        break;
-                    case ChannelWindowAdjust windowAdjust:
-                        channel.ProcessMessageAsync(windowAdjust);
-                        break;
-                    case ChannelData channelData:
-                        await channel.ProcessMessageAsync(channelData, cancellationToken).ConfigureAwait(false);
-                        break;
-                    case ChannelEof channelEof:
-                        channel.ProcessMessageAsync(channelEof);
-                        break;
-                    case ChannelClose channelClose:
-                        channel.ProcessMessageAsync(channelClose);
-                        break;
-                }
+                _handlers = _handlers.Clear();
+                _sshClientState = State.Error;
             }
         }
 
@@ -722,64 +534,6 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Processes packets in the background until the connection has been disconnected.
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task ProcessPacketsAsync(CancellationToken cancellationToken)
-        {
-            await ReadWhileAsync(() => IsConnected, cancellationToken);
-        }
-
-        /// <summary>
-        /// Processes packets in the background until the condition has been met.
-        /// </summary>
-        /// <param name="condition">The condition that must be true to exit the method.</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task ProcessPacketsWhileAsync(Func<bool> condition, CancellationToken cancellationToken)
-        {
-            await ReadWhileAsync(condition, cancellationToken);
-        }
-
-        /// <summary>
-        /// Processes packets in the background until the condition has been met.
-        /// </summary>
-        /// <param name="condition">The condition that must be true to exit the method.</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task ProcessPacketsWhileAsync(Func<Task<bool>> condition, CancellationToken cancellationToken)
-        {
-            await ReadWhileAsync(condition, cancellationToken);
-        }
-
-        /// <summary>
-        /// Processes packets in the background for the specified amount of time.
-        /// </summary>
-        /// <param name="timeSpan">The amount of time to wait.</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task ProcessPacketsAsync(TimeSpan timeSpan, CancellationToken cancellationToken)
-        {
-            var taskTimer = Task.Delay(timeSpan, cancellationToken);
-            await ReadWhileAsync(() => !taskTimer.IsCompleted, cancellationToken);
-            await taskTimer;
-        }
-
-        /// <summary>
-        /// Processes packets in the background for the specified amount of milliseconds..
-        /// </summary>
-        /// <param name="milliseconds">The amount of milliseconds to wait for.</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task ProcessPacketsAsync(int milliseconds, CancellationToken cancellationToken)
-        {
-            var taskTimer = Task.Delay(milliseconds, cancellationToken);
-            await ReadWhileAsync(() => !taskTimer.IsCompleted, cancellationToken);
-            await taskTimer;
-        }
-
-        /// <summary>
         /// Closes the SshClient
         /// </summary>
         public void Close()
@@ -794,7 +548,6 @@ namespace Surfus.Shell
                 }
 
                 _sshClientState = State.Closed;
-                ConnectionInfo.Authentication?.Dispose();
                 ConnectionInfo.Dispose();
                 _tcpStream?.Dispose();
                 _tcpConnection?.Dispose();

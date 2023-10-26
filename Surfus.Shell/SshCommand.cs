@@ -19,11 +19,6 @@ namespace Surfus.Shell
         private readonly SshChannel _channel;
 
         /// <summary>
-        /// The client the command will be sent to.
-        /// </summary>
-        private readonly SshClient _client;
-
-        /// <summary>
         /// The disposed state of the command.
         /// </summary>
         private bool _isDisposed;
@@ -45,19 +40,7 @@ namespace Surfus.Shell
         /// <param name="channel">The channel to send the command over.</param>
         internal SshCommand(SshClient sshClient, SshChannel channel)
         {
-            _client = sshClient;
             _channel = channel;
-            _channel.OnDataReceived = OnDataReceived;
-        }
-
-        /// <summary>
-        /// Receives data from the channel and places it into the buffer.
-        /// </summary>
-        /// <param name="buffer">The received data.</param>
-        /// <returns></returns>
-        internal void OnDataReceived(byte[] buffer, int offset, int length)
-        {
-            _memoryStream.Write(buffer, offset, length);
         }
 
         /// <summary>
@@ -128,20 +111,19 @@ namespace Surfus.Shell
                 throw new Exception("Command request is not opened");
             }
 
-            bool eof = false;
-            bool closed = false;
-
-            _channel.OnChannelEofReceived = (message) =>
-            {
-                eof = true;
-            };
-            _channel.OnChannelCloseReceived = (message) =>
-            {
-                closed = true;
-            };
-
             await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken).ConfigureAwait(false);
-            await _client.ReadWhileAsync(() => !eof && !closed, cancellationToken).ConfigureAwait(false);
+
+            while (true)
+            {
+                var bytes = await _channel.ReadDataAsync(cancellationToken).ConfigureAwait(false);
+                if (bytes.IsEmpty)
+                {
+                    break;
+                }
+                await _memoryStream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+            }
+            await _channel.ChannelEof;
+            await _channel.ChannelClosed;
 
             _commandState = State.Completed;
 

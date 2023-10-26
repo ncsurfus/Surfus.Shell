@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Surfus.Shell.Compression;
 using Surfus.Shell.Crypto;
@@ -24,8 +26,23 @@ namespace Surfus.Shell
         );
 
         private readonly SshClient _client;
-        private readonly TaskCompletionSource _ready = new();
-        private readonly TaskCompletionSource _initialKexComplete = new();
+        private readonly ChannelReader<MessageEvent> _channelReader;
+
+        private static bool FilterMessage(MessageEvent message)
+        {
+            return message.Type switch
+            {
+                MessageType.SSH_MSG_KEX_Exchange_30
+                or MessageType.SSH_MSG_KEX_Exchange_31
+                or MessageType.SSH_MSG_KEX_Exchange_32
+                or MessageType.SSH_MSG_KEX_Exchange_33
+                or MessageType.SSH_MSG_KEX_Exchange_34
+                or MessageType.SSH_MSG_KEXINIT
+                or MessageType.SSH_MSG_NEWKEYS
+                    => true,
+                _ => false,
+            };
+        }
 
         /// <summary>
         /// Create the SshKeyExchanger.
@@ -34,95 +51,62 @@ namespace Surfus.Shell
         public SshKeyExchanger(SshClient client)
         {
             _client = client;
+            _channelReader = _client.RegisterMessageHandler(FilterMessage);
         }
 
         /// <summary>
-        /// This task completes once the SshKeyExchanger is listening for incoming messages.
+        /// Returns true if the message starts a key exchange.
         /// </summary>
-        public Task Ready => _ready.Task;
+        public bool IsKeyExchangeStart(MessageEvent message)
+        {
+            return message.Type is MessageType.SSH_MSG_KEXINIT;
+        }
 
         /// <summary>
-        /// This task completes once the first key exchange completes..
+        /// Returns true if the message starts a key exchange.
         /// </summary>
-        public Task InitialKeyExchangeComplete => _initialKexComplete.Task;
+        public bool IsKeyExchangeEnd(MessageEvent message)
+        {
+            return message.Type is MessageType.SSH_MSG_NEWKEYS;
+        }
 
         /// <summary>
-        /// 
+        /// Starts the Key Exchange process.
         /// </summary>
         /// <param name="cancellationToken">Stops the key exchange.</param>
-        public async Task HandleKeyExchangeAsync(CancellationToken cancellationToken)
-        {
-            using (cancellationToken.Register(() => _ready.TrySetCanceled()))
-            using (cancellationToken.Register(() => _ready.TrySetCanceled()))
-            {
-                try
-                {
-                    await KeyExchangeAsync(cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    _initialKexComplete.TrySetException(ex);
-                    _ready.TrySetException(ex);
-                }
-            }
-        }
-
-        private async Task KeyExchangeAsync(CancellationToken cancellationToken)
+        public async Task StartKeyExchangeAsync(CancellationToken cancellationToken)
         {
             Memory<byte> sessionIdentifier = Memory<byte>.Empty;
-            while (true)
+            // Start waiting for the server's KexInit.
+            // If this isn't the first exchange, then just await until the server wants to start the exchange.
+            var serverKexInitTask = _channelReader.ReadAsync<KexInit>(cancellationToken).AsTask();
+            if (!sessionIdentifier.IsEmpty)
             {
-                // Start waiting for the server's KexInit.
-                var serverKexInitTask = _client.ReadUntilAsync<KexInit>(cancellationToken);
-                _ready.TrySetResult();
-
-                // If this isn't the first key exchange, then just await until the server wants to start the exchange.
-                if (!sessionIdentifier.IsEmpty)
-                {
-                    await serverKexInitTask.ConfigureAwait(false);
-                }
-
-                // Send our KexInit, and ensure the server's has also been received
-                var clientKexInit = new KexInit();
-                await _client.WriteMessageAsync(clientKexInit, cancellationToken).ConfigureAwait(false);
-                var serverKexInit = await serverKexInitTask.ConfigureAwait(false);
-
-                // Determine what the negotiated alogrithms are.
-                var kexResult = new KexInitExchangeResult(clientKexInit, serverKexInit);
-                var kexAlgorithm = KeyExchangeAlgorithm.Create(_client, kexResult);
-                Task<KeyExchangeResult> exchangeTask = null;
-
-                // Send the new keys. We need to begin waiting for SSH_MSG_NEWKEYS before we
-                // the negotiated Key Exchange Algorithm completes, so the SSH_MSG_NEWKEYS
-                // isn't missed. We also need to ensure that once we receive the SSH_MSG_NEWKEYS,
-                // that we don't process any more messages until we've updated our ciphers. Finally
-                // we need to send our own SSH_MSG_NEWKEYS and ensure no more messages are written
-                // until our ciphers are updated.
-                await _client.ReadUntilAsync(() =>
-                {
-                    exchangeTask = kexAlgorithm.ExchangeAsync(cancellationToken);
-                    return Task.CompletedTask;
-                },
-                async m =>
-                {
-                    if (m.Type != MessageType.SSH_MSG_NEWKEYS || exchangeTask == null)
-                    {
-                        return false;
-                    }
-
-                    var (h, k) = await exchangeTask.ConfigureAwait(false);
-                    sessionIdentifier = sessionIdentifier.IsEmpty ? h : sessionIdentifier;
-                    var cryptoConfig = new CryptoConfig(sessionIdentifier, h, k, kexAlgorithm, kexResult);
-
-                    await _client.WriteMessageAsync(new NewKeys(), cancellationToken).ConfigureAwait(false);
-                    ApplyKeyExchange(cryptoConfig);
-                    await _client.WriteMessageAsync(new NewKeysComplete(), cancellationToken).ConfigureAwait(false);
-                    return true;
-                }, cancellationToken).ConfigureAwait(false);
-
-                // Lets callers know we've exchanged keys at least once!
-                _initialKexComplete.TrySetResult();
+                await serverKexInitTask.ConfigureAwait(false);
             }
+
+            // If this is the first exchange or we've received the server's KeyExchange then send KexInit.
+            var clientKexInit = new KexInit();
+            await _client.WriteMessageAsync(clientKexInit, cancellationToken).ConfigureAwait(false);
+            var serverKexInit = await serverKexInitTask.ConfigureAwait(false);
+
+            // Determine what the negotiated algorithms are.
+            var kexInitResult = new KexInitExchangeResult(clientKexInit, serverKexInit);
+            var kexAlgorithm = KeyExchangeAlgorithm.Create(_client, kexInitResult);
+            var (h, k) = await kexAlgorithm.ExchangeAsync(_channelReader, cancellationToken).ConfigureAwait(false);
+
+            // Wait for SSH_MSG_NEWKEYS and prevent any new mes
+            await _channelReader.ReadAsync(MessageType.SSH_MSG_NEWKEYS, cancellationToken).ConfigureAwait(false);
+
+            // Send our own SSH_MSG_NEWKEYS message.
+            await _client.WriteMessageAsync(new NewKeys(), cancellationToken).ConfigureAwait(false);
+
+            // Begin crypto rotation.
+            sessionIdentifier = sessionIdentifier.IsEmpty ? h : sessionIdentifier;
+            var cryptoConfig = new CryptoConfig(sessionIdentifier, h, k, kexAlgorithm, kexInitResult);
+            ApplyKeyExchange(cryptoConfig);
+
+            await _client.WriteMessageAsync(new NewKeysComplete(), cancellationToken).ConfigureAwait(false);
         }
 
         private void ApplyKeyExchange(CryptoConfig cryptoConfig)

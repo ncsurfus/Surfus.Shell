@@ -7,6 +7,7 @@ using Surfus.Shell.Messages;
 using System.Threading;
 using Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange;
 using Surfus.Shell.KeyExchange.DiffieHellman;
+using System.Threading.Channels;
 
 namespace Surfus.Shell.KeyExchange
 {
@@ -64,7 +65,10 @@ namespace Surfus.Shell.KeyExchange
             }
         }
 
-        public abstract Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken);
+        public abstract Task<KeyExchangeResult> ExchangeAsync(
+            ChannelReader<MessageEvent> channelReader,
+            CancellationToken cancellationToken
+        );
 
         protected static bool KexThrowIfNotMessageType(MessageEvent messageEvent, MessageType expectedMessageType)
         {

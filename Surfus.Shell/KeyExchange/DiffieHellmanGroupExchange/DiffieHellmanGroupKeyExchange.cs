@@ -1,7 +1,7 @@
-﻿using System;
-using System.Numerics;
+﻿using System.Numerics;
 using System.Security.Cryptography;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
@@ -103,19 +103,16 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             return shaGenerator.ComputeHash(data);
         }
 
-        public override async Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken)
+        public override async Task<KeyExchangeResult> ExchangeAsync(
+            ChannelReader<MessageEvent> channelReader,
+            CancellationToken cancellationToken
+        )
         {
-            var dhgGroupMessage = await _client.ReadUntilAsync(
-                async () =>
-                {
-                    await _client
-                        .WriteMessageAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken)
-                        .ConfigureAwait(false);
-                },
-                m => KexThrowIfNotMessageType(m, MessageType.SSH_MSG_KEX_Exchange_31),
-                cancellationToken
-            );
-
+            // Send the initial 'Request' message, which sets up the parameters for the key exchange.
+            await _client
+                .WriteMessageAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken)
+                .ConfigureAwait(false);
+            var dhgGroupMessage = await channelReader.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_31, cancellationToken);
             var dhgGroup = new DhgGroup(dhgGroupMessage.Packet);
 
             // Generate random number 'x'.
@@ -124,19 +121,14 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             // Generate 'e'.
             var e = new BigInt(BigInteger.ModPow(dhgGroup.G.BigInteger, x, dhgGroup.P.BigInteger));
 
-            var dhgReplyMessage = await _client.ReadUntilAsync(
-                async () => await _client.WriteMessageAsync(new DhgInit(e), cancellationToken).ConfigureAwait(false),
-                m => KexThrowIfNotMessageType(m, MessageType.SSH_MSG_KEX_Exchange_33),
-                cancellationToken
-            );
-
-            // Send 'e' to the server with the 'Init' message.
+            // Send 'e' to the server with the 'Init' message and receive the reply.
+            await _client.WriteMessageAsync(new DhgInit(e), cancellationToken).ConfigureAwait(false);
+            var dhgReplyMessage = await channelReader.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_33, cancellationToken);
             var replyMessage = new DhgReply(dhgReplyMessage.Packet);
 
             // Verify 'F' is in the range of [1, p-1]
             if (replyMessage.F.BigInteger < 1 || replyMessage.F.BigInteger > dhgGroup.P.BigInteger - 1)
             {
-                // await _sshClient.Log("Invalid 'F' from server!");
                 throw new SshException("Invalid 'F' from server!");
             }
 

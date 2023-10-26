@@ -7,6 +7,7 @@ using Surfus.Shell.Messages.Channel.Requests;
 using System.Text.RegularExpressions;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages.Channel;
+using System.IO;
 
 namespace Surfus.Shell
 {
@@ -38,7 +39,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The read buffer.
         /// </summary>
-        private readonly StringBuilder _readBuffer = new StringBuilder();
+        private Memory<byte> _buffer = Memory<byte>.Empty;
 
         /// <summary>
         /// Creates the SSH Terminal.
@@ -49,57 +50,6 @@ namespace Surfus.Shell
         {
             _client = sshClient;
             _channel = channel;
-            _channel.OnDataReceived = OnDataReceived;
-            _channel.OnChannelCloseReceived = OnChannelCloseReceived;
-        }
-
-        /// <summary>
-        /// The state of the channel.
-        /// </summary>
-        public bool IsOpen => _channel.IsOpen;
-
-        /// <summary>
-        /// Returns true if data can be the read from the channel.
-        /// </summary>
-        public bool DataAvailable => _readBuffer.Length > 0;
-
-        /// <summary>
-        /// Do Not Use (Yet).
-        /// </summary>
-        public Func<string, bool> DataReceivedCallback;
-
-        /// <summary>
-        /// The callback if the server disconnects.
-        /// </summary>
-        public event Action ServerDisconnected;
-
-        /// <summary>
-        /// The channel callback for when data can be read.
-        /// </summary>
-        /// <param name="buffer">The data sent through the channel.</param>
-        /// <returns></returns>
-        private void OnDataReceived(byte[] buffer, int offset, int length)
-        {
-            var data = Encoding.UTF8.GetString(buffer, offset, length);
-
-            if (DataReceivedCallback == null)
-            {
-                _readBuffer.Append(data);
-            }
-            else if (DataReceivedCallback(data))
-            {
-                _readBuffer.Append(data);
-            }
-        }
-
-        /// <summary>
-        /// The channel callback for when the channel is closed.
-        /// </summary>
-        /// <param name="close">The channel close message.</param>
-        /// <returns></returns>
-        private void OnChannelCloseReceived(ChannelClose close)
-        {
-            ServerDisconnected?.Invoke();
         }
 
         /// <summary>
@@ -182,6 +132,28 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns>Text from the server.</returns>
+        public async Task<Memory<byte>> ReadBytesAsync(CancellationToken cancellationToken)
+        {
+            if (_terminalState != State.Opened)
+            {
+                throw new Exception("Terminal not opened.");
+            }
+
+            if (!_buffer.IsEmpty)
+            {
+                var bufferData = _buffer;
+                _buffer = Memory<byte>.Empty;
+                return bufferData;
+            }
+
+            return await _channel.ReadDataAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Reads text from the server.
+        /// </summary>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        /// <returns>Text from the server.</returns>
         public async Task<string> ReadAsync(CancellationToken cancellationToken)
         {
             if (_terminalState != State.Opened)
@@ -189,34 +161,15 @@ namespace Surfus.Shell
                 throw new Exception("Terminal not opened.");
             }
 
-            if (_readBuffer.Length == 0)
+            if (!_buffer.IsEmpty)
             {
-                await _client.ReadWhileAsync(() => _readBuffer.Length == 0, cancellationToken).ConfigureAwait(false);
-            }
-            var text = _readBuffer.ToString();
-            _readBuffer.Clear();
-            return text;
-        }
-
-        /// <summary>
-        /// Reads a single character from the server.
-        /// </summary>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns>a single character from the server.</returns>
-        public async Task<char> ReadCharAsync(CancellationToken cancellationToken)
-        {
-            if (_terminalState != State.Opened)
-            {
-                throw new Exception("Terminal not opened.");
+                var bufferData = _buffer;
+                _buffer = Memory<byte>.Empty;
+                return Encoding.UTF8.GetString(bufferData.Span);
             }
 
-            if (_readBuffer.Length == 0)
-            {
-                await _client.ReadWhileAsync(() => _readBuffer.Length == 0, cancellationToken).ConfigureAwait(false);
-            }
-            var text = _readBuffer[0];
-            _readBuffer.Remove(0, 1);
-            return text;
+            var data = await _channel.ReadDataAsync(cancellationToken).ConfigureAwait(false);
+            return Encoding.UTF8.GetString(data.Span);
         }
 
         /// <summary>
@@ -227,16 +180,31 @@ namespace Surfus.Shell
         /// <returns>The matching text.</returns>
         public async Task<string> ExpectAsync(string plainText, CancellationToken cancellationToken)
         {
+            var matchBytes = Encoding.UTF8.GetBytes(plainText);
+
+            // Check if the match is already in the buffer.
             int index;
-            while ((index = _readBuffer.IndexOf(plainText)) == -1)
+            if ((index = _buffer.Span.IndexOf(matchBytes)) != -1)
             {
-                var currentBufferSize = _readBuffer.Length;
-                await _client.ReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
+                _buffer = _buffer.Slice(0, index + matchBytes.Length);
+                return Encoding.UTF8.GetString(_buffer.Span.Slice(index, matchBytes.Length));
             }
-            index = index + plainText.Length;
-            var result = _readBuffer.ToString().Substring(0, index);
-            _readBuffer.Remove(0, index);
-            return result;
+
+            // Write data into a memory stream. The code must ensure that any data ends up in the _buffer.
+            // In the event of a Cancellation, all data should be in _buffer, so the caller could further
+            // get the data.
+            using var memory = new MemoryStream();
+            memory.Write(_buffer.Span);
+            while ((index = _buffer.Span.IndexOf(matchBytes)) != -1)
+            {
+                var newData = await _channel.ReadDataAsync(cancellationToken).ConfigureAwait(false);
+                memory.Write(newData.Span);
+                memory.TryGetBuffer(out var bufferSegment);
+                _buffer = bufferSegment.AsMemory();
+            }
+            var data = _buffer.Slice(0, index + matchBytes.Length);
+            _buffer = _buffer.Slice(index + matchBytes.Length);
+            return Encoding.UTF8.GetString(data.Span);
         }
 
         /// <summary>
@@ -259,15 +227,27 @@ namespace Surfus.Shell
         /// <returns>The regex match.</returns>
         public async Task<Match> ExpectRegexMatchAsync(string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
         {
-            Match regexMatch;
-            while (!(regexMatch = Regex.Match(_readBuffer.ToString(), regexText, regexOptions)).Success)
+            var builder = new StringBuilder();
+            builder.Append(Encoding.UTF8.GetString(_buffer.Span));
+
+            // Check if the match is already in the buffer.
+            try
             {
-                var currentBufferSize = _readBuffer.Length;
-                await _client.ReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
+                Match regexMatch;
+                while (!(regexMatch = Regex.Match(builder.ToString(), regexText, regexOptions)).Success)
+                {
+                    var newData = await _channel.ReadDataAsync(cancellationToken).ConfigureAwait(false);
+                    builder.Append(Encoding.UTF8.GetString(newData.Span));
+                }
+                var index = regexMatch.Index + regexMatch.Length;
+                _buffer = Encoding.UTF8.GetBytes(builder.ToString(index, builder.Length - index));
+                return regexMatch;
             }
-            var index = regexMatch.Index + regexMatch.Length;
-            _readBuffer.Remove(0, index);
-            return regexMatch;
+            catch
+            {
+                _buffer = Encoding.UTF8.GetBytes(builder.ToString());
+                throw;
+            }
         }
 
         /// <summary>
@@ -279,6 +259,14 @@ namespace Surfus.Shell
         public Task<Match> ExpectRegexMatchAsync(string regexText, CancellationToken cancellationToken)
         {
             return ExpectRegexMatchAsync(regexText, RegexOptions.None, cancellationToken);
+        }
+
+        /// <summary>
+        /// Closes the SshClient
+        /// </summary>
+        public async Task SendEOFAsync(CancellationToken cancellationToken)
+        {
+            await _client.WriteMessageAsync(new ChannelEof(_channel.ServerId), cancellationToken);
         }
 
         /// <summary>
