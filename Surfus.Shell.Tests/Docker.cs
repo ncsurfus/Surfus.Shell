@@ -1,8 +1,5 @@
-using System.Buffers.Text;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Transactions;
+using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Surfus.Shell.Tests;
@@ -20,14 +17,14 @@ public class UnitTest1
             {
                 FileName = "/usr/bin/docker",
                 ArgumentList = { "compose", "up", "-d", "--build" },
-                WorkingDirectory = "/home/ncsurfus/repos/Surfus.Shell/Surfus.Shell.Tests/docker",
+                WorkingDirectory = Path.Join(Path.GetDirectoryName(Assembly.GetEntryAssembly()!.Location), "docker"),
             },
         };
         process.Start();
         process.WaitForExit();
         if (process.ExitCode != 0)
         {
-            throw new InvalidProgramException();
+            throw new Exception("Docker failed to start!");
         }
         Thread.Sleep(3000);
     }
@@ -42,14 +39,14 @@ public class UnitTest1
                 {
                     FileName = "/usr/bin/docker",
                     ArgumentList = { "compose", "down", "--remove-orphans" },
-                    WorkingDirectory = "/home/ncsurfus/repos/Surfus.Shell/Surfus.Shell.Tests/docker",
+                    WorkingDirectory = Path.Join(Path.GetDirectoryName(Assembly.GetEntryAssembly()!.Location), "docker"),
                 },
             };
             process.Start();
             process.WaitForExit();
             if (process.ExitCode != 0)
             {
-                throw new InvalidProgramException();
+                throw new Exception("Docker failed to stop!");
             }
         }
     }

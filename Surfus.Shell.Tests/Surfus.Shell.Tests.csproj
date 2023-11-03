@@ -18,6 +18,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Surfus.Shell\Surfus.Shell.csproj" />
+    <Content Include="docker\**">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>  
   </ItemGroup>
 
 </Project>
