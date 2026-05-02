@@ -9,9 +9,8 @@ using Surfus.Shell.Messages.UserAuth;
 
 namespace Surfus.Shell
 {
-    internal class SshAuthentication : IDisposable
+    internal class SshAuthentication : IMessageHandler, IDisposable
     {
-        private readonly SendMessageAsync _send;
         private readonly Func<byte[]> _getSessionIdentifier;
         private readonly SshMessageInbox _inbox = new();
         private bool _serviceAccepted;
@@ -21,9 +20,8 @@ namespace Surfus.Shell
         /// </summary>
         internal Action<string> OnBanner { get; set; }
 
-        internal SshAuthentication(SendMessageAsync send, Func<byte[]> getSessionIdentifier)
+        internal SshAuthentication(Func<byte[]> getSessionIdentifier)
         {
-            _send = send;
             _getSessionIdentifier = getSessionIdentifier;
         }
 
@@ -56,7 +54,7 @@ namespace Surfus.Shell
             if (_serviceAccepted)
                 return;
 
-            await _send(new Messages.ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
+            await _inbox.SendAsync(new Messages.ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
             var msg = await ReadAuthMessageAsync(cancellationToken).ConfigureAwait(false);
 
             if (msg.Type != MessageType.SSH_MSG_SERVICE_ACCEPT)
@@ -67,7 +65,8 @@ namespace Surfus.Shell
 
         private async Task AuthenticateWithMethodAsync(string username, IAuthMethod method, CancellationToken cancellationToken)
         {
-            await method.SendRequestAsync(_send, username, cancellationToken).ConfigureAwait(false);
+            var request = await method.CreateRequestAsync(username, cancellationToken).ConfigureAwait(false);
+            await _inbox.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
             while (true)
             {
@@ -82,7 +81,9 @@ namespace Surfus.Shell
                         throw new SshInvalidCredentials();
 
                     case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                        await method.HandleMessage60Async(_send, username, _getSessionIdentifier(), msg, cancellationToken).ConfigureAwait(false);
+                        var response = await method.HandleMessage60Async(username, _getSessionIdentifier(), msg, cancellationToken).ConfigureAwait(false);
+                    if (response != null)
+                        await _inbox.SendAsync(response, cancellationToken).ConfigureAwait(false);
                         continue;
 
                     default:
@@ -117,9 +118,11 @@ namespace Surfus.Shell
             }
         }
 
-        internal void ProcessMessage(MessageEvent messageEvent) => _inbox.Deliver(messageEvent);
+        public Func<IClientMessage, CancellationToken, Task> OnSend { set => _inbox.OnSend = value; }
 
-        internal void OnError(Exception error) => _inbox.OnError(error);
+        public void ProcessMessage(MessageEvent messageEvent) => _inbox.Deliver(messageEvent);
+
+        public void OnError(Exception error) => _inbox.OnError(error);
 
         public void Dispose() => _inbox.Dispose();
     }

@@ -8,9 +8,8 @@ using Surfus.Shell.Messages.Channel;
 
 namespace Surfus.Shell
 {
-    internal class SshChannel
+    internal class SshChannel : IMessageHandler
     {
-        private readonly SendMessageAsync _send;
         internal readonly SshMessageInbox Inbox = new();
         internal IDisposable Registration { get; set; }
 
@@ -36,9 +35,8 @@ namespace Surfus.Shell
         /// </summary>
         internal Action<ChannelClose> OnChannelCloseReceived;
 
-        internal SshChannel(SendMessageAsync send, uint channelId)
+        internal SshChannel(uint channelId)
         {
-            _send = send;
             ClientId = channelId;
         }
 
@@ -51,7 +49,7 @@ namespace Surfus.Shell
         internal async Task OpenAsync(ChannelOpen openMessage, CancellationToken cancellationToken)
         {
             ReceiveWindow = (int)openMessage.InitialWindowSize;
-            await _send(openMessage, cancellationToken).ConfigureAwait(false);
+            await Inbox.SendAsync(openMessage, cancellationToken).ConfigureAwait(false);
 
             var msg = await ReadChannelMessageAsync(cancellationToken).ConfigureAwait(false);
             switch (msg.Message)
@@ -70,7 +68,7 @@ namespace Surfus.Shell
 
         internal async Task RequestAsync(ChannelRequest requestMessage, CancellationToken cancellationToken)
         {
-            await _send(requestMessage, cancellationToken).ConfigureAwait(false);
+            await Inbox.SendAsync(requestMessage, cancellationToken).ConfigureAwait(false);
 
             var msg = await ReadChannelMessageAsync(cancellationToken).ConfigureAwait(false);
             switch (msg.Message)
@@ -103,7 +101,7 @@ namespace Surfus.Shell
                     chunk = new byte[chunkSize];
                     Array.Copy(buffer, offset, chunk, 0, chunkSize);
                 }
-                await _send(new ChannelData(ServerId, chunk), cancellationToken).ConfigureAwait(false);
+                await Inbox.SendAsync(new ChannelData(ServerId, chunk), cancellationToken).ConfigureAwait(false);
                 SendWindow -= chunkSize;
                 totalBytesLeft -= chunkSize;
                 offset += chunkSize;
@@ -114,7 +112,7 @@ namespace Surfus.Shell
         {
             if (IsOpen)
             {
-                await _send(new ChannelClose(ServerId), cancellationToken).ConfigureAwait(false);
+                await Inbox.SendAsync(new ChannelClose(ServerId), cancellationToken).ConfigureAwait(false);
                 IsOpen = false;
             }
         }
@@ -219,7 +217,7 @@ namespace Surfus.Shell
 
             if (ReceiveWindow <= 0)
             {
-                await _send(new ChannelWindowAdjust(ServerId, (uint)WindowRefill), cancellationToken).ConfigureAwait(false);
+                await Inbox.SendAsync(new ChannelWindowAdjust(ServerId, (uint)WindowRefill), cancellationToken).ConfigureAwait(false);
                 ReceiveWindow += WindowRefill;
             }
 
@@ -227,8 +225,14 @@ namespace Surfus.Shell
         }
 
 
-        internal void ProcessMessage(MessageEvent messageEvent) => Inbox.Deliver(messageEvent);
+        public Func<IClientMessage, CancellationToken, Task> OnSend { set => Inbox.OnSend = value; }
 
-        internal void OnError(Exception error) => Inbox.OnError(error);
+        public void ProcessMessage(MessageEvent messageEvent)
+        {
+            if (messageEvent.Message is IChannelRecipient r && r.RecipientChannel == ClientId)
+                Inbox.Deliver(messageEvent);
+        }
+
+        public void OnError(Exception error) => Inbox.OnError(error);
     }
 }

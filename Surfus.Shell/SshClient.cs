@@ -61,53 +61,44 @@ namespace Surfus.Shell
         /// </summary>
         private NetworkStream _tcpStream;
 
-        /// <summary>
-        /// Registered message handlers. The read loop delivers every message to each handler.
-        /// When the read loop exits, each error callback is invoked with the exception (or null).
-        /// </summary>
         private readonly object _handlersLock = new();
-        private ImmutableList<(Action<MessageEvent> onMessage, Action<Exception> onError)> _messageHandlers =
-            ImmutableList.Create<(Action<MessageEvent>, Action<Exception>)>();
+        private ImmutableList<IMessageHandler> _messageHandlers = ImmutableList.Create<IMessageHandler>();
 
         /// <summary>
-        /// Registers a message handler with an error callback. Returns a disposable that unregisters it.
+        /// Registers a message handler. Automatically wires OnSend to WriteMessageAsync.
+        /// Returns a disposable that unregisters it.
         /// </summary>
-        internal IDisposable RegisterMessageHandler(Action<MessageEvent> onMessage, Action<Exception> onError)
+        internal IDisposable RegisterMessageHandler(IMessageHandler handler)
         {
-            var entry = (onMessage, onError);
+            handler.OnSend = WriteMessageAsync;
             lock (_handlersLock)
             {
-                _messageHandlers = _messageHandlers.Add(entry);
+                _messageHandlers = _messageHandlers.Add(handler);
             }
-            return new HandlerRegistration(this, entry);
+            return new HandlerRegistration(this, handler);
         }
 
-        private void UnregisterMessageHandler((Action<MessageEvent>, Action<Exception>) entry)
+        private void UnregisterMessageHandler(IMessageHandler handler)
         {
             lock (_handlersLock)
             {
-                _messageHandlers = _messageHandlers.Remove(entry);
+                _messageHandlers = _messageHandlers.Remove(handler);
             }
         }
 
-        /// <summary>
-        /// Notifies all registered handlers that the read loop has exited.
-        /// </summary>
         private void NotifyHandlersOfError(Exception error)
         {
             var handlers = _messageHandlers;
-            foreach (var (_, onError) in handlers)
-            {
-                onError?.Invoke(error);
-            }
+            foreach (var handler in handlers)
+                handler.OnError(error);
         }
 
         private sealed class HandlerRegistration : IDisposable
         {
             private readonly SshClient _client;
-            private readonly (Action<MessageEvent>, Action<Exception>) _entry;
-            public HandlerRegistration(SshClient client, (Action<MessageEvent>, Action<Exception>) entry) { _client = client; _entry = entry; }
-            public void Dispose() => _client.UnregisterMessageHandler(_entry);
+            private readonly IMessageHandler _handler;
+            public HandlerRegistration(SshClient client, IMessageHandler handler) { _client = client; _handler = handler; }
+            public void Dispose() => _client.UnregisterMessageHandler(_handler);
         }
 
         /// <summary>
@@ -170,20 +161,14 @@ namespace Surfus.Shell
             _sshClientState = State.Connecting;
 
             // Set SshClient defaults
-            ConnectionInfo.KeyExchanger = new SshKeyExchanger(WriteMessageAsync, ConnectionInfo, HostKeyCallback);
+            ConnectionInfo.KeyExchanger = new SshKeyExchanger(ConnectionInfo, HostKeyCallback);
+            ConnectionInfo.KeyExchanger.OnSend = WriteMessageAsync;
 
             // Perform version exchange and key exchange
             ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
 
             // Register key exchanger to receive kex-related messages
-            _disposables.Add(RegisterMessageHandler(
-                msg =>
-                {
-                    var id = (int)msg.Type;
-                    if (id >= 20 && id <= 49)
-                        ConnectionInfo.KeyExchanger.ProcessMessage(msg);
-                },
-                ConnectionInfo.KeyExchanger.OnError));
+            _disposables.Add(RegisterMessageHandler(ConnectionInfo.KeyExchanger));
 
             var keyExchangeTask = ConnectionInfo.KeyExchanger.HandleKeyExchangeAsync(cancellationToken);
             await ConnectionInfo.KeyExchanger.Ready.ConfigureAwait(false);
@@ -231,7 +216,7 @@ namespace Surfus.Shell
             }
 
             var auth = EnsureAuthentication();
-            using var _ = RegisterMessageHandler(auth.ProcessMessage, auth.OnError);
+            using var _ = RegisterMessageHandler(auth);
             await auth.LoginAsync(username, new PasswordAuth(password), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
@@ -256,7 +241,7 @@ namespace Surfus.Shell
             }
 
             var auth = EnsureAuthentication();
-            using var _ = RegisterMessageHandler(auth.ProcessMessage, auth.OnError);
+            using var _ = RegisterMessageHandler(auth);
             await auth.LoginAsync(username, new KeyboardInteractiveAuth(interactiveResponse), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
@@ -275,7 +260,7 @@ namespace Surfus.Shell
             }
 
             var auth = EnsureAuthentication();
-            using var _ = RegisterMessageHandler(auth.ProcessMessage, auth.OnError);
+            using var _ = RegisterMessageHandler(auth);
             var keys = await agent.ListKeysAsync(cancellationToken).ConfigureAwait(false);
             if (keys.Count == 0)
                 throw new Exceptions.SshAuthenticationException("The SSH agent has no keys.");
@@ -301,7 +286,7 @@ namespace Surfus.Shell
             }
 
             var auth = EnsureAuthentication();
-            using var _ = RegisterMessageHandler(auth.ProcessMessage, auth.OnError);
+            using var _ = RegisterMessageHandler(auth);
             await auth.LoginAsync(username, new AgentAuth(agent, key), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
@@ -319,10 +304,8 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            var channel = new SshChannel(WriteMessageAsync, _channelCounter);
-            channel.Registration = RegisterMessageHandler(
-                msg => { if (msg.Message is IChannelRecipient r && r.RecipientChannel == channel.ClientId) channel.ProcessMessage(msg); },
-                channel.OnError);
+            var channel = new SshChannel(_channelCounter);
+            channel.Registration = RegisterMessageHandler(channel);
             var terminal = new SshTerminal(channel);
 
             _disposables.Add(terminal);
@@ -345,10 +328,8 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            var channel = new SshChannel(WriteMessageAsync, _channelCounter);
-            channel.Registration = RegisterMessageHandler(
-                msg => { if (msg.Message is IChannelRecipient r && r.RecipientChannel == channel.ClientId) channel.ProcessMessage(msg); },
-                channel.OnError);
+            var channel = new SshChannel(_channelCounter);
+            channel.Registration = RegisterMessageHandler(channel);
             var command = new SshCommand(channel);
 
             _disposables.Add(command);
@@ -520,10 +501,8 @@ namespace Surfus.Shell
 
             // Deliver to registered message handlers
             var handlers = _messageHandlers;
-            foreach (var (onMessage, _) in handlers)
-            {
-                onMessage(messageEvent);
-            }
+            foreach (var handler in handlers)
+                handler.ProcessMessage(messageEvent);
 
             // After delivering SSH_MSG_NEWKEYS, wait for the key exchanger
             // to provide the new read-side crypto before reading the next packet.
@@ -611,7 +590,7 @@ namespace Surfus.Shell
         {
             if (_authentication == null)
             {
-                _authentication = new SshAuthentication(WriteMessageAsync, () => ConnectionInfo.SessionIdentifier);
+                _authentication = new SshAuthentication(() => ConnectionInfo.SessionIdentifier);
                 _authentication.OnBanner = banner => Banner = banner;
             }
             return _authentication;

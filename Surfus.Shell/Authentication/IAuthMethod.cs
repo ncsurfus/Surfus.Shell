@@ -1,4 +1,3 @@
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Surfus.Shell.Messages;
@@ -16,13 +15,13 @@ namespace Surfus.Shell.Authentication
     internal interface IAuthMethod
     {
         /// <summary>
-        /// Sends the initial authentication request.
+        /// Returns the initial authentication request message to send.
         /// </summary>
-        Task SendRequestAsync(SendMessageAsync send, string username, CancellationToken cancellationToken);
+        Task<IClientMessage> CreateRequestAsync(string username, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Handles message type 60 (PK_OK or INFO_REQUEST depending on auth method).
+        /// Handles message type 60 and returns a response message to send, or null if no response.
         /// </summary>
-        Task HandleMessage60Async(SendMessageAsync send, string username, byte[] sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken);
+        Task<IClientMessage> HandleMessage60Async(string username, byte[] sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken);
     }
 }

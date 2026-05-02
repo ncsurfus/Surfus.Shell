@@ -17,7 +17,9 @@ public class SshAuthenticationTests
 
     private SshAuthentication CreateAuth()
     {
-        return new SshAuthentication(FakeSend, () => new byte[32]);
+        var auth = new SshAuthentication(() => new byte[32]);
+        auth.OnSend = FakeSend;
+        return auth;
     }
 
     /// <summary>

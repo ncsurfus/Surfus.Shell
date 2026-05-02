@@ -98,9 +98,8 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
 
         public override async Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken)
         {
-            await _context.Send(new DhInit(E), cancellationToken).ConfigureAwait(false);
-            var dhReplyMessage = await _context.Inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
-
+            await _context.Inbox.SendAsync(new DhInit(E), cancellationToken).ConfigureAwait(false);
+            var dhReplyMessage = await _context.Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_31, cancellationToken).ConfigureAwait(false);
             var reply = new DhReply(dhReplyMessage.Packet);
 
             // Verify 'F' is in the range of [1, p-1]

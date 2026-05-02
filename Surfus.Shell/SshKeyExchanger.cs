@@ -12,9 +12,8 @@ using Surfus.Shell.Messages.KeyExchange;
 
 namespace Surfus.Shell
 {
-    public class SshKeyExchanger
+    internal class SshKeyExchanger : IMessageHandler
     {
-        private readonly SendMessageAsync _send;
         private readonly SshConnectionInfo _connectionInfo;
         private readonly Func<byte[], bool> _hostKeyCallback;
         private readonly SshMessageInbox _inbox = new();
@@ -22,15 +21,14 @@ namespace Surfus.Shell
         private readonly TaskCompletionSource _initialKexComplete = new();
         private readonly Channel<Action> _newReadKeys = Channel.CreateUnbounded<Action>();
 
-        internal SshKeyExchanger(SendMessageAsync send, SshConnectionInfo connectionInfo, Func<byte[], bool> hostKeyCallback)
+        internal SshKeyExchanger(SshConnectionInfo connectionInfo, Func<byte[], bool> hostKeyCallback)
         {
-            _send = send;
             _connectionInfo = connectionInfo;
             _hostKeyCallback = hostKeyCallback;
         }
 
-        public Task Ready => _ready.Task;
-        public Task InitialKeyExchangeComplete => _initialKexComplete.Task;
+        internal Task Ready => _ready.Task;
+        internal Task InitialKeyExchangeComplete => _initialKexComplete.Task;
 
         /// <summary>
         /// Called by the read loop after delivering SSH_MSG_NEWKEYS.
@@ -41,7 +39,7 @@ namespace Surfus.Shell
             return await _newReadKeys.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task HandleKeyExchangeAsync(CancellationToken cancellationToken)
+        internal async Task HandleKeyExchangeAsync(CancellationToken cancellationToken)
         {
             using (cancellationToken.Register(() => _ready.TrySetCanceled()))
             using (cancellationToken.Register(() => _initialKexComplete.TrySetCanceled()))
@@ -68,11 +66,11 @@ namespace Surfus.Shell
                 var serverKexInit = await ReadKexInitAsync(cancellationToken).ConfigureAwait(false);
 
                 var clientKexInit = new KexInit();
-                await _send(clientKexInit, cancellationToken).ConfigureAwait(false);
+                await _inbox.SendAsync(clientKexInit, cancellationToken).ConfigureAwait(false);
 
                 var kexResult = new KexInitExchangeResult(clientKexInit, serverKexInit);
                 var kexContext = new KexContext(
-                    _send, _inbox,
+                    _inbox,
                     _connectionInfo.ClientVersion, _connectionInfo.ServerVersion,
                     _hostKeyCallback);
                 var kexAlgorithm = KeyExchangeAlgorithm.Create(kexContext, kexResult);
@@ -84,14 +82,12 @@ namespace Surfus.Shell
                 sessionIdentifier = sessionIdentifier.IsEmpty ? h : sessionIdentifier;
                 _connectionInfo.SessionIdentifier ??= sessionIdentifier.ToArray();
 
-                var newKeysMsg = await _inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
-                if (newKeysMsg.Type != MessageType.SSH_MSG_NEWKEYS)
-                    throw new Exceptions.SshException($"Expected SSH_MSG_NEWKEYS but got {newKeysMsg.Type}");
+                await _inbox.ReadAsync(MessageType.SSH_MSG_NEWKEYS, cancellationToken).ConfigureAwait(false);
 
                 // Send NewKeys with OLD crypto, then apply new write crypto
-                await _send(new NewKeys(), cancellationToken).ConfigureAwait(false);
+                await _inbox.SendAsync(new NewKeys(), cancellationToken).ConfigureAwait(false);
                 ApplyWriteCrypto(sessionIdentifier, h, k, kexAlgorithm, kexResult);
-                await _send(new NewKeysComplete(), cancellationToken).ConfigureAwait(false);
+                await _inbox.SendAsync(new NewKeysComplete(), cancellationToken).ConfigureAwait(false);
 
                 // Hand read crypto to the read loop
                 var readCrypto = CreateReadCrypto(sessionIdentifier, h, k, kexAlgorithm, kexResult);
@@ -103,12 +99,7 @@ namespace Surfus.Shell
 
         private async Task<KexInit> ReadKexInitAsync(CancellationToken cancellationToken)
         {
-            while (true)
-            {
-                var msg = await _inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
-                if (msg.Type == MessageType.SSH_MSG_KEXINIT)
-                    return (KexInit)msg.Message;
-            }
+            return await _inbox.ReadAsync<KexInit>(cancellationToken).ConfigureAwait(false);
         }
 
         private void ApplyWriteCrypto(Memory<byte> sessionId, Memory<byte> h, BigInt k, KeyExchangeAlgorithm kex, KexInitExchangeResult result)
@@ -146,7 +137,14 @@ namespace Surfus.Shell
             };
         }
 
-        internal void ProcessMessage(MessageEvent messageEvent) => _inbox.Deliver(messageEvent);
-        internal void OnError(Exception error) => _inbox.OnError(error);
+        public Func<IClientMessage, CancellationToken, Task> OnSend { set => _inbox.OnSend = value; }
+
+        public void ProcessMessage(MessageEvent messageEvent)
+        {
+            var id = (int)messageEvent.Type;
+            if (id >= 20 && id <= 49)
+                _inbox.Deliver(messageEvent);
+        }
+        public void OnError(Exception error) => _inbox.OnError(error);
     }
 }
