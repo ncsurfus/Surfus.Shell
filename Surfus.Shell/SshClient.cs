@@ -495,8 +495,8 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_DISCONNECT:
                     _disconnectReceived = true;
                     break;
-                // Auth and other messages are delivered to registered handlers below.
-                // Channel messages are delivered to registered handlers below.
+                    // Auth and other messages are delivered to registered handlers below.
+                    // Channel messages are delivered to registered handlers below.
             }
 
             // Deliver to registered message handlers

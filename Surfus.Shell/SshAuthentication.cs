@@ -82,8 +82,8 @@ namespace Surfus.Shell
 
                     case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
                         var response = await method.HandleMessage60Async(username, _getSessionIdentifier(), msg, cancellationToken).ConfigureAwait(false);
-                    if (response != null)
-                        await _inbox.SendAsync(response, cancellationToken).ConfigureAwait(false);
+                        if (response != null)
+                            await _inbox.SendAsync(response, cancellationToken).ConfigureAwait(false);
                         continue;
 
                     default:
