@@ -195,6 +195,24 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Notifies the server of a terminal window size change.
+        /// </summary>
+        /// <param name="columns">The new terminal width in characters.</param>
+        /// <param name="rows">The new terminal height in rows.</param>
+        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
+        public async Task SendWindowChangeAsync(uint columns, uint rows, CancellationToken cancellationToken)
+        {
+            if (_terminalState != State.Opened)
+            {
+                throw new Exception("Terminal not opened.");
+            }
+            await _channel.SendMessageAsync(
+                new ChannelRequestWindowChange(_channel.ServerId, columns, rows),
+                cancellationToken
+            ).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Reads text from the server.
         /// </summary>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>

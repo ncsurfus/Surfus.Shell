@@ -122,6 +122,11 @@ namespace Surfus.Shell
             }
         }
 
+        internal async Task SendMessageAsync(IClientMessage message, CancellationToken cancellationToken)
+        {
+            await Inbox.SendAsync(message, cancellationToken).ConfigureAwait(false);
+        }
+
         /// <summary>
         /// Reads the next channel message, processing window adjusts and data inline.
         /// Control messages (open confirm/failure, success/failure, eof, close) are returned.

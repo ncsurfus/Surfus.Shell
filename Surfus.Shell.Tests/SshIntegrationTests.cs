@@ -125,6 +125,22 @@ public class SshIntegrationTests
         Assert.False(string.IsNullOrEmpty(data));
     }
 
+    [Fact]
+    public async Task ShellChannel_WindowChange()
+    {
+        await using var server = await SshTestServer.StartAsync(shellMode: "echo");
+        await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
+        await client.ConnectAsync(Timeout());
+        await client.AuthenticateAsync(User, Pass, Timeout());
+        var terminal = await client.CreateTerminalAsync(Timeout());
+        await terminal.ReadAsync(Timeout());
+        // Send window-change and verify the terminal still works after
+        await terminal.SendWindowChangeAsync(120, 40, Timeout());
+        await terminal.WriteLineAsync("hello", Timeout());
+        var data = await terminal.ReadAsync(Timeout());
+        Assert.Contains("hello", data);
+    }
+
     // --- Host key ---
 
     [Fact]
