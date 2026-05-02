@@ -136,7 +136,6 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             // Verify 'F' is in the range of [1, p-1]
             if (replyMessage.F.BigInteger < 1 || replyMessage.F.BigInteger > dhgGroup.P.BigInteger - 1)
             {
-                // await _sshClient.Log("Invalid 'F' from server!");
                 throw new SshException("Invalid 'F' from server!");
             }
 

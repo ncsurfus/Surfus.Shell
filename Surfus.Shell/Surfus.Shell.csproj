@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <Version>2.0.0</Version>
-    <TargetFramework>net6</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
     <Authors>Nathan Surfus</Authors>
     <Description>Surfus.Shell is an SSH Client written in C#.</Description>

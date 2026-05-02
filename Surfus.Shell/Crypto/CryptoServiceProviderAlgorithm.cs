@@ -98,12 +98,7 @@ namespace Surfus.Shell.Crypto
             // Read enough data until we have at least 1 block.
             while (bufferPosition != blockSize + packetStart)
             {
-                bufferPosition += await networkStream.ReadAsync(
-                    buffer,
-                    bufferPosition,
-                    blockSize + packetStart - bufferPosition,
-                    cancellationToken
-                );
+                bufferPosition += await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, blockSize + packetStart - bufferPosition), cancellationToken);
             }
 
             _decryptor.TransformBlock(buffer, bufferPosition - blockSize, blockSize, buffer, bufferPosition - blockSize); // Decrypt the first block in the buffer.
@@ -120,7 +115,7 @@ namespace Surfus.Shell.Crypto
 
             while (bufferPosition != bufferLength) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
             {
-                bufferPosition += await networkStream.ReadAsync(buffer, bufferPosition, bufferLength - bufferPosition, cancellationToken);
+                bufferPosition += await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, bufferLength - bufferPosition), cancellationToken);
             }
 
             if (sshPacketSize > blockSize) // Check if this was more than a single block..

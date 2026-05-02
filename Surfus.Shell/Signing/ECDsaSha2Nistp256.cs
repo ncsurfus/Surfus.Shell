@@ -14,5 +14,7 @@ namespace Surfus.Shell.Signing
         public override string CurveName { get; } = "nistp256";
 
         public override HashAlgorithmName HashName => HashAlgorithmName.SHA256;
+
+        public override int FieldSizeBytes => 32;
     }
 }

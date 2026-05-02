@@ -4,11 +4,15 @@ obj/
 packages/
 *.DS_Store
 *.userprefs
+*.log
 PublishProfiles
 Surfus.Shell/Properties/
 publish/
 *.user
-Surfus.Shell.Tests/
-Surfus.Shell.Console/
 *.psess
 *.vsp
+mise.toml
+.vscode/
+Surfus.Shell.Tests/testserver/testserver
+Surfus.Shell.Tests/testserver/testserver.exe
+Surfus.Shell.Tests/testserver/server_*.txt

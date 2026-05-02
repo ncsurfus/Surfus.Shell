@@ -23,7 +23,7 @@ namespace Surfus.Shell
         /// <summary>
         /// _sshClientState holds the state of the SshClient.
         /// </summary>
-        private State _sshClientState = State.Intitial;
+        private State _sshClientState = State.Initial;
 
         /// <summary>
         /// _channelCounter holds the current channel index used to derive new channel IDs.
@@ -90,7 +90,7 @@ namespace Surfus.Shell
         /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
         /// </summary>
-        public SshConnectionInfo ConnectionInfo = new SshConnectionInfo();
+        public SshConnectionInfo ConnectionInfo { get; } = new SshConnectionInfo();
 
         /// <summary>
         /// Banner holds the banner message sent by the SSH server after login. If null, no banner was sent.
@@ -100,7 +100,7 @@ namespace Surfus.Shell
         /// <summary>
         /// When set, calls this callback function to determine if the host key is valid and if the connection should continue.
         /// </summary>
-        public Func<byte[], bool> HostKeyCallback = null;
+        public Func<byte[], bool> HostKeyCallback { get; set; }
 
         /// <summary>
         /// An SshClient that can connect designated hostname and port.
@@ -121,7 +121,7 @@ namespace Surfus.Shell
         public async Task ConnectAsync(CancellationToken cancellationToken)
         {
             // Validate current state of SshClient
-            if (_sshClientState != State.Intitial)
+            if (_sshClientState != State.Initial)
             {
                 ThrowOnInvalidState();
             }
@@ -139,15 +139,22 @@ namespace Surfus.Shell
             var keyExchangeTask = ConnectionInfo.KeyExchanger.HandleKeyExchangeAsync(cancellationToken);
             await ConnectionInfo.KeyExchanger.Ready.ConfigureAwait(false);
 
-            // Start the read loop
+            // Start the read loop. When the loop exits for any reason,
+            // cancel _closeCts so all pending ReadUntilAsync waiters unblock.
             async Task readLoop()
             {
-                while (true)
+                try
                 {
-                    await ReadMessageAsync(_closeCts.Token);
+                    while (true)
+                    {
+                        await ReadMessageAsync(_closeCts.Token);
+                    }
+                }
+                finally
+                {
+                    _closeCts.Cancel();
                 }
             }
-            ;
             _readLoop = readLoop();
 
             await ConnectionInfo.KeyExchanger.InitialKeyExchangeComplete.ConfigureAwait(false);
@@ -284,7 +291,7 @@ namespace Surfus.Shell
                     }
 
                     // It appears in some cases ReadAsync can get hung and not properly respond to the CancellationToken.
-                    var readTask = _tcpStream.ReadAsync(buffer, bufferPosition, buffer.Length - bufferPosition, cancellationToken);
+                    var readTask = _tcpStream.ReadAsync(buffer.AsMemory(bufferPosition, buffer.Length - bufferPosition), cancellationToken).AsTask();
                     var readResult = await Task.WhenAny(timeout.Task, readTask).ConfigureAwait(false);
 
                     if (readResult == timeout.Task)
@@ -362,7 +369,7 @@ namespace Surfus.Shell
                     throw new SshException("Server version is not supported.");
                 }
                 var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
-                await _tcpStream.WriteAsync(clientVersionBytes, 0, clientVersionBytes.Length, cancellationToken).ConfigureAwait(false);
+                await _tcpStream.WriteAsync(clientVersionBytes.AsMemory(), cancellationToken).ConfigureAwait(false);
                 await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
                 return version;
             }
@@ -699,12 +706,12 @@ namespace Surfus.Shell
                 byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
 
                 ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
-                await _tcpStream.WriteAsync(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length, cancellationToken).ConfigureAwait(false);
+                await _tcpStream.WriteAsync(sshPacket.Buffer.AsMemory(sshPacket.Offset, sshPacket.Length), cancellationToken).ConfigureAwait(false);
 
                 if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
                 {
                     await _tcpStream
-                        .WriteAsync(macOutput, 0, ConnectionInfo.WriteMacAlgorithm.OutputSize, cancellationToken)
+                        .WriteAsync(macOutput.AsMemory(0, ConnectionInfo.WriteMacAlgorithm.OutputSize), cancellationToken)
                         .ConfigureAwait(false);
                 }
 
@@ -827,14 +834,15 @@ namespace Surfus.Shell
         {
             _closeCts.Cancel();
             Close();
-            try
+            if (_readLoop != null)
             {
-                if (_readLoop != null)
+                try
                 {
                     await _readLoop;
                 }
+                catch (Exception) { }
             }
-            catch (Exception) { }
+            _closeCts.Dispose();
         }
 
         /// <summary>
@@ -842,7 +850,7 @@ namespace Surfus.Shell
         /// </summary>
         internal enum State
         {
-            Intitial,
+            Initial,
             Connecting,
             Connected,
             Authenticating,

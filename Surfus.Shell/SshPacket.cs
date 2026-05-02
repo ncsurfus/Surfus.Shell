@@ -64,7 +64,6 @@ namespace Surfus.Shell
             var paddingLength = -((5 + compressedPayload.DataLength) % paddingMultiplier) + paddingMultiplier * 2;
             paddingLength = paddingLength <= 255 ? paddingLength : paddingLength - paddingMultiplier;
             var padding = new byte[paddingLength];
-            RandomGenerator.GetBytes(padding); // TODO: On switch to .NET Standard 2.0, we can write directly to the buffer.
 
             // Add 4 for the MAC authentication packet sequence number.
             // Offset everything by 4...
@@ -98,7 +97,6 @@ namespace Surfus.Shell
             var paddingLength = -((5 + compressedPayload.Length) % paddingMultiplier) + paddingMultiplier * 2;
             paddingLength = paddingLength <= 255 ? paddingLength : paddingLength - paddingMultiplier;
             var padding = new byte[paddingLength];
-            RandomGenerator.GetBytes(padding); // TODO: On switch to .NET Standard 2.0, we can write directly to the buffer.
 
             // Add 4 for the MAC authentication packet sequence number.
             // Offset everything by 4...

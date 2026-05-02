@@ -80,6 +80,11 @@ namespace Surfus.Shell
             await Client
                 .ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken)
                 .ConfigureAwait(false);
+
+            if (_loginState == State.Failed)
+            {
+                throw new SshInvalidCredentials();
+            }
         }
 
         /// <summary>
@@ -109,6 +114,11 @@ namespace Surfus.Shell
             await Client
                 .ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken)
                 .ConfigureAwait(false);
+
+            if (_loginState == State.Failed)
+            {
+                throw new SshInvalidCredentials();
+            }
         }
 
         /// <summary>
@@ -150,11 +160,6 @@ namespace Surfus.Shell
         internal void ProcessRequestFailureMessage()
         {
             _loginState = State.Failed;
-            if (_loginState != State.WaitingOnServiceAccept)
-            {
-                throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
-            }
-            throw new SshAuthenticationException("The server does not support authentication.");
         }
 
         /// <summary>
@@ -180,12 +185,7 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal void ProcessMessageAsync(UaFailure message)
         {
-            if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
-            {
-                _loginState = State.Failed;
-                throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
-            }
-            throw new SshInvalidCredentials();
+            _loginState = State.Failed;
         }
 
         /// <summary>

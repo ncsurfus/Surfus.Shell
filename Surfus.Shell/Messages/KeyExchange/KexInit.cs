@@ -115,10 +115,6 @@ namespace Surfus.Shell.Messages.KeyExchange
 
         public int GetSize()
         {
-            //if(_bytes.Array != null)
-            // {
-            //    return _bytes.Count;
-            // }
             return ByteSizer.GetByteSize()
                 + RandomBytes.AsMemory().GetByteBlobSize()
                 + KexAlgorithms.GetNameListSize()

@@ -189,7 +189,6 @@ namespace Surfus.Shell
             var length = (int)ReadUInt32();
             var asciiString = length != 0 ? Encoding.ASCII.GetString(Bytes, Position, length) : null;
             Position += length;
-            Console.WriteLine(asciiString);
             return asciiString;
         }
 

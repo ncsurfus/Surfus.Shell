@@ -41,28 +41,31 @@ namespace Surfus.Shell.Signing
 
         public override int KeySize { get; }
 
+        public abstract int FieldSizeBytes { get; }
+
         public override bool VerifySignature(byte[] data, byte[] signature)
         {
             // https://www.rfc-editor.org/rfc/rfc5656#section-3.1.2
             using var ecdsa = ECDsa.Create(Parameters);
 
-            // Verify signature type
             var reader = new ByteReader(signature);
             if (Name != reader.ReadString())
             {
                 throw new Exception($"Expected {Name} signature type!");
             }
 
-            // Read signature blob. The signature is composed of two big integers: r and s. These
-            // need to be converted into Unsigned + Big Endian for .NET to validate the signature.
+            // r and s must each be zero-padded to the curve's field size.
             var blob = reader.ReadBinaryString();
             var blobReader = new ByteReader(blob);
             var r = blobReader.ReadBigInteger();
             var s = blobReader.ReadBigInteger();
 
-            var rsSignature = new byte[r.BigInteger.GetByteCount(true) + s.BigInteger.GetByteCount(true)];
-            r.BigInteger.TryWriteBytes(rsSignature, out var rBytes, true, true);
-            s.BigInteger.TryWriteBytes(rsSignature.AsSpan(rBytes), out var _, true, true);
+            var fieldSize = FieldSizeBytes;
+            var rsSignature = new byte[fieldSize * 2];
+            var rBytes = (int)r.BigInteger.GetByteCount(true);
+            var sBytes = (int)s.BigInteger.GetByteCount(true);
+            r.BigInteger.TryWriteBytes(rsSignature.AsSpan(fieldSize - rBytes, rBytes), out _, true, true);
+            s.BigInteger.TryWriteBytes(rsSignature.AsSpan(fieldSize * 2 - sBytes, sBytes), out _, true, true);
 
             return ecdsa.VerifyData(data, rsSignature, HashName);
         }
