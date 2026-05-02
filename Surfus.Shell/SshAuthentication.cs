@@ -1,6 +1,8 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Surfus.Shell.Authentication;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.UserAuth;
@@ -8,415 +10,128 @@ using Surfus.Shell.Messages.UserAuth;
 namespace Surfus.Shell
 {
     /// <summary>
-    /// Provides authentication methods
+    /// Drives the SSH authentication state machine. Auth-method-specific logic
+    /// is delegated to an IAuthMethod implementation.
     /// </summary>
     internal class SshAuthentication : IDisposable
     {
-        /// <summary>
-        /// The SshClient that owns the channel.
-        /// </summary>
-        private SshClient Client { get; }
-
-        /// <summary>
-        /// The current state of authentication.
-        /// </summary>
-        private State _loginState = State.Initial;
-
-        /// <summary>
-        /// The type of login to be attempted.
-        /// </summary>
-        private LoginType _loginType = LoginType.None;
-
-        /// <summary>
-        /// The provided username.
-        /// </summary>
+        private readonly SshClient _client;
+        private IAuthMethod _method;
         private string _username;
-
-        /// <summary>
-        /// The provided password.
-        /// </summary>
-        private string _password;
-
-        /// <summary>
-        /// The interactive response callback.
-        /// </summary>
-        private Func<string, CancellationToken, Task<string>> _interactiveResponse;
-
-        /// <summary>
-        /// The SSH agent client for publickey auth.
-        /// </summary>
-        private SshAgentClient _agent;
-
-        /// <summary>
-        /// The agent key to authenticate with.
-        /// </summary>
-        private SshAgentKey _agentKey;
-
-        /// <summary>
-        /// The disposed state of the channel.
-        /// </summary>
-        private bool _isDisposed;
-
-        /// <summary>
-        /// Provides authentication over SSH.
-        /// </summary>
-        /// <param name="sshClient"></param>
-        internal SshAuthentication(SshClient sshClient)
+        private State _state = State.Initial;
+        internal SshAuthentication(SshClient client)
         {
-            Client = sshClient;
+            _client = client;
         }
 
         /// <summary>
-        /// Logs in a user.
+        /// Authenticates using a single auth method.
         /// </summary>
-        /// <param name="username">The username to login with.</param>
-        /// <param name="password">The password to login with.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns></returns>
-        internal async Task LoginAsync(string username, string password, CancellationToken cancellationToken)
+        internal async Task LoginAsync(string username, IAuthMethod method, CancellationToken cancellationToken)
         {
-            if (_loginState != State.Initial)
-            {
-                throw new SshAuthenticationException("An authentication request was already attempted.");
-            }
-
             _username = username;
-            _password = password;
-            _loginType = LoginType.Password;
+            _method = method;
 
-            await Client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
-            _loginState = State.WaitingOnServiceAccept;
+            await EnsureServiceAcceptedAsync(cancellationToken).ConfigureAwait(false);
 
-            await Client
-                .ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken)
+            _state = State.WaitingOnResponse;
+            await _method.SendRequestAsync(_client, _username, cancellationToken).ConfigureAwait(false);
+
+            await _client
+                .ReadWhileAsync(() => _state == State.WaitingOnResponse || _state == State.WaitingOnMessage60Response, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (_loginState == State.Failed)
-            {
+            if (_state == State.Failed)
                 throw new SshInvalidCredentials();
-            }
         }
 
         /// <summary>
-        /// Logs in a user.
+        /// Authenticates by trying a list of auth methods in order until one succeeds.
         /// </summary>
-        /// <param name="username">The username to login with.</param>
-        /// <param name="responseTask">The interactive callback.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns></returns>
-        internal async Task LoginAsync(
-            string username,
-            Func<string, CancellationToken, Task<string>> responseTask,
-            CancellationToken cancellationToken
-        )
+        internal async Task LoginAsync(string username, IReadOnlyList<IAuthMethod> methods, CancellationToken cancellationToken)
         {
-            if (_loginState != State.Initial)
-            {
-                throw new SshAuthenticationException("An authentication request was already attempted.");
-            }
-
             _username = username;
-            _interactiveResponse = responseTask;
-            _loginType = LoginType.Interactive;
-            await Client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
-            _loginState = State.WaitingOnServiceAccept;
+            await EnsureServiceAcceptedAsync(cancellationToken).ConfigureAwait(false);
 
-            await Client
-                .ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (_loginState == State.Failed)
+            foreach (var method in methods)
             {
-                throw new SshInvalidCredentials();
-            }
-        }
+                _method = method;
+                _state = State.WaitingOnResponse;
+                await method.SendRequestAsync(_client, _username, cancellationToken).ConfigureAwait(false);
 
-        /// <summary>
-        /// Logs in a user by trying all keys from the SSH agent.
-        /// </summary>
-        internal async Task LoginAsync(string username, SshAgentClient agent, CancellationToken cancellationToken)
-        {
-            var keys = await agent.ListKeysAsync(cancellationToken).ConfigureAwait(false);
-            if (keys.Count == 0)
-            {
-                throw new SshAuthenticationException("The SSH agent has no keys.");
-            }
-
-            if (_loginState != State.Initial)
-            {
-                throw new SshAuthenticationException("An authentication request was already attempted.");
-            }
-
-            _username = username;
-            _agent = agent;
-            _loginType = LoginType.PublicKey;
-
-            await Client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
-            _loginState = State.WaitingOnServiceAccept;
-
-            // Wait for ServiceAccept
-            await Client
-                .ReadWhileAsync(() => _loginState == State.WaitingOnServiceAccept, cancellationToken)
-                .ConfigureAwait(false);
-
-            // Try each key
-            foreach (var key in keys)
-            {
-                _agentKey = key;
-                _loginState = State.WaitingOnPublicKeyOk;
-
-                // Send publickey query (has_signature=false)
-                await Client
-                    .WriteMessageAsync(new UaRequest(_username, "ssh-connection", key.KeyType, key.KeyBlob, null), cancellationToken)
+                await _client
+                    .ReadWhileAsync(() => _state == State.WaitingOnResponse || _state == State.WaitingOnMessage60Response, cancellationToken)
                     .ConfigureAwait(false);
 
-                await Client
-                    .ReadWhileAsync(() => _loginState == State.WaitingOnPublicKeyOk || _loginState == State.WaitingOnCredentialSuccess, cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (_loginState == State.Completed)
-                {
+                if (_state == State.Completed)
                     return;
-                }
-                // State.Failed means this key was rejected, try the next one
             }
 
             throw new SshInvalidCredentials();
         }
 
-        /// <summary>
-        /// Logs in a user using a specific SSH agent key.
-        /// </summary>
-        internal async Task LoginAsync(string username, SshAgentClient agent, SshAgentKey key, CancellationToken cancellationToken)
+        private async Task EnsureServiceAcceptedAsync(CancellationToken cancellationToken)
         {
-            if (_loginState != State.Initial)
-            {
-                throw new SshAuthenticationException("An authentication request was already attempted.");
-            }
+            if (_client.ConnectionInfo.UserAuthServiceAccepted)
+                return;
 
-            _username = username;
-            _agent = agent;
-            _agentKey = key;
-            _loginType = LoginType.PublicKey;
+            await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
+            _state = State.WaitingOnServiceAccept;
 
-            await Client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
-            _loginState = State.WaitingOnServiceAccept;
-
-            await Client
-                .ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken)
+            await _client
+                .ReadWhileAsync(() => _state == State.WaitingOnServiceAccept, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (_loginState == State.Failed)
-            {
-                throw new SshInvalidCredentials();
-            }
+            if (_state == State.Failed)
+                throw new SshAuthenticationException("The server does not support authentication.");
         }
 
-        /// <summary>
-        /// Processes an authentication message sent by the server.
-        /// </summary>
-        /// <param name="message">The message sent by the server.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns></returns>
-        internal async Task ProcessMessageAsync(ServiceAccept message, CancellationToken cancellationToken)
+        // --- Message handlers called by SshClient.ReadMessageAsync ---
+
+        internal Task ProcessMessageAsync(ServiceAccept message, CancellationToken cancellationToken)
         {
-            if (_loginState != State.WaitingOnServiceAccept)
+            if (_state != State.WaitingOnServiceAccept)
             {
-                _loginState = State.Failed;
-                throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
+                _state = State.Failed;
+                return Task.CompletedTask;
             }
-
-            if (_loginType == LoginType.Password)
-            {
-                await Client
-                    .WriteMessageAsync(new UaRequest(_username, "ssh-connection", "password", _password), cancellationToken)
-                    .ConfigureAwait(false);
-                _password = null;
-                _loginState = State.WaitingOnCredentialSuccess;
-            }
-
-            if (_loginType == LoginType.Interactive)
-            {
-                await Client
-                    .WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", (string)null, (string)null), cancellationToken)
-                    .ConfigureAwait(false);
-                _loginState = State.WaitingOnCredentialSuccessOrInteractive;
-            }
-
-            if (_loginType == LoginType.PublicKey)
-            {
-                if (_agentKey != null)
-                {
-                    // Single-key flow: send publickey query (has_signature=false)
-                    await Client
-                        .WriteMessageAsync(new UaRequest(_username, "ssh-connection", _agentKey.KeyType, _agentKey.KeyBlob, null), cancellationToken)
-                        .ConfigureAwait(false);
-                    _loginState = State.WaitingOnPublicKeyOk;
-                }
-                else
-                {
-                    // Try-all-keys flow: just mark service accepted, the loop sends queries
-                    _loginState = State.WaitingOnPublicKeyOk;
-                }
-            }
+            _client.ConnectionInfo.UserAuthServiceAccepted = true;
+            _state = State.ServiceAccepted;
+            return Task.CompletedTask;
         }
 
-        /// <summary>
-        /// Processes an authentication message sent by the server.
-        /// </summary>
-        /// <returns></returns>
-        internal void ProcessRequestFailureMessage()
-        {
-            _loginState = State.Failed;
-        }
+        internal void ProcessRequestFailureMessage() => _state = State.Failed;
 
-        /// <summary>
-        /// Processes an authentication message sent by the server.
-        /// </summary>
-        /// <param name="message">The message sent by the server.</param>
-        /// <returns></returns>
-        internal void ProcessMessageAsync(UaSuccess message)
-        {
-            if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive && _loginState != State.WaitingOnPublicKeyOk)
-            {
-                _loginState = State.Failed;
-                throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
-            }
+        internal void ProcessMessageAsync(UaSuccess message) => _state = State.Completed;
 
-            _loginState = State.Completed;
-        }
+        internal void ProcessMessageAsync(UaFailure message) => _state = State.Failed;
 
-        /// <summary>
-        /// Processes an authentication message sent by the server.
-        /// </summary>
-        /// <param name="message">The message sent by the server.</param>
-        /// <returns></returns>
-        internal void ProcessMessageAsync(UaFailure message)
-        {
-            _loginState = State.Failed;
-        }
-
-        /// <summary>
-        /// Processes an authentication message sent by the server.
-        /// </summary>
-        /// <param name="message">The message sent by the server.</param>
-        /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
-        /// <returns></returns>
-        /// <summary>
-        /// Handles message type 60, which is PK_OK for publickey auth or INFO_REQUEST for keyboard-interactive.
-        /// </summary>
         internal async Task ProcessMessage60Async(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
-            if (_loginState == State.WaitingOnPublicKeyOk)
+            if (_state != State.WaitingOnResponse && _state != State.WaitingOnMessage60Response)
             {
-                // Message 60 = SSH_MSG_USERAUTH_PK_OK. Don't parse as UaInfoRequest.
-                await ProcessPublicKeyOkAsync(cancellationToken).ConfigureAwait(false);
+                _state = State.Failed;
                 return;
             }
 
-            if (_loginState != State.WaitingOnCredentialSuccessOrInteractive)
-            {
-                _loginState = State.Failed;
-                return;
-            }
-
-            // Message 60 = SSH_MSG_USERAUTH_INFO_REQUEST for keyboard-interactive.
-            var message = messageEvent.Message as UaInfoRequest;
-            var responses = new string[message.PromptNumber];
-            for (var i = 0; i != responses.Length; i++)
-            {
-                responses[i] = await _interactiveResponse(message.Prompt[i], cancellationToken).ConfigureAwait(false);
-            }
-
-            await Client.WriteMessageAsync(new UaInfoResponse((uint)responses.Length, responses), cancellationToken).ConfigureAwait(false);
+            _state = State.WaitingOnMessage60Response;
+            await _method.HandleMessage60Async(_client, _username, messageEvent, cancellationToken).ConfigureAwait(false);
+            _state = State.WaitingOnResponse;
         }
 
-        /// <summary>
-        /// Handles SSH_MSG_USERAUTH_PK_OK by signing with the agent and sending the signed request.
-        /// </summary>
-        private async Task ProcessPublicKeyOkAsync(CancellationToken cancellationToken)
-        {
-            var sessionId = Client.ConnectionInfo.SessionIdentifier;
+        internal void Close() { }
 
-            // Build the data to sign per RFC 4252 section 7:
-            // string    session identifier
-            // byte      SSH_MSG_USERAUTH_REQUEST (50)
-            // string    user name
-            // string    service name ("ssh-connection")
-            // string    "publickey"
-            // boolean   TRUE
-            // string    public key algorithm name
-            // string    public key blob
-            var dataSize = sessionId.GetBinaryStringSize()
-                + 1
-                + _username.GetStringSize()
-                + "ssh-connection".GetAsciiStringSize()
-                + "publickey".GetAsciiStringSize()
-                + 1
-                + _agentKey.KeyType.GetAsciiStringSize()
-                + _agentKey.KeyBlob.GetBinaryStringSize();
+        public void Dispose() { }
 
-            var dataWriter = new ByteWriter(dataSize);
-            dataWriter.WriteBinaryString(sessionId);
-            dataWriter.WriteByte(50); // SSH_MSG_USERAUTH_REQUEST
-            dataWriter.WriteString(_username);
-            dataWriter.WriteAsciiString("ssh-connection");
-            dataWriter.WriteAsciiString("publickey");
-            dataWriter.WriteByte(1); // TRUE
-            dataWriter.WriteAsciiString(_agentKey.KeyType);
-            dataWriter.WriteBinaryString(_agentKey.KeyBlob);
-
-            var signature = await _agent.SignAsync(_agentKey.KeyBlob, dataWriter.Bytes, cancellationToken).ConfigureAwait(false);
-
-            await Client
-                .WriteMessageAsync(new UaRequest(_username, "ssh-connection", _agentKey.KeyType, _agentKey.KeyBlob, signature), cancellationToken)
-                .ConfigureAwait(false);
-            _loginState = State.WaitingOnCredentialSuccess;
-        }
-
-        /// <summary>
-        /// Closes the SSH Authentication.
-        /// </summary>
-        internal void Close()
-        {
-            if (!_isDisposed)
-            {
-                _isDisposed = true;
-                _password = null;
-            }
-        }
-
-        /// <summary>
-        /// Disposes the SSH Authentication.
-        /// </summary>
-        public void Dispose()
-        {
-            Close();
-        }
-
-        /// <summary>
-        /// The state of the authentication process.
-        /// </summary>
         internal enum State
         {
             Initial,
             WaitingOnServiceAccept,
-            WaitingOnCredentialSuccessOrInteractive,
-            WaitingOnPublicKeyOk,
-            WaitingOnCredentialSuccess,
+            ServiceAccepted,
+            WaitingOnResponse,
+            WaitingOnMessage60Response,
             Completed,
             Failed
-        }
-
-        /// <summary>
-        /// The SSH login Type.
-        /// </summary>
-        internal enum LoginType
-        {
-            None,
-            Password,
-            Interactive,
-            PublicKey
         }
     }
 }

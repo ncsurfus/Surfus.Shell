@@ -48,6 +48,11 @@ namespace Surfus.Shell
         /// </summary>
         internal byte[] SessionIdentifier { get; set; }
 
+        /// <summary>
+        /// Whether the ssh-userauth service has been accepted by the server.
+        /// </summary>
+        internal bool UserAuthServiceAccepted { get; set; }
+
         internal uint InboundPacketSequence { get; set; }
 
         /// <summary>

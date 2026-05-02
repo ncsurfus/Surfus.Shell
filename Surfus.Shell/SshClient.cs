@@ -1,4 +1,5 @@
-﻿using Surfus.Shell.Exceptions;
+﻿using Surfus.Shell.Authentication;
+using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
 using Surfus.Shell.Messages.UserAuth;
@@ -85,7 +86,7 @@ namespace Surfus.Shell
         /// IsConnected determines if the SshClient is connected to the remote SSH server.
         /// </summary>
         public bool IsConnected =>
-            _tcpConnection?.Connected == true && !_disconnectReceived && !_isDisposed && _sshClientState == State.Authenticated;
+            _tcpConnection?.Connected == true && !_disconnectReceived && !_isDisposed && (_sshClientState == State.Connected || _sshClientState == State.Authenticated);
 
         /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
@@ -131,7 +132,6 @@ namespace Surfus.Shell
 
             // Set SshClient defaults
             ConnectionInfo.KeyExchanger = new SshKeyExchanger(this);
-            ConnectionInfo.Authentication = new SshAuthentication(this);
 
             // Perform version exchange and key exchange
             ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
@@ -158,7 +158,7 @@ namespace Surfus.Shell
             _readLoop = readLoop();
 
             await ConnectionInfo.KeyExchanger.InitialKeyExchangeComplete.ConfigureAwait(false);
-            _sshClientState = State.Authenticating;
+            _sshClientState = State.Connected;
         }
 
         /// <summary>
@@ -171,12 +171,14 @@ namespace Surfus.Shell
         public async Task AuthenticateAsync(string username, string password, CancellationToken cancellationToken)
         {
             // Validate current state of SshClient
-            if (_sshClientState != State.Authenticating)
+            if (!IsConnected)
             {
                 ThrowOnInvalidState();
             }
 
-            await ConnectionInfo.Authentication.LoginAsync(username, password, cancellationToken).ConfigureAwait(false);
+            ConnectionInfo.Authentication?.Dispose();
+            ConnectionInfo.Authentication = new SshAuthentication(this);
+            await ConnectionInfo.Authentication.LoginAsync(username, new PasswordAuth(password), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
 
@@ -194,12 +196,14 @@ namespace Surfus.Shell
         )
         {
             // Validate current state of SshClient
-            if (_sshClientState != State.Authenticating)
+            if (!IsConnected)
             {
                 ThrowOnInvalidState();
             }
 
-            await ConnectionInfo.Authentication.LoginAsync(username, interactiveResponse, cancellationToken).ConfigureAwait(false);
+            ConnectionInfo.Authentication?.Dispose();
+            ConnectionInfo.Authentication = new SshAuthentication(this);
+            await ConnectionInfo.Authentication.LoginAsync(username, new KeyboardInteractiveAuth(interactiveResponse), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
 
@@ -211,12 +215,20 @@ namespace Surfus.Shell
         /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
         public async Task AuthenticateAsync(string username, SshAgentClient agent, CancellationToken cancellationToken)
         {
-            if (_sshClientState != State.Authenticating)
+            if (!IsConnected)
             {
                 ThrowOnInvalidState();
             }
 
-            await ConnectionInfo.Authentication.LoginAsync(username, agent, cancellationToken).ConfigureAwait(false);
+            ConnectionInfo.Authentication?.Dispose();
+            ConnectionInfo.Authentication = new SshAuthentication(this);
+            var keys = await agent.ListKeysAsync(cancellationToken).ConfigureAwait(false);
+            if (keys.Count == 0)
+                throw new Exceptions.SshAuthenticationException("The SSH agent has no keys.");
+            var methods = new List<IAuthMethod>();
+            foreach (var key in keys)
+                methods.Add(new AgentAuth(agent, key));
+            await ConnectionInfo.Authentication.LoginAsync(username, methods, cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
 
@@ -229,12 +241,14 @@ namespace Surfus.Shell
         /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
         public async Task AuthenticateAsync(string username, SshAgentClient agent, SshAgentKey key, CancellationToken cancellationToken)
         {
-            if (_sshClientState != State.Authenticating)
+            if (!IsConnected)
             {
                 ThrowOnInvalidState();
             }
 
-            await ConnectionInfo.Authentication.LoginAsync(username, agent, key, cancellationToken).ConfigureAwait(false);
+            ConnectionInfo.Authentication?.Dispose();
+            ConnectionInfo.Authentication = new SshAuthentication(this);
+            await ConnectionInfo.Authentication.LoginAsync(username, new AgentAuth(agent, key), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
 
@@ -849,9 +863,9 @@ namespace Surfus.Shell
             switch (_sshClientState)
             {
                 case State.Connecting:
-                case State.Connected:
-                case State.Authenticating:
                     throw new SshException($"The {nameof(SshClient)} is already attempting a connection.");
+                case State.Connected:
+                    throw new SshException($"The {nameof(SshClient)} is connected but not authenticated.");
                 case State.Authenticated:
                     throw new SshException($"The {nameof(SshClient)} is already connected.");
                 case State.Error:
@@ -886,7 +900,6 @@ namespace Surfus.Shell
             Initial,
             Connecting,
             Connected,
-            Authenticating,
             Authenticated,
             Closed,
             Error

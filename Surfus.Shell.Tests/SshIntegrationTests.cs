@@ -40,6 +40,22 @@ public class SshIntegrationTests
             () => client.AuthenticateAsync(User, "wrong", Timeout()));
     }
 
+    [Fact]
+    public async Task AuthRetry_WrongThenRight()
+    {
+        await using var server = await SshTestServer.StartAsync();
+        await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
+        await client.ConnectAsync(Timeout());
+
+        // First attempt fails
+        await Assert.ThrowsAsync<Exceptions.SshInvalidCredentials>(
+            () => client.AuthenticateAsync(User, "wrong", Timeout()));
+
+        // Second attempt succeeds without reconnecting
+        await client.AuthenticateAsync(User, Pass, Timeout());
+        Assert.True(client.IsConnected);
+    }
+
     // --- Channels ---
 
     [Fact]
