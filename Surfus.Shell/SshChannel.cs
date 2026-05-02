@@ -128,7 +128,7 @@ namespace Surfus.Shell
             while (true)
             {
                 var msg = await Inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
-                if (ProcessInlineMessage(msg))
+                if (await ProcessInlineMessage(msg).ConfigureAwait(false))
                     continue;
                 return msg;
             }
@@ -141,7 +141,7 @@ namespace Surfus.Shell
         internal async Task ProcessOneInboxMessageAsync(CancellationToken cancellationToken)
         {
             var msg = await Inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
-            ProcessInlineMessage(msg);
+            await ProcessInlineMessage(msg).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -184,7 +184,7 @@ namespace Surfus.Shell
         /// Handles messages that can arrive at any time (window adjust, data, eof, close).
         /// Returns true if the message was handled inline, false if it should be returned to the caller.
         /// </summary>
-        private bool ProcessInlineMessage(MessageEvent msg)
+        private async Task<bool> ProcessInlineMessage(MessageEvent msg)
         {
             switch (msg.Message)
             {
@@ -193,7 +193,7 @@ namespace Surfus.Shell
                     return true;
 
                 case ChannelData data:
-                    HandleDataSync(data);
+                    await HandleDataAsync(data, CancellationToken.None).ConfigureAwait(false);
                     return true;
 
                 case ChannelEof eof:
@@ -226,13 +226,6 @@ namespace Surfus.Shell
             OnDataReceived?.Invoke(message.Data, 0, length);
         }
 
-        private void HandleDataSync(ChannelData message)
-        {
-            if (ReceiveWindow <= 0) return;
-            var length = Math.Min(message.Data.Length, ReceiveWindow);
-            ReceiveWindow -= length;
-            OnDataReceived?.Invoke(message.Data, 0, length);
-        }
 
         internal void ProcessMessage(MessageEvent messageEvent) => Inbox.Deliver(messageEvent);
 

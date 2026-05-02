@@ -62,12 +62,6 @@ namespace Surfus.Shell
         private NetworkStream _tcpStream;
 
         /// <summary>
-        /// A list of callbacks that are invoked anytime a new message is received. If they return
-        /// True, then the callback is removed.
-        /// </summary>
-        private ImmutableList<Func<MessageEvent, Task>> _callbacks = ImmutableList.Create<Func<MessageEvent, Task>>();
-
-        /// <summary>
         /// Registered message handlers. The read loop delivers every message to each handler.
         /// When the read loop exits, each error callback is invoked with the exception (or null).
         /// </summary>
@@ -126,6 +120,7 @@ namespace Surfus.Shell
         /// </summary>
         private readonly SemaphoreSlim _writeSemaphore = new(1, 1);
 
+
         /// <summary>
         /// IsConnected determines if the SshClient is connected to the remote SSH server.
         /// </summary>
@@ -175,16 +170,25 @@ namespace Surfus.Shell
             _sshClientState = State.Connecting;
 
             // Set SshClient defaults
-            ConnectionInfo.KeyExchanger = new SshKeyExchanger(this);
+            ConnectionInfo.KeyExchanger = new SshKeyExchanger(WriteMessageAsync, ConnectionInfo, HostKeyCallback);
 
             // Perform version exchange and key exchange
             ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
+
+            // Register key exchanger to receive kex-related messages
+            _disposables.Add(RegisterMessageHandler(
+                msg =>
+                {
+                    var id = (int)msg.Type;
+                    if (id >= 20 && id <= 49)
+                        ConnectionInfo.KeyExchanger.ProcessMessage(msg);
+                },
+                ConnectionInfo.KeyExchanger.OnError));
 
             var keyExchangeTask = ConnectionInfo.KeyExchanger.HandleKeyExchangeAsync(cancellationToken);
             await ConnectionInfo.KeyExchanger.Ready.ConfigureAwait(false);
 
             // Start the read loop. When the loop exits for any reason,
-            // cancel _closeCts so all pending ReadUntilAsync waiters unblock.
             async Task readLoop()
             {
                 Exception loopError = null;
@@ -477,168 +481,6 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal async Task<MessageEvent> ReadUntilAsync(
-            Func<Task> onReading,
-            Func<MessageEvent, ValueTask<bool>> condition,
-            CancellationToken cancellationToken
-        )
-        {
-            // Create a TaskCompletionSource that completes once the message is spotted.
-            var tcs = new TaskCompletionSource<MessageEvent>();
-
-            // The TaskCompletionSource should be cleaned up if the SSH Client is disposed.
-            using (_closeCts.Token.Register(() => tcs.TrySetCanceled()))
-            {
-                async Task callbackAsync(MessageEvent messageEvent)
-                {
-                    try
-                    {
-                        if (await condition(messageEvent))
-                        {
-                            tcs.TrySetResult(messageEvent);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        tcs.TrySetException(ex);
-                    }
-                }
-
-                // Add our callback into the read loop
-                lock (_callbacks)
-                {
-                    _callbacks = _callbacks.Add(callbackAsync);
-                }
-
-                // Run any code, like sending a message
-                if (onReading is not null)
-                {
-                    await onReading();
-                }
-
-                // Wait for the task to complete, and then perform cleanup
-                try
-                {
-                    return await tcs.Task;
-                }
-                finally
-                {
-                    lock (_callbacks)
-                    {
-                        _callbacks = _callbacks.Remove(callbackAsync);
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal Task<MessageEvent> ReadUntilAsync(
-            Func<Task> onReading,
-            Func<MessageEvent, bool> condition,
-            CancellationToken cancellationToken
-        )
-        {
-            ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(condition(messageEvent));
-            }
-            return ReadUntilAsync(onReading, conditionWrapper, cancellationToken);
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal Task<MessageEvent> ReadUntilAsync(Func<MessageEvent, bool> condition, CancellationToken cancellationToken)
-        {
-            ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(condition(messageEvent));
-            }
-            return ReadUntilAsync(null, conditionWrapper, cancellationToken);
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal Task<MessageEvent> ReadUntilAsync(Func<Task> onReading, MessageType messageType, CancellationToken cancellationToken)
-        {
-            ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(messageEvent.Type == messageType);
-            }
-            return ReadUntilAsync(onReading, conditionWrapper, cancellationToken);
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal Task<MessageEvent> ReadUntilAsync(MessageType messageType, CancellationToken cancellationToken)
-        {
-            ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(messageEvent.Type == messageType);
-            }
-            return ReadUntilAsync(null, conditionWrapper, cancellationToken);
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal async Task<T> ReadUntilAsync<T>(Func<Task> onReading, CancellationToken cancellationToken)
-            where T : class, IMessage
-        {
-            static ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(messageEvent.Message is T);
-            }
-            var result = await ReadUntilAsync(onReading, conditionWrapper, cancellationToken);
-            return result.Message as T;
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal async Task<T> ReadUntilAsync<T>(CancellationToken cancellationToken)
-            where T : class, IMessage
-        {
-            static ValueTask<bool> conditionWrapper(MessageEvent messageEvent)
-            {
-                return ValueTask.FromResult(messageEvent.Message is T);
-            }
-            var result = await ReadUntilAsync(null, conditionWrapper, cancellationToken);
-            return result.Message as T;
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal async Task ReadWhileAsync(Func<bool> condition, CancellationToken cancellationToken)
-        {
-            await ReadUntilAsync(null, (_) => !condition(), cancellationToken);
-        }
-
-        /// <summary>
-        /// Reads packets one-by-one from the server until the callback method returns false.
-        /// </summary>
-        /// <returns></returns>
-        internal async Task ReadWhileAsync(Func<Task<bool>> condition, CancellationToken cancellationToken)
-        {
-            await ReadUntilAsync(null, async (_) => !await condition(), cancellationToken);
-        }
-
-        /// <summary>
         /// Reads a message from the server
         /// </summary>
         /// <param name="cancellationToken">The cancellation token is used to cancel the ReadMessage request</param>
@@ -683,12 +525,14 @@ namespace Surfus.Shell
                 onMessage(messageEvent);
             }
 
-            // Get a local reference of the current callbacks
-            var callbacks = _callbacks;
-            foreach (var callback in callbacks)
+            // After delivering SSH_MSG_NEWKEYS, wait for the key exchanger
+            // to provide the new read-side crypto before reading the next packet.
+            if (messageEvent.Type == MessageType.SSH_MSG_NEWKEYS)
             {
-                await callback(messageEvent);
+                var applyReadCrypto = await ConnectionInfo.KeyExchanger.GetNewReadKeysAsync(cancellationToken).ConfigureAwait(false);
+                applyReadCrypto();
             }
+
         }
 
 
@@ -735,64 +579,6 @@ namespace Surfus.Shell
                     _writeSemaphore.Release();
                 }
             }
-        }
-
-        /// <summary>
-        /// Processes packets in the background until the connection has been disconnected.
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task ProcessPacketsAsync(CancellationToken cancellationToken)
-        {
-            await ReadWhileAsync(() => IsConnected, cancellationToken);
-        }
-
-        /// <summary>
-        /// Processes packets in the background until the condition has been met.
-        /// </summary>
-        /// <param name="condition">The condition that must be true to exit the method.</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task ProcessPacketsWhileAsync(Func<bool> condition, CancellationToken cancellationToken)
-        {
-            await ReadWhileAsync(condition, cancellationToken);
-        }
-
-        /// <summary>
-        /// Processes packets in the background until the condition has been met.
-        /// </summary>
-        /// <param name="condition">The condition that must be true to exit the method.</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task ProcessPacketsWhileAsync(Func<Task<bool>> condition, CancellationToken cancellationToken)
-        {
-            await ReadWhileAsync(condition, cancellationToken);
-        }
-
-        /// <summary>
-        /// Processes packets in the background for the specified amount of time.
-        /// </summary>
-        /// <param name="timeSpan">The amount of time to wait.</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task ProcessPacketsAsync(TimeSpan timeSpan, CancellationToken cancellationToken)
-        {
-            var taskTimer = Task.Delay(timeSpan, cancellationToken);
-            await ReadWhileAsync(() => !taskTimer.IsCompleted, cancellationToken);
-            await taskTimer;
-        }
-
-        /// <summary>
-        /// Processes packets in the background for the specified amount of milliseconds..
-        /// </summary>
-        /// <param name="milliseconds">The amount of milliseconds to wait for.</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task ProcessPacketsAsync(int milliseconds, CancellationToken cancellationToken)
-        {
-            var taskTimer = Task.Delay(milliseconds, cancellationToken);
-            await ReadWhileAsync(() => !taskTimer.IsCompleted, cancellationToken);
-            await taskTimer;
         }
 
         /// <summary>

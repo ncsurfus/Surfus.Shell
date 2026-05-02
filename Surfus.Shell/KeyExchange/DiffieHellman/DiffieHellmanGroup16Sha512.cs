@@ -9,8 +9,8 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
     /// </summary>
     internal sealed class DiffieHellmanGroup16Sha512 : DiffieHellmanKeyExchange
     {
-        internal DiffieHellmanGroup16Sha512(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult)
-            : base(sshClient, kexInitExchangeResult) { }
+        internal DiffieHellmanGroup16Sha512(KexContext context, KexInitExchangeResult kexInitExchangeResult)
+            : base(context, kexInitExchangeResult) { }
 
         /// <summary>
         /// A large predefined safe prime number.

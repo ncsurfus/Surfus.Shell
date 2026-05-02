@@ -7,8 +7,8 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
     /// </summary>
     internal sealed class DiffieHellmanGroup14Sha256 : DiffieHellmanGroup14Sha1
     {
-        internal DiffieHellmanGroup14Sha256(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult)
-            : base(sshClient, kexInitExchangeResult) { }
+        internal DiffieHellmanGroup14Sha256(KexContext context, KexInitExchangeResult kexInitExchangeResult)
+            : base(context, kexInitExchangeResult) { }
 
         protected override HashAlgorithm CreateHashAlgorithm()
         {

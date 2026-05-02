@@ -15,7 +15,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
     /// </summary>
     internal abstract class DiffieHellmanKeyExchange : KeyExchangeAlgorithm
     {
-        private readonly SshClient _sshClient;
+        private readonly KexContext _context;
         private readonly KexInitExchangeResult _kexInitExchangeResult;
 
         /// <summary>
@@ -27,7 +27,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// <param name="kexInitExchangeResult">
         /// The result of the KexInit exchange.
         /// </param>
-        protected DiffieHellmanKeyExchange(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult)
+        protected DiffieHellmanKeyExchange(KexContext context, KexInitExchangeResult kexInitExchangeResult)
         {
             var e = BigInteger.Zero;
             var x = BigInteger.Zero;
@@ -38,7 +38,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             }
             E = new BigInt(e);
             X = new BigInt(x);
-            _sshClient = sshClient;
+            _context = context;
             _kexInitExchangeResult = kexInitExchangeResult;
         }
 
@@ -98,12 +98,8 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
 
         public override async Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken)
         {
-            // Send the DHReply message after we've sent the DH Init.
-            var dhReplyMessage = await _sshClient.ReadUntilAsync(
-                async () => await _sshClient.WriteMessageAsync(new DhInit(E), cancellationToken).ConfigureAwait(false),
-                m => KexThrowIfNotMessageType(m, MessageType.SSH_MSG_KEX_Exchange_31),
-                cancellationToken
-            );
+            await _context.Send(new DhInit(E), cancellationToken).ConfigureAwait(false);
+            var dhReplyMessage = await _context.Inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
 
             var reply = new DhReply(dhReplyMessage.Packet);
 
@@ -122,18 +118,18 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
                 reply.ServerPublicHostKeyAndCertificates
             );
 
-            _sshClient.ConnectionInfo.ServerCertificate = reply.ServerPublicHostKeyAndCertificates;
-            _sshClient.ConnectionInfo.ServerCertificateSize = signingAlgorithm.KeySize;
+            _context.ServerCertificate = reply.ServerPublicHostKeyAndCertificates;
+            _context.ServerCertificateSize = signingAlgorithm.KeySize;
 
-            if (_sshClient.HostKeyCallback != null && !_sshClient.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates))
+            if (_context.HostKeyCallback != null && !_context.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates))
             {
                 throw new SshException("Rejected Host Key.");
             }
 
             // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.s
             var totalBytes =
-                _sshClient.ConnectionInfo.ClientVersion.GetStringSize()
-                + _sshClient.ConnectionInfo.ServerVersion.GetStringSize()
+                _context.ClientVersion.GetStringSize()
+                + _context.ServerVersion.GetStringSize()
                 + _kexInitExchangeResult.Client.GetKexInitBinaryStringSize()
                 + _kexInitExchangeResult.Server.GetKexInitBinaryStringSize()
                 + reply.ServerPublicHostKeyAndCertificates.GetBinaryStringSize()
@@ -142,8 +138,8 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
                 + k.GetBigIntegerSize();
 
             var byteWriter = new ByteWriter(totalBytes);
-            byteWriter.WriteString(_sshClient.ConnectionInfo.ClientVersion);
-            byteWriter.WriteString(_sshClient.ConnectionInfo.ServerVersion);
+            byteWriter.WriteString(_context.ClientVersion);
+            byteWriter.WriteString(_context.ServerVersion);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Client);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Server);
             byteWriter.WriteBinaryString(reply.ServerPublicHostKeyAndCertificates);

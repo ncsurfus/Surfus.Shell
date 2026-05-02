@@ -41,9 +41,9 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         private readonly string _shaVersion;
 
         /// <summary>
-        /// The SshClient representing the SSH connection.
+        /// The key exchange context.
         /// </summary>
-        private readonly SshClient _client;
+        private readonly KexContext _context;
 
         /// <summary>
         /// The signing algorithm.
@@ -53,7 +53,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// <summary>
         /// Initializes a new instance of the <see cref="DiffieHellmanGroupKeyExchange"/> class.
         /// </summary>
-        /// <param name="sshClient">
+        /// <param name="context">
         /// The SSH client.
         /// </param>
         /// <param name="kexInitExchangeResult">
@@ -62,9 +62,9 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// <param name="shaVersion">
         /// The SHA version. Can be 'SHA1' or 'SHA256'.
         /// </param>
-        internal DiffieHellmanGroupKeyExchange(SshClient sshClient, KexInitExchangeResult kexInitExchangeResult, string shaVersion)
+        internal DiffieHellmanGroupKeyExchange(KexContext context, KexInitExchangeResult kexInitExchangeResult, string shaVersion)
         {
-            _client = sshClient;
+            _context = context;
             _kexInitExchangeResult = kexInitExchangeResult;
             _shaVersion = shaVersion;
         }
@@ -105,16 +105,8 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
         public override async Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken)
         {
-            var dhgGroupMessage = await _client.ReadUntilAsync(
-                async () =>
-                {
-                    await _client
-                        .WriteMessageAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken)
-                        .ConfigureAwait(false);
-                },
-                m => KexThrowIfNotMessageType(m, MessageType.SSH_MSG_KEX_Exchange_31),
-                cancellationToken
-            );
+            await _context.Send(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken).ConfigureAwait(false);
+            var dhgGroupMessage = await _context.Inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
 
             var dhgGroup = new DhgGroup(dhgGroupMessage.Packet);
 
@@ -124,11 +116,8 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             // Generate 'e'.
             var e = new BigInt(BigInteger.ModPow(dhgGroup.G.BigInteger, x, dhgGroup.P.BigInteger));
 
-            var dhgReplyMessage = await _client.ReadUntilAsync(
-                async () => await _client.WriteMessageAsync(new DhgInit(e), cancellationToken).ConfigureAwait(false),
-                m => KexThrowIfNotMessageType(m, MessageType.SSH_MSG_KEX_Exchange_33),
-                cancellationToken
-            );
+            await _context.Send(new DhgInit(e), cancellationToken).ConfigureAwait(false);
+            var dhgReplyMessage = await _context.Inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
 
             // Send 'e' to the server with the 'Init' message.
             var replyMessage = new DhgReply(dhgReplyMessage.Packet);
@@ -148,13 +137,18 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
                 replyMessage.ServerPublicHostKeyAndCertificates
             );
 
-            _client.ConnectionInfo.ServerCertificate = replyMessage.ServerPublicHostKeyAndCertificates;
-            _client.ConnectionInfo.ServerCertificateSize = _signingAlgorithm.KeySize;
+            _context.ServerCertificate = replyMessage.ServerPublicHostKeyAndCertificates;
+            _context.ServerCertificateSize = _signingAlgorithm.KeySize;
+
+            if (_context.HostKeyCallback != null && !_context.HostKeyCallback(replyMessage.ServerPublicHostKeyAndCertificates))
+            {
+                throw new SshException("Rejected Host Key.");
+            }
 
             // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.
             var totalBytes =
-                _client.ConnectionInfo.ClientVersion.GetStringSize()
-                + _client.ConnectionInfo.ServerVersion.GetStringSize()
+                _context.ClientVersion.GetStringSize()
+                + _context.ServerVersion.GetStringSize()
                 + _kexInitExchangeResult.Client.GetKexInitBinaryStringSize()
                 + _kexInitExchangeResult.Server.GetKexInitBinaryStringSize()
                 + replyMessage.ServerPublicHostKeyAndCertificates.GetBinaryStringSize()
@@ -169,8 +163,8 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
                 + k.GetBigIntegerSize();
 
             var byteWriter = new ByteWriter(totalBytes);
-            byteWriter.WriteString(_client.ConnectionInfo.ClientVersion);
-            byteWriter.WriteString(_client.ConnectionInfo.ServerVersion);
+            byteWriter.WriteString(_context.ClientVersion);
+            byteWriter.WriteString(_context.ServerVersion);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Client);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Server);
             byteWriter.WriteBinaryString(replyMessage.ServerPublicHostKeyAndCertificates);
