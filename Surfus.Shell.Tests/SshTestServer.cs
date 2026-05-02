@@ -27,7 +27,8 @@ public sealed class SshTestServer : IAsyncDisposable
         string? ciphers = null,
         string? macs = null,
         string user = "testuser",
-        string pass = "testpass")
+        string pass = "testpass",
+        string? authorizedKeyPath = null)
     {
         var serverPath = FindServerBinary();
 
@@ -35,6 +36,7 @@ public sealed class SshTestServer : IAsyncDisposable
         if (kex != null) args += $" --kex {kex}";
         if (ciphers != null) args += $" --ciphers {ciphers}";
         if (macs != null) args += $" --macs {macs}";
+        if (authorizedKeyPath != null) args += $" --authorized-key {authorizedKeyPath}";
 
         var psi = new ProcessStartInfo(serverPath, args)
         {

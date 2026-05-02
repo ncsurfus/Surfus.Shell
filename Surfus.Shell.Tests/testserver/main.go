@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -17,6 +18,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -35,6 +37,7 @@ func main() {
 	kexAlgos := flag.String("kex", "", "comma-separated kex algorithms (empty = all supported)")
 	ciphers := flag.String("ciphers", "", "comma-separated ciphers (empty = all supported)")
 	macs := flag.String("macs", "", "comma-separated MACs (empty = all supported)")
+	authorizedKey := flag.String("authorized-key", "", "path to authorized public key file for publickey auth")
 	flag.Parse()
 
 	signer := generateHostKey(*hostKeyType)
@@ -59,6 +62,23 @@ func main() {
 			}
 			return nil, fmt.Errorf("invalid credentials")
 		},
+	}
+
+	if *authorizedKey != "" {
+		authorizedKeyData, err := os.ReadFile(*authorizedKey)
+		if err != nil {
+			log.Fatalf("failed to read authorized key: %v", err)
+		}
+		pubKey, _, _, _, err := ssh.ParseAuthorizedKey(authorizedKeyData)
+		if err != nil {
+			log.Fatalf("failed to parse authorized key: %v", err)
+		}
+		config.PublicKeyCallback = func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+			if c.User() == *user && bytes.Equal(key.Marshal(), pubKey.Marshal()) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("unknown public key for %s", c.User())
+		}
 	}
 
 	config.AddHostKey(signer)
@@ -86,16 +106,18 @@ func main() {
 
 	// Shutdown on signal or timeout
 	done := make(chan struct{})
+	closeOnce := sync.Once{}
+	shutdown := func() { closeOnce.Do(func() { close(done) }) }
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 		<-sig
-		close(done)
+		shutdown()
 	}()
 	if *timeoutSec > 0 {
 		go func() {
 			time.Sleep(time.Duration(*timeoutSec) * time.Second)
-			close(done)
+			shutdown()
 		}()
 	}
 

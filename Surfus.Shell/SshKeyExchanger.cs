@@ -112,6 +112,7 @@ namespace Surfus.Shell
 
                     var (h, k) = await exchangeTask.ConfigureAwait(false);
                     sessionIdentifier = sessionIdentifier.IsEmpty ? h : sessionIdentifier;
+                    _client.ConnectionInfo.SessionIdentifier ??= sessionIdentifier.ToArray();
                     var cryptoConfig = new CryptoConfig(sessionIdentifier, h, k, kexAlgorithm, kexResult);
 
                     await _client.WriteMessageAsync(new NewKeys(), cancellationToken).ConfigureAwait(false);

@@ -43,6 +43,16 @@ namespace Surfus.Shell
         private Func<string, CancellationToken, Task<string>> _interactiveResponse;
 
         /// <summary>
+        /// The SSH agent client for publickey auth.
+        /// </summary>
+        private SshAgentClient _agent;
+
+        /// <summary>
+        /// The agent key to authenticate with.
+        /// </summary>
+        private SshAgentKey _agentKey;
+
+        /// <summary>
         /// The disposed state of the channel.
         /// </summary>
         private bool _isDisposed;
@@ -122,6 +132,87 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Logs in a user by trying all keys from the SSH agent.
+        /// </summary>
+        internal async Task LoginAsync(string username, SshAgentClient agent, CancellationToken cancellationToken)
+        {
+            var keys = await agent.ListKeysAsync(cancellationToken).ConfigureAwait(false);
+            if (keys.Count == 0)
+            {
+                throw new SshAuthenticationException("The SSH agent has no keys.");
+            }
+
+            if (_loginState != State.Initial)
+            {
+                throw new SshAuthenticationException("An authentication request was already attempted.");
+            }
+
+            _username = username;
+            _agent = agent;
+            _loginType = LoginType.PublicKey;
+
+            await Client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
+            _loginState = State.WaitingOnServiceAccept;
+
+            // Wait for ServiceAccept
+            await Client
+                .ReadWhileAsync(() => _loginState == State.WaitingOnServiceAccept, cancellationToken)
+                .ConfigureAwait(false);
+
+            // Try each key
+            foreach (var key in keys)
+            {
+                _agentKey = key;
+                _loginState = State.WaitingOnPublicKeyOk;
+
+                // Send publickey query (has_signature=false)
+                await Client
+                    .WriteMessageAsync(new UaRequest(_username, "ssh-connection", key.KeyType, key.KeyBlob, null), cancellationToken)
+                    .ConfigureAwait(false);
+
+                await Client
+                    .ReadWhileAsync(() => _loginState == State.WaitingOnPublicKeyOk || _loginState == State.WaitingOnCredentialSuccess, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (_loginState == State.Completed)
+                {
+                    return;
+                }
+                // State.Failed means this key was rejected, try the next one
+            }
+
+            throw new SshInvalidCredentials();
+        }
+
+        /// <summary>
+        /// Logs in a user using a specific SSH agent key.
+        /// </summary>
+        internal async Task LoginAsync(string username, SshAgentClient agent, SshAgentKey key, CancellationToken cancellationToken)
+        {
+            if (_loginState != State.Initial)
+            {
+                throw new SshAuthenticationException("An authentication request was already attempted.");
+            }
+
+            _username = username;
+            _agent = agent;
+            _agentKey = key;
+            _loginType = LoginType.PublicKey;
+
+            await Client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
+            _loginState = State.WaitingOnServiceAccept;
+
+            await Client
+                .ReadWhileAsync(() => _loginState != State.Completed && _loginState != State.Failed, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (_loginState == State.Failed)
+            {
+                throw new SshInvalidCredentials();
+            }
+        }
+
+        /// <summary>
         /// Processes an authentication message sent by the server.
         /// </summary>
         /// <param name="message">The message sent by the server.</param>
@@ -147,9 +238,26 @@ namespace Surfus.Shell
             if (_loginType == LoginType.Interactive)
             {
                 await Client
-                    .WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", null, null), cancellationToken)
+                    .WriteMessageAsync(new UaRequest(_username, "ssh-connection", "keyboard-interactive", (string)null, (string)null), cancellationToken)
                     .ConfigureAwait(false);
                 _loginState = State.WaitingOnCredentialSuccessOrInteractive;
+            }
+
+            if (_loginType == LoginType.PublicKey)
+            {
+                if (_agentKey != null)
+                {
+                    // Single-key flow: send publickey query (has_signature=false)
+                    await Client
+                        .WriteMessageAsync(new UaRequest(_username, "ssh-connection", _agentKey.KeyType, _agentKey.KeyBlob, null), cancellationToken)
+                        .ConfigureAwait(false);
+                    _loginState = State.WaitingOnPublicKeyOk;
+                }
+                else
+                {
+                    // Try-all-keys flow: just mark service accepted, the loop sends queries
+                    _loginState = State.WaitingOnPublicKeyOk;
+                }
             }
         }
 
@@ -169,7 +277,7 @@ namespace Surfus.Shell
         /// <returns></returns>
         internal void ProcessMessageAsync(UaSuccess message)
         {
-            if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive)
+            if (_loginState != State.WaitingOnCredentialSuccess && _loginState != State.WaitingOnCredentialSuccessOrInteractive && _loginState != State.WaitingOnPublicKeyOk)
             {
                 _loginState = State.Failed;
                 throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
@@ -194,14 +302,26 @@ namespace Surfus.Shell
         /// <param name="message">The message sent by the server.</param>
         /// <param name="cancellationToken">A cancellationToken used to cancel the asynchronous method.</param>
         /// <returns></returns>
-        internal async Task ProcessMessageAsync(UaInfoRequest message, CancellationToken cancellationToken)
+        /// <summary>
+        /// Handles message type 60, which is PK_OK for publickey auth or INFO_REQUEST for keyboard-interactive.
+        /// </summary>
+        internal async Task ProcessMessage60Async(MessageEvent messageEvent, CancellationToken cancellationToken)
         {
+            if (_loginState == State.WaitingOnPublicKeyOk)
+            {
+                // Message 60 = SSH_MSG_USERAUTH_PK_OK. Don't parse as UaInfoRequest.
+                await ProcessPublicKeyOkAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             if (_loginState != State.WaitingOnCredentialSuccessOrInteractive)
             {
                 _loginState = State.Failed;
-                throw new SshAuthenticationException(SshAuthenticationException.UnexpectedAuthenticationMessage);
+                return;
             }
 
+            // Message 60 = SSH_MSG_USERAUTH_INFO_REQUEST for keyboard-interactive.
+            var message = messageEvent.Message as UaInfoRequest;
             var responses = new string[message.PromptNumber];
             for (var i = 0; i != responses.Length; i++)
             {
@@ -209,6 +329,49 @@ namespace Surfus.Shell
             }
 
             await Client.WriteMessageAsync(new UaInfoResponse((uint)responses.Length, responses), cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Handles SSH_MSG_USERAUTH_PK_OK by signing with the agent and sending the signed request.
+        /// </summary>
+        private async Task ProcessPublicKeyOkAsync(CancellationToken cancellationToken)
+        {
+            var sessionId = Client.ConnectionInfo.SessionIdentifier;
+
+            // Build the data to sign per RFC 4252 section 7:
+            // string    session identifier
+            // byte      SSH_MSG_USERAUTH_REQUEST (50)
+            // string    user name
+            // string    service name ("ssh-connection")
+            // string    "publickey"
+            // boolean   TRUE
+            // string    public key algorithm name
+            // string    public key blob
+            var dataSize = sessionId.GetBinaryStringSize()
+                + 1
+                + _username.GetStringSize()
+                + "ssh-connection".GetAsciiStringSize()
+                + "publickey".GetAsciiStringSize()
+                + 1
+                + _agentKey.KeyType.GetAsciiStringSize()
+                + _agentKey.KeyBlob.GetBinaryStringSize();
+
+            var dataWriter = new ByteWriter(dataSize);
+            dataWriter.WriteBinaryString(sessionId);
+            dataWriter.WriteByte(50); // SSH_MSG_USERAUTH_REQUEST
+            dataWriter.WriteString(_username);
+            dataWriter.WriteAsciiString("ssh-connection");
+            dataWriter.WriteAsciiString("publickey");
+            dataWriter.WriteByte(1); // TRUE
+            dataWriter.WriteAsciiString(_agentKey.KeyType);
+            dataWriter.WriteBinaryString(_agentKey.KeyBlob);
+
+            var signature = await _agent.SignAsync(_agentKey.KeyBlob, dataWriter.Bytes, cancellationToken).ConfigureAwait(false);
+
+            await Client
+                .WriteMessageAsync(new UaRequest(_username, "ssh-connection", _agentKey.KeyType, _agentKey.KeyBlob, signature), cancellationToken)
+                .ConfigureAwait(false);
+            _loginState = State.WaitingOnCredentialSuccess;
         }
 
         /// <summary>
@@ -239,6 +402,7 @@ namespace Surfus.Shell
             Initial,
             WaitingOnServiceAccept,
             WaitingOnCredentialSuccessOrInteractive,
+            WaitingOnPublicKeyOk,
             WaitingOnCredentialSuccess,
             Completed,
             Failed
@@ -251,7 +415,8 @@ namespace Surfus.Shell
         {
             None,
             Password,
-            Interactive
+            Interactive,
+            PublicKey
         }
     }
 }

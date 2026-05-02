@@ -23,6 +23,21 @@ namespace Surfus.Shell.Messages.UserAuth
         public string Password { get; }
         public string Language { get; }
         public string Submethods { get; }
+        public bool HasSignature { get; }
+        public string PublicKeyAlgorithm { get; }
+        public byte[] PublicKeyBlob { get; }
+        public byte[] Signature { get; }
+
+        public UaRequest(string username, string serviceName, string publicKeyAlgorithm, byte[] publicKeyBlob, byte[] signature)
+        {
+            Username = username;
+            ServiceName = serviceName;
+            MethodName = "publickey";
+            HasSignature = signature != null;
+            PublicKeyAlgorithm = publicKeyAlgorithm;
+            PublicKeyBlob = publicKeyBlob;
+            Signature = signature;
+        }
 
         public MessageType Type { get; } = MessageType.SSH_MSG_USERAUTH_REQUEST;
         public byte MessageId => (byte)Type;
@@ -34,10 +49,17 @@ namespace Surfus.Shell.Messages.UserAuth
             {
                 size += 1 + Password.GetStringSize();
             }
-
-            if (MethodName == "keyboard-interactive")
+            else if (MethodName == "keyboard-interactive")
             {
                 size += Language.GetStringSize() + Submethods.GetStringSize();
+            }
+            else if (MethodName == "publickey")
+            {
+                size += 1 + PublicKeyAlgorithm.GetAsciiStringSize() + PublicKeyBlob.GetBinaryStringSize();
+                if (HasSignature)
+                {
+                    size += Signature.GetBinaryStringSize();
+                }
             }
 
             var writer = new ByteWriter(Type, size);
@@ -49,11 +71,20 @@ namespace Surfus.Shell.Messages.UserAuth
                 writer.WriteByte(0);
                 writer.WriteString(Password);
             }
-
-            if (MethodName == "keyboard-interactive")
+            else if (MethodName == "keyboard-interactive")
             {
                 writer.WriteString(Language);
                 writer.WriteString(Submethods);
+            }
+            else if (MethodName == "publickey")
+            {
+                writer.WriteByte(HasSignature ? (byte)1 : (byte)0);
+                writer.WriteAsciiString(PublicKeyAlgorithm);
+                writer.WriteBinaryString(PublicKeyBlob);
+                if (HasSignature)
+                {
+                    writer.WriteBinaryString(Signature);
+                }
             }
 
             return writer;

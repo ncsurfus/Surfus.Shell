@@ -204,6 +204,41 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// AuthenticateAsync authenticates to the SSH server by trying all keys from the SSH agent.
+        /// </summary>
+        /// <param name="username">The username to login as</param>
+        /// <param name="agent">The SSH agent client</param>
+        /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
+        public async Task AuthenticateAsync(string username, SshAgentClient agent, CancellationToken cancellationToken)
+        {
+            if (_sshClientState != State.Authenticating)
+            {
+                ThrowOnInvalidState();
+            }
+
+            await ConnectionInfo.Authentication.LoginAsync(username, agent, cancellationToken).ConfigureAwait(false);
+            _sshClientState = State.Authenticated;
+        }
+
+        /// <summary>
+        /// AuthenticateAsync authenticates to the SSH server using a specific SSH agent key.
+        /// </summary>
+        /// <param name="username">The username to login as</param>
+        /// <param name="agent">The SSH agent client</param>
+        /// <param name="key">The agent key to authenticate with</param>
+        /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
+        public async Task AuthenticateAsync(string username, SshAgentClient agent, SshAgentKey key, CancellationToken cancellationToken)
+        {
+            if (_sshClientState != State.Authenticating)
+            {
+                ThrowOnInvalidState();
+            }
+
+            await ConnectionInfo.Authentication.LoginAsync(username, agent, key, cancellationToken).ConfigureAwait(false);
+            _sshClientState = State.Authenticated;
+        }
+
+        /// <summary>
         /// Requests a terminal from the SSH server.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token used to cancel the terminal request</param>
@@ -625,7 +660,7 @@ namespace Surfus.Shell
                     break;
                 case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
                     await ConnectionInfo.Authentication
-                        .ProcessMessageAsync(messageEvent.Message as UaInfoRequest, cancellationToken)
+                        .ProcessMessage60Async(messageEvent, cancellationToken)
                         .ConfigureAwait(false);
                     break;
                 case MessageType.SSH_MSG_USERAUTH_BANNER:
@@ -699,8 +734,6 @@ namespace Surfus.Shell
             await _writeSemaphore.WaitAsync(cancellationToken);
             try
             {
-                // TODO: Fix compressedPayload! var compressedPayload = ConnectionInfo.WriteCompressionAlgorithm.Compress(message.GetBytes());
-                // We don't actually support compression though... so no rush...
                 var sshPacket = new SshPacket(message.GetByteWriter(), Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8));
                 ByteWriter.WriteUint(sshPacket.Buffer, SshPacket.SequenceIndex, ConnectionInfo.OutboundPacketSequence);
                 byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);

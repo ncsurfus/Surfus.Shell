@@ -43,6 +43,11 @@ namespace Surfus.Shell
         /// <summary>
         /// The inbound packet sequence number.
         /// </summary>
+        /// <summary>
+        /// The session identifier from the first key exchange, used for publickey auth signing.
+        /// </summary>
+        internal byte[] SessionIdentifier { get; set; }
+
         internal uint InboundPacketSequence { get; set; }
 
         /// <summary>
