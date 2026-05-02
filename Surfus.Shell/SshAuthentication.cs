@@ -9,129 +9,116 @@ using Surfus.Shell.Messages.UserAuth;
 
 namespace Surfus.Shell
 {
-    /// <summary>
-    /// Drives the SSH authentication state machine. Auth-method-specific logic
-    /// is delegated to an IAuthMethod implementation.
-    /// </summary>
     internal class SshAuthentication : IDisposable
     {
-        private readonly SshClient _client;
-        private IAuthMethod _method;
-        private string _username;
-        private State _state = State.Initial;
-        internal SshAuthentication(SshClient client)
-        {
-            _client = client;
-        }
+        private readonly SendMessageAsync _send;
+        private readonly Func<byte[]> _getSessionIdentifier;
+        private readonly SshMessageInbox _inbox = new();
+        private bool _serviceAccepted;
 
         /// <summary>
-        /// Authenticates using a single auth method.
+        /// Called when the server sends a banner during authentication.
         /// </summary>
+        internal Action<string> OnBanner { get; set; }
+
+        internal SshAuthentication(SendMessageAsync send, Func<byte[]> getSessionIdentifier)
+        {
+            _send = send;
+            _getSessionIdentifier = getSessionIdentifier;
+        }
+
         internal async Task LoginAsync(string username, IAuthMethod method, CancellationToken cancellationToken)
         {
-            _username = username;
-            _method = method;
-
             await EnsureServiceAcceptedAsync(cancellationToken).ConfigureAwait(false);
-
-            _state = State.WaitingOnResponse;
-            await _method.SendRequestAsync(_client, _username, cancellationToken).ConfigureAwait(false);
-
-            await _client
-                .ReadWhileAsync(() => _state == State.WaitingOnResponse || _state == State.WaitingOnMessage60Response, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (_state == State.Failed)
-                throw new SshInvalidCredentials();
+            await AuthenticateWithMethodAsync(username, method, cancellationToken).ConfigureAwait(false);
         }
 
-        /// <summary>
-        /// Authenticates by trying a list of auth methods in order until one succeeds.
-        /// </summary>
         internal async Task LoginAsync(string username, IReadOnlyList<IAuthMethod> methods, CancellationToken cancellationToken)
         {
-            _username = username;
             await EnsureServiceAcceptedAsync(cancellationToken).ConfigureAwait(false);
 
-            foreach (var method in methods)
+            for (var i = 0; i < methods.Count; i++)
             {
-                _method = method;
-                _state = State.WaitingOnResponse;
-                await method.SendRequestAsync(_client, _username, cancellationToken).ConfigureAwait(false);
-
-                await _client
-                    .ReadWhileAsync(() => _state == State.WaitingOnResponse || _state == State.WaitingOnMessage60Response, cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (_state == State.Completed)
+                var isLast = i == methods.Count - 1;
+                try
+                {
+                    await AuthenticateWithMethodAsync(username, methods[i], cancellationToken).ConfigureAwait(false);
                     return;
+                }
+                catch (SshInvalidCredentials) when (!isLast)
+                {
+                }
             }
-
-            throw new SshInvalidCredentials();
         }
 
         private async Task EnsureServiceAcceptedAsync(CancellationToken cancellationToken)
         {
-            if (_client.ConnectionInfo.UserAuthServiceAccepted)
+            if (_serviceAccepted)
                 return;
 
-            await _client.WriteMessageAsync(new ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
-            _state = State.WaitingOnServiceAccept;
+            await _send(new Messages.ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
+            var msg = await ReadAuthMessageAsync(cancellationToken).ConfigureAwait(false);
 
-            await _client
-                .ReadWhileAsync(() => _state == State.WaitingOnServiceAccept, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (_state == State.Failed)
+            if (msg.Type != MessageType.SSH_MSG_SERVICE_ACCEPT)
                 throw new SshAuthenticationException("The server does not support authentication.");
+
+            _serviceAccepted = true;
         }
 
-        // --- Message handlers called by SshClient.ReadMessageAsync ---
-
-        internal Task ProcessMessageAsync(ServiceAccept message, CancellationToken cancellationToken)
+        private async Task AuthenticateWithMethodAsync(string username, IAuthMethod method, CancellationToken cancellationToken)
         {
-            if (_state != State.WaitingOnServiceAccept)
+            await method.SendRequestAsync(_send, username, cancellationToken).ConfigureAwait(false);
+
+            while (true)
             {
-                _state = State.Failed;
-                return Task.CompletedTask;
+                var msg = await ReadAuthMessageAsync(cancellationToken).ConfigureAwait(false);
+
+                switch (msg.Type)
+                {
+                    case MessageType.SSH_MSG_USERAUTH_SUCCESS:
+                        return;
+
+                    case MessageType.SSH_MSG_USERAUTH_FAILURE:
+                        throw new SshInvalidCredentials();
+
+                    case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
+                        await method.HandleMessage60Async(_send, username, _getSessionIdentifier(), msg, cancellationToken).ConfigureAwait(false);
+                        continue;
+
+                    default:
+                        throw new SshException($"Unexpected message during authentication: {msg.Type}");
+                }
             }
-            _client.ConnectionInfo.UserAuthServiceAccepted = true;
-            _state = State.ServiceAccepted;
-            return Task.CompletedTask;
         }
 
-        internal void ProcessRequestFailureMessage() => _state = State.Failed;
-
-        internal void ProcessMessageAsync(UaSuccess message) => _state = State.Completed;
-
-        internal void ProcessMessageAsync(UaFailure message) => _state = State.Failed;
-
-        internal async Task ProcessMessage60Async(MessageEvent messageEvent, CancellationToken cancellationToken)
+        /// <summary>
+        /// Reads the next message from the inbox, skipping banners and
+        /// throwing on disconnect.
+        /// </summary>
+        private async Task<MessageEvent> ReadAuthMessageAsync(CancellationToken cancellationToken)
         {
-            if (_state != State.WaitingOnResponse && _state != State.WaitingOnMessage60Response)
+            while (true)
             {
-                _state = State.Failed;
-                return;
+                var msg = await _inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
+
+                if (msg.Type == MessageType.SSH_MSG_USERAUTH_BANNER)
+                {
+                    OnBanner?.Invoke((msg.Message as UaBanner)?.Message);
+                    continue;
+                }
+
+                if (msg.Type == MessageType.SSH_MSG_DISCONNECT)
+                {
+                    var disconnect = (Disconnect)msg.Message;
+                    throw new SshDisconnectException(disconnect.Reason);
+                }
+
+                return msg;
             }
-
-            _state = State.WaitingOnMessage60Response;
-            await _method.HandleMessage60Async(_client, _username, messageEvent, cancellationToken).ConfigureAwait(false);
-            _state = State.WaitingOnResponse;
         }
 
-        internal void Close() { }
+        internal void ProcessMessage(MessageEvent messageEvent) => _inbox.Deliver(messageEvent);
 
-        public void Dispose() { }
-
-        internal enum State
-        {
-            Initial,
-            WaitingOnServiceAccept,
-            ServiceAccepted,
-            WaitingOnResponse,
-            WaitingOnMessage60Response,
-            Completed,
-            Failed
-        }
+        public void Dispose() => _inbox.Dispose();
     }
 }

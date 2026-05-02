@@ -14,16 +14,13 @@ namespace Surfus.Shell.Authentication
             _password = password;
         }
 
-        public async Task SendRequestAsync(SshClient client, string username, CancellationToken cancellationToken)
+        public async Task SendRequestAsync(SendMessageAsync send, string username, CancellationToken cancellationToken)
         {
-            await client.WriteMessageAsync(
-                new UaRequest(username, "ssh-connection", "password", _password), cancellationToken)
-                .ConfigureAwait(false);
+            await send(new UaRequest(username, "ssh-connection", "password", _password), cancellationToken).ConfigureAwait(false);
         }
 
-        public Task HandleMessage60Async(SshClient client, string username, MessageEvent messageEvent, CancellationToken cancellationToken)
+        public Task HandleMessage60Async(SendMessageAsync send, string username, byte[] sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken)
         {
-            // Password auth does not use message 60.
             return Task.CompletedTask;
         }
     }

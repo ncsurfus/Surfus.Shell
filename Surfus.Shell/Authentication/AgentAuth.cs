@@ -16,20 +16,14 @@ namespace Surfus.Shell.Authentication
             _key = key;
         }
 
-        public async Task SendRequestAsync(SshClient client, string username, CancellationToken cancellationToken)
+        public async Task SendRequestAsync(SendMessageAsync send, string username, CancellationToken cancellationToken)
         {
-            // Send publickey query (has_signature=false)
-            await client.WriteMessageAsync(
-                new UaRequest(username, "ssh-connection", _key.KeyType, _key.KeyBlob, null), cancellationToken)
-                .ConfigureAwait(false);
+            await send(new UaRequest(username, "ssh-connection", _key.KeyType, _key.KeyBlob, null), cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task HandleMessage60Async(SshClient client, string username, MessageEvent messageEvent, CancellationToken cancellationToken)
+        public async Task HandleMessage60Async(SendMessageAsync send, string username, byte[] sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken)
         {
-            // Message 60 = SSH_MSG_USERAUTH_PK_OK. Sign and send the real request.
-            var sessionId = client.ConnectionInfo.SessionIdentifier;
-
-            var dataSize = sessionId.GetBinaryStringSize()
+            var dataSize = sessionIdentifier.GetBinaryStringSize()
                 + 1
                 + username.GetStringSize()
                 + "ssh-connection".GetAsciiStringSize()
@@ -39,20 +33,18 @@ namespace Surfus.Shell.Authentication
                 + _key.KeyBlob.GetBinaryStringSize();
 
             var dataWriter = new ByteWriter(dataSize);
-            dataWriter.WriteBinaryString(sessionId);
-            dataWriter.WriteByte(50); // SSH_MSG_USERAUTH_REQUEST
+            dataWriter.WriteBinaryString(sessionIdentifier);
+            dataWriter.WriteByte(50);
             dataWriter.WriteString(username);
             dataWriter.WriteAsciiString("ssh-connection");
             dataWriter.WriteAsciiString("publickey");
-            dataWriter.WriteByte(1); // TRUE
+            dataWriter.WriteByte(1);
             dataWriter.WriteAsciiString(_key.KeyType);
             dataWriter.WriteBinaryString(_key.KeyBlob);
 
             var signature = await _agent.SignAsync(_key.KeyBlob, dataWriter.Bytes, cancellationToken).ConfigureAwait(false);
 
-            await client.WriteMessageAsync(
-                new UaRequest(username, "ssh-connection", _key.KeyType, _key.KeyBlob, signature), cancellationToken)
-                .ConfigureAwait(false);
+            await send(new UaRequest(username, "ssh-connection", _key.KeyType, _key.KeyBlob, signature), cancellationToken).ConfigureAwait(false);
         }
     }
 }

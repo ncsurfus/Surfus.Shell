@@ -73,6 +73,40 @@ namespace Surfus.Shell
         private ImmutableList<Func<MessageEvent, Task>> _callbacks = ImmutableList.Create<Func<MessageEvent, Task>>();
 
         /// <summary>
+        /// Registered message handlers. The read loop delivers every message to each handler.
+        /// </summary>
+        private readonly object _handlersLock = new();
+        private ImmutableList<Action<MessageEvent>> _messageHandlers = ImmutableList.Create<Action<MessageEvent>>();
+
+        /// <summary>
+        /// Registers a message handler. Returns a disposable that unregisters it.
+        /// </summary>
+        internal IDisposable RegisterMessageHandler(Action<MessageEvent> handler)
+        {
+            lock (_handlersLock)
+            {
+                _messageHandlers = _messageHandlers.Add(handler);
+            }
+            return new HandlerRegistration(this, handler);
+        }
+
+        private void UnregisterMessageHandler(Action<MessageEvent> handler)
+        {
+            lock (_handlersLock)
+            {
+                _messageHandlers = _messageHandlers.Remove(handler);
+            }
+        }
+
+        private sealed class HandlerRegistration : IDisposable
+        {
+            private readonly SshClient _client;
+            private readonly Action<MessageEvent> _handler;
+            public HandlerRegistration(SshClient client, Action<MessageEvent> handler) { _client = client; _handler = handler; }
+            public void Dispose() => _client.UnregisterMessageHandler(_handler);
+        }
+
+        /// <summary>
         /// A task that reads messages from the incoming SSH server.
         /// </summary>
         private Task _readLoop;
@@ -176,9 +210,9 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            ConnectionInfo.Authentication?.Dispose();
-            ConnectionInfo.Authentication = new SshAuthentication(this);
-            await ConnectionInfo.Authentication.LoginAsync(username, new PasswordAuth(password), cancellationToken).ConfigureAwait(false);
+            var auth = EnsureAuthentication();
+            using var _ = RegisterMessageHandler(auth.ProcessMessage);
+            await auth.LoginAsync(username, new PasswordAuth(password), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
 
@@ -201,9 +235,9 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            ConnectionInfo.Authentication?.Dispose();
-            ConnectionInfo.Authentication = new SshAuthentication(this);
-            await ConnectionInfo.Authentication.LoginAsync(username, new KeyboardInteractiveAuth(interactiveResponse), cancellationToken).ConfigureAwait(false);
+            var auth = EnsureAuthentication();
+            using var _ = RegisterMessageHandler(auth.ProcessMessage);
+            await auth.LoginAsync(username, new KeyboardInteractiveAuth(interactiveResponse), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
 
@@ -220,15 +254,15 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            ConnectionInfo.Authentication?.Dispose();
-            ConnectionInfo.Authentication = new SshAuthentication(this);
+            var auth = EnsureAuthentication();
+            using var _ = RegisterMessageHandler(auth.ProcessMessage);
             var keys = await agent.ListKeysAsync(cancellationToken).ConfigureAwait(false);
             if (keys.Count == 0)
                 throw new Exceptions.SshAuthenticationException("The SSH agent has no keys.");
             var methods = new List<IAuthMethod>();
             foreach (var key in keys)
                 methods.Add(new AgentAuth(agent, key));
-            await ConnectionInfo.Authentication.LoginAsync(username, methods, cancellationToken).ConfigureAwait(false);
+            await auth.LoginAsync(username, methods, cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
 
@@ -246,9 +280,9 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            ConnectionInfo.Authentication?.Dispose();
-            ConnectionInfo.Authentication = new SshAuthentication(this);
-            await ConnectionInfo.Authentication.LoginAsync(username, new AgentAuth(agent, key), cancellationToken).ConfigureAwait(false);
+            var auth = EnsureAuthentication();
+            using var _ = RegisterMessageHandler(auth.ProcessMessage);
+            await auth.LoginAsync(username, new AgentAuth(agent, key), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
 
@@ -620,14 +654,7 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_DISCONNECT:
                     _disconnectReceived = true;
                     break;
-                case MessageType.SSH_MSG_SERVICE_ACCEPT:
-                case MessageType.SSH_MSG_REQUEST_FAILURE:
-                case MessageType.SSH_MSG_USERAUTH_SUCCESS:
-                case MessageType.SSH_MSG_USERAUTH_FAILURE:
-                case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                case MessageType.SSH_MSG_USERAUTH_BANNER:
-                    await ProcessAuthenticationMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
-                    break;
+                // Auth and other messages are delivered to registered handlers below.
                 case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
                 case MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE:
                 case MessageType.SSH_MSG_CHANNEL_SUCCESS:
@@ -640,46 +667,18 @@ namespace Surfus.Shell
                     break;
             }
 
+            // Deliver to registered message handlers
+            var handlers = _messageHandlers;
+            foreach (var handler in handlers)
+            {
+                handler(messageEvent);
+            }
+
             // Get a local reference of the current callbacks
             var callbacks = _callbacks;
             foreach (var callback in callbacks)
             {
                 await callback(messageEvent);
-            }
-        }
-
-        /// <summary>
-        /// Forwards a message from the server to the the SshAuthentication
-        /// </summary>
-        /// <param name="messageEvent">The message to be processed</param>
-        /// <param name="cancellationToken">The cancellation token is used to cancel the process request</param>
-        /// <returns></returns>
-        private async Task ProcessAuthenticationMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
-        {
-            switch (messageEvent.Type)
-            {
-                case MessageType.SSH_MSG_SERVICE_ACCEPT:
-                    await ConnectionInfo.Authentication
-                        .ProcessMessageAsync(messageEvent.Message as ServiceAccept, cancellationToken)
-                        .ConfigureAwait(false);
-                    break;
-                case MessageType.SSH_MSG_REQUEST_FAILURE:
-                    ConnectionInfo.Authentication.ProcessRequestFailureMessage();
-                    break;
-                case MessageType.SSH_MSG_USERAUTH_SUCCESS:
-                    ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaSuccess);
-                    break;
-                case MessageType.SSH_MSG_USERAUTH_FAILURE:
-                    ConnectionInfo.Authentication.ProcessMessageAsync(messageEvent.Message as UaFailure);
-                    break;
-                case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                    await ConnectionInfo.Authentication
-                        .ProcessMessage60Async(messageEvent, cancellationToken)
-                        .ConfigureAwait(false);
-                    break;
-                case MessageType.SSH_MSG_USERAUTH_BANNER:
-                    Banner = (messageEvent.Message as UaBanner)?.Message;
-                    break;
             }
         }
 
@@ -848,7 +847,6 @@ namespace Surfus.Shell
                 }
 
                 _sshClientState = State.Closed;
-                ConnectionInfo.Authentication?.Dispose();
                 ConnectionInfo.Dispose();
                 _tcpStream?.Dispose();
                 _tcpConnection?.Dispose();
@@ -858,6 +856,18 @@ namespace Surfus.Shell
         /// <summary>
         /// Throws an SshException if the SshClient is in an invalid state to continue.
         /// </summary>
+        private SshAuthentication _authentication;
+
+        private SshAuthentication EnsureAuthentication()
+        {
+            if (_authentication == null)
+            {
+                _authentication = new SshAuthentication(WriteMessageAsync, () => ConnectionInfo.SessionIdentifier);
+                _authentication.OnBanner = banner => Banner = banner;
+            }
+            return _authentication;
+        }
+
         private void ThrowOnInvalidState()
         {
             switch (_sshClientState)

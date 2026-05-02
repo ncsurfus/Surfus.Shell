@@ -15,14 +15,12 @@ namespace Surfus.Shell.Authentication
             _responseCallback = responseCallback;
         }
 
-        public async Task SendRequestAsync(SshClient client, string username, CancellationToken cancellationToken)
+        public async Task SendRequestAsync(SendMessageAsync send, string username, CancellationToken cancellationToken)
         {
-            await client.WriteMessageAsync(
-                new UaRequest(username, "ssh-connection", "keyboard-interactive", (string)null, (string)null), cancellationToken)
-                .ConfigureAwait(false);
+            await send(new UaRequest(username, "ssh-connection", "keyboard-interactive", (string)null, (string)null), cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task HandleMessage60Async(SshClient client, string username, MessageEvent messageEvent, CancellationToken cancellationToken)
+        public async Task HandleMessage60Async(SendMessageAsync send, string username, byte[] sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken)
         {
             var message = (UaInfoRequest)messageEvent.Message;
             var responses = new string[message.PromptNumber];
@@ -30,7 +28,7 @@ namespace Surfus.Shell.Authentication
             {
                 responses[i] = await _responseCallback(message.Prompt[i], cancellationToken).ConfigureAwait(false);
             }
-            await client.WriteMessageAsync(new UaInfoResponse((uint)responses.Length, responses), cancellationToken).ConfigureAwait(false);
+            await send(new UaInfoResponse((uint)responses.Length, responses), cancellationToken).ConfigureAwait(false);
         }
     }
 }

@@ -48,10 +48,6 @@ namespace Surfus.Shell
         /// </summary>
         internal byte[] SessionIdentifier { get; set; }
 
-        /// <summary>
-        /// Whether the ssh-userauth service has been accepted by the server.
-        /// </summary>
-        internal bool UserAuthServiceAccepted { get; set; }
 
         internal uint InboundPacketSequence { get; set; }
 
@@ -65,10 +61,6 @@ namespace Surfus.Shell
         /// </summary>
         internal SshKeyExchanger KeyExchanger { get; set; }
 
-        /// <summary>
-        /// The authentication module.
-        /// </summary>
-        internal SshAuthentication Authentication { get; set; }
 
         /// <summary>
         /// The algorithm used to compress data from the server.

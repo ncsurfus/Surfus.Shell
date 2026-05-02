@@ -1,24 +1,28 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Surfus.Shell.Messages;
 
-namespace Surfus.Shell
+namespace Surfus.Shell.Authentication
 {
     /// <summary>
-    /// Defines an SSH authentication method. Implementations handle the method-specific
-    /// parts of the auth flow while SshAuthentication drives the state machine.
+    /// A delegate for sending SSH messages.
+    /// </summary>
+    internal delegate Task SendMessageAsync(IClientMessage message, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Defines an SSH authentication method.
     /// </summary>
     internal interface IAuthMethod
     {
         /// <summary>
-        /// Sends the initial authentication request after the ssh-userauth service is accepted.
+        /// Sends the initial authentication request.
         /// </summary>
-        Task SendRequestAsync(SshClient client, string username, CancellationToken cancellationToken);
+        Task SendRequestAsync(SendMessageAsync send, string username, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Handles message type 60 (SSH_MSG_USERAUTH_PK_OK or SSH_MSG_USERAUTH_INFO_REQUEST).
-        /// Returns the next state for the auth state machine.
+        /// Handles message type 60 (PK_OK or INFO_REQUEST depending on auth method).
         /// </summary>
-        Task HandleMessage60Async(SshClient client, string username, MessageEvent messageEvent, CancellationToken cancellationToken);
+        Task HandleMessage60Async(SendMessageAsync send, string username, byte[] sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken);
     }
 }
