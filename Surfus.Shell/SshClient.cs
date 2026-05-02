@@ -74,36 +74,51 @@ namespace Surfus.Shell
 
         /// <summary>
         /// Registered message handlers. The read loop delivers every message to each handler.
+        /// When the read loop exits, each error callback is invoked with the exception (or null).
         /// </summary>
         private readonly object _handlersLock = new();
-        private ImmutableList<Action<MessageEvent>> _messageHandlers = ImmutableList.Create<Action<MessageEvent>>();
+        private ImmutableList<(Action<MessageEvent> onMessage, Action<Exception> onError)> _messageHandlers =
+            ImmutableList.Create<(Action<MessageEvent>, Action<Exception>)>();
 
         /// <summary>
-        /// Registers a message handler. Returns a disposable that unregisters it.
+        /// Registers a message handler with an error callback. Returns a disposable that unregisters it.
         /// </summary>
-        internal IDisposable RegisterMessageHandler(Action<MessageEvent> handler)
+        internal IDisposable RegisterMessageHandler(Action<MessageEvent> onMessage, Action<Exception> onError)
         {
+            var entry = (onMessage, onError);
             lock (_handlersLock)
             {
-                _messageHandlers = _messageHandlers.Add(handler);
+                _messageHandlers = _messageHandlers.Add(entry);
             }
-            return new HandlerRegistration(this, handler);
+            return new HandlerRegistration(this, entry);
         }
 
-        private void UnregisterMessageHandler(Action<MessageEvent> handler)
+        private void UnregisterMessageHandler((Action<MessageEvent>, Action<Exception>) entry)
         {
             lock (_handlersLock)
             {
-                _messageHandlers = _messageHandlers.Remove(handler);
+                _messageHandlers = _messageHandlers.Remove(entry);
+            }
+        }
+
+        /// <summary>
+        /// Notifies all registered handlers that the read loop has exited.
+        /// </summary>
+        private void NotifyHandlersOfError(Exception error)
+        {
+            var handlers = _messageHandlers;
+            foreach (var (_, onError) in handlers)
+            {
+                onError?.Invoke(error);
             }
         }
 
         private sealed class HandlerRegistration : IDisposable
         {
             private readonly SshClient _client;
-            private readonly Action<MessageEvent> _handler;
-            public HandlerRegistration(SshClient client, Action<MessageEvent> handler) { _client = client; _handler = handler; }
-            public void Dispose() => _client.UnregisterMessageHandler(_handler);
+            private readonly (Action<MessageEvent>, Action<Exception>) _entry;
+            public HandlerRegistration(SshClient client, (Action<MessageEvent>, Action<Exception>) entry) { _client = client; _entry = entry; }
+            public void Dispose() => _client.UnregisterMessageHandler(_entry);
         }
 
         /// <summary>
@@ -177,6 +192,7 @@ namespace Surfus.Shell
             // cancel _closeCts so all pending ReadUntilAsync waiters unblock.
             async Task readLoop()
             {
+                Exception loopError = null;
                 try
                 {
                     while (true)
@@ -184,9 +200,14 @@ namespace Surfus.Shell
                         await ReadMessageAsync(_closeCts.Token);
                     }
                 }
+                catch (Exception ex)
+                {
+                    loopError = ex;
+                }
                 finally
                 {
                     _closeCts.Cancel();
+                    NotifyHandlersOfError(loopError);
                 }
             }
             _readLoop = readLoop();
@@ -211,7 +232,7 @@ namespace Surfus.Shell
             }
 
             var auth = EnsureAuthentication();
-            using var _ = RegisterMessageHandler(auth.ProcessMessage);
+            using var _ = RegisterMessageHandler(auth.ProcessMessage, auth.OnError);
             await auth.LoginAsync(username, new PasswordAuth(password), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
@@ -236,7 +257,7 @@ namespace Surfus.Shell
             }
 
             var auth = EnsureAuthentication();
-            using var _ = RegisterMessageHandler(auth.ProcessMessage);
+            using var _ = RegisterMessageHandler(auth.ProcessMessage, auth.OnError);
             await auth.LoginAsync(username, new KeyboardInteractiveAuth(interactiveResponse), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
@@ -255,7 +276,7 @@ namespace Surfus.Shell
             }
 
             var auth = EnsureAuthentication();
-            using var _ = RegisterMessageHandler(auth.ProcessMessage);
+            using var _ = RegisterMessageHandler(auth.ProcessMessage, auth.OnError);
             var keys = await agent.ListKeysAsync(cancellationToken).ConfigureAwait(false);
             if (keys.Count == 0)
                 throw new Exceptions.SshAuthenticationException("The SSH agent has no keys.");
@@ -281,7 +302,7 @@ namespace Surfus.Shell
             }
 
             var auth = EnsureAuthentication();
-            using var _ = RegisterMessageHandler(auth.ProcessMessage);
+            using var _ = RegisterMessageHandler(auth.ProcessMessage, auth.OnError);
             await auth.LoginAsync(username, new AgentAuth(agent, key), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
@@ -669,9 +690,9 @@ namespace Surfus.Shell
 
             // Deliver to registered message handlers
             var handlers = _messageHandlers;
-            foreach (var handler in handlers)
+            foreach (var (onMessage, _) in handlers)
             {
-                handler(messageEvent);
+                onMessage(messageEvent);
             }
 
             // Get a local reference of the current callbacks

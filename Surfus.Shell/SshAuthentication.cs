@@ -119,6 +119,8 @@ namespace Surfus.Shell
 
         internal void ProcessMessage(MessageEvent messageEvent) => _inbox.Deliver(messageEvent);
 
+        internal void OnError(Exception error) => _inbox.OnError(error);
+
         public void Dispose() => _inbox.Dispose();
     }
 }
