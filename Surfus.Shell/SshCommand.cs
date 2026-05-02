@@ -9,6 +9,21 @@ using Surfus.Shell.Messages.Channel.Requests;
 namespace Surfus.Shell
 {
     /// <summary>
+    /// The result of an SSH command execution containing stdout and stderr.
+    /// </summary>
+    public class SshCommandResult
+    {
+        public string Stdout { get; }
+        public string Stderr { get; }
+
+        internal SshCommandResult(string stdout, string stderr)
+        {
+            Stdout = stdout;
+            Stderr = stderr;
+        }
+    }
+
+    /// <summary>
     /// A command to be sent to the server.
     /// </summary>
     public class SshCommand : IDisposable
@@ -29,36 +44,54 @@ namespace Surfus.Shell
         private State _commandState = State.Initial;
 
         /// <summary>
-        /// The buffer to store the received command data into.
+        /// The buffer to store the received stdout data into.
         /// </summary>
-        private readonly MemoryStream _memoryStream = new MemoryStream();
+        private readonly MemoryStream _stdoutStream = new MemoryStream();
+
+        /// <summary>
+        /// The buffer to store the received stderr data into.
+        /// </summary>
+        private readonly MemoryStream _stderrStream = new MemoryStream();
+
+        /// <summary>
+        /// When true, stderr data is combined into the stdout stream.
+        /// </summary>
+        public bool CombineStderr { get; set; }
 
         /// <summary>
         /// Constructs the command to be sent to the server.
         /// </summary>
-        /// <param name="sshClient">The client to send the command to.</param>
         /// <param name="channel">The channel to send the command over.</param>
         internal SshCommand(SshChannel channel)
         {
             _channel = channel;
             _channel.OnDataReceived = OnDataReceived;
+            _channel.OnExtendedDataReceived = OnExtendedDataReceived;
         }
 
         /// <summary>
-        /// Receives data from the channel and places it into the buffer.
+        /// Receives stdout data from the channel.
         /// </summary>
-        /// <param name="buffer">The received data.</param>
-        /// <returns></returns>
         internal void OnDataReceived(byte[] buffer, int offset, int length)
         {
-            _memoryStream.Write(buffer, offset, length);
+            _stdoutStream.Write(buffer, offset, length);
+        }
+
+        /// <summary>
+        /// Receives stderr data from the channel.
+        /// </summary>
+        internal void OnExtendedDataReceived(byte[] buffer, int offset, int length)
+        {
+            if (CombineStderr)
+                _stdoutStream.Write(buffer, offset, length);
+            else
+                _stderrStream.Write(buffer, offset, length);
         }
 
         /// <summary>
         /// Opens the underlying SSH channel and requests to send commands over the channel.
         /// </summary>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
-        /// <returns></returns>
         internal async Task OpenAsync(CancellationToken cancellationToken)
         {
             if (_commandState != State.Initial)
@@ -78,7 +111,6 @@ namespace Surfus.Shell
         /// Closes the command.
         /// </summary>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
-        /// <returns></returns>
         public async Task CloseAsync(CancellationToken cancellationToken)
         {
             if (_commandState == State.Opened)
@@ -98,7 +130,8 @@ namespace Surfus.Shell
             {
                 _isDisposed = true;
                 _channel.Dispose();
-                _memoryStream.Dispose();
+                _stdoutStream.Dispose();
+                _stderrStream.Dispose();
             }
         }
 
@@ -111,12 +144,24 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Sends the command to the server.
+        /// Sends the command to the server and returns the combined output (stdout, or stdout+stderr if combineStderr was set).
         /// </summary>
-        /// <param name="command"></param>
+        /// <param name="command">The command to execute.</param>
         /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
-        /// <returns>The result of the command.</returns>
+        /// <returns>The stdout result of the command (includes stderr if combineStderr is true).</returns>
         public async Task<string> ExecuteAsync(string command, CancellationToken cancellationToken)
+        {
+            var result = await ExecuteWithResultAsync(command, cancellationToken).ConfigureAwait(false);
+            return result.Stdout;
+        }
+
+        /// <summary>
+        /// Sends the command to the server and returns both stdout and stderr.
+        /// </summary>
+        /// <param name="command">The command to execute.</param>
+        /// <param name="cancellationToken">A cancellation token used to cancel the asynchronous method.</param>
+        /// <returns>An <see cref="SshCommandResult"/> containing stdout and stderr.</returns>
+        public async Task<SshCommandResult> ExecuteWithResultAsync(string command, CancellationToken cancellationToken)
         {
             if (_commandState != State.Opened)
             {
@@ -128,10 +173,11 @@ namespace Surfus.Shell
 
             _commandState = State.Completed;
 
-            using (_memoryStream)
-            {
-                return Encoding.UTF8.GetString(_memoryStream.ToArray());
-            }
+            var stdout = Encoding.UTF8.GetString(_stdoutStream.ToArray());
+            var stderr = Encoding.UTF8.GetString(_stderrStream.ToArray());
+            _stdoutStream.Dispose();
+            _stderrStream.Dispose();
+            return new SshCommandResult(stdout, stderr);
         }
 
         /// <summary>

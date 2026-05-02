@@ -362,13 +362,18 @@ func handleExec(ch ssh.Channel, payload []byte) {
 	}
 
 	stdout, _ := cmd.StdoutPipe()
-	cmd.Stderr = cmd.Stdout
+	stderr, _ := cmd.StderrPipe()
 	if err := cmd.Start(); err != nil {
 		ch.Write([]byte(err.Error() + "\n"))
 		ch.SendRequest("exit-status", false, ssh.Marshal(struct{ S uint32 }{1}))
 		return
 	}
-	io.Copy(ch, stdout)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); io.Copy(ch, stdout) }()
+	go func() { defer wg.Done(); io.Copy(ch.Stderr(), stderr) }()
+	wg.Wait()
 	cmd.Wait()
 
 	exitCode := uint32(0)

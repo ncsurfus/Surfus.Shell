@@ -44,6 +44,7 @@ namespace Surfus.Shell
         {
             _channel = channel;
             _channel.OnDataReceived = OnDataReceived;
+            _channel.OnExtendedDataReceived = OnExtendedDataReceived;
             _channel.OnChannelCloseReceived = OnChannelCloseReceived;
         }
 
@@ -61,6 +62,11 @@ namespace Surfus.Shell
         /// Do Not Use (Yet).
         /// </summary>
         public Func<string, bool> DataReceivedCallback;
+
+        /// <summary>
+        /// Callback for extended data (stderr). Return true to also append to the read buffer.
+        /// </summary>
+        public Func<string, bool> ExtendedDataReceivedCallback;
 
         /// <summary>
         /// The callback if the server disconnects.
@@ -81,6 +87,23 @@ namespace Surfus.Shell
                 _readBuffer.Append(data);
             }
             else if (DataReceivedCallback(data))
+            {
+                _readBuffer.Append(data);
+            }
+        }
+
+        /// <summary>
+        /// The channel callback for when extended data (stderr) is received.
+        /// </summary>
+        private void OnExtendedDataReceived(byte[] buffer, int offset, int length)
+        {
+            var data = Encoding.UTF8.GetString(buffer, offset, length);
+
+            if (ExtendedDataReceivedCallback == null)
+            {
+                _readBuffer.Append(data);
+            }
+            else if (ExtendedDataReceivedCallback(data))
             {
                 _readBuffer.Append(data);
             }

@@ -21,9 +21,14 @@ namespace Surfus.Shell
         internal bool IsOpen { get; private set; }
 
         /// <summary>
-        /// Callback for received data.
+        /// Callback for received data (stdout).
         /// </summary>
         internal Action<byte[], int, int> OnDataReceived;
+
+        /// <summary>
+        /// Callback for received extended data (stderr).
+        /// </summary>
+        internal Action<byte[], int, int> OnExtendedDataReceived;
 
         /// <summary>
         /// Callback when EOF is received.
@@ -163,6 +168,10 @@ namespace Surfus.Shell
                         await HandleDataAsync(data, cancellationToken).ConfigureAwait(false);
                         break;
 
+                    case ChannelExtendedData extData:
+                        await HandleExtendedDataAsync(extData, cancellationToken).ConfigureAwait(false);
+                        break;
+
                     case ChannelEof eof:
                         OnChannelEofReceived?.Invoke(eof);
                         return;
@@ -194,6 +203,10 @@ namespace Surfus.Shell
                     await HandleDataAsync(data, CancellationToken.None).ConfigureAwait(false);
                     return true;
 
+                case ChannelExtendedData extData:
+                    await HandleExtendedDataAsync(extData, CancellationToken.None).ConfigureAwait(false);
+                    return true;
+
                 case ChannelEof eof:
                     OnChannelEofReceived?.Invoke(eof);
                     return true;
@@ -222,6 +235,22 @@ namespace Surfus.Shell
             }
 
             OnDataReceived?.Invoke(message.Data, 0, length);
+        }
+
+        private async Task HandleExtendedDataAsync(ChannelExtendedData message, CancellationToken cancellationToken)
+        {
+            if (ReceiveWindow <= 0) return;
+
+            var length = Math.Min(message.Data.Length, ReceiveWindow);
+            ReceiveWindow -= length;
+
+            if (ReceiveWindow <= 0)
+            {
+                await Inbox.SendAsync(new ChannelWindowAdjust(ServerId, (uint)WindowRefill), cancellationToken).ConfigureAwait(false);
+                ReceiveWindow += WindowRefill;
+            }
+
+            OnExtendedDataReceived?.Invoke(message.Data, 0, length);
         }
 
 

@@ -71,6 +71,48 @@ public class SshIntegrationTests
     }
 
     [Fact]
+    public async Task ExecChannel_StderrSeparate()
+    {
+        await using var server = await SshTestServer.StartAsync();
+        await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
+        await client.ConnectAsync(Timeout());
+        await client.AuthenticateAsync(User, Pass, Timeout());
+        var command = await client.CreateCommandAsync(Timeout());
+        var result = await command.ExecuteWithResultAsync("echo out && echo err >&2", Timeout());
+        Assert.Contains("out", result.Stdout);
+        Assert.Contains("err", result.Stderr);
+        Assert.DoesNotContain("err", result.Stdout);
+    }
+
+    [Fact]
+    public async Task ExecChannel_StderrCombined()
+    {
+        await using var server = await SshTestServer.StartAsync();
+        await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
+        await client.ConnectAsync(Timeout());
+        await client.AuthenticateAsync(User, Pass, Timeout());
+        var command = await client.CreateCommandAsync(Timeout());
+        command.CombineStderr = true;
+        var result = await command.ExecuteWithResultAsync("echo out && echo err >&2", Timeout());
+        Assert.Contains("out", result.Stdout);
+        Assert.Contains("err", result.Stdout);
+        Assert.Empty(result.Stderr);
+    }
+
+    [Fact]
+    public async Task ExecChannel_StderrOnly()
+    {
+        await using var server = await SshTestServer.StartAsync();
+        await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
+        await client.ConnectAsync(Timeout());
+        await client.AuthenticateAsync(User, Pass, Timeout());
+        var command = await client.CreateCommandAsync(Timeout());
+        var result = await command.ExecuteWithResultAsync("echo err >&2", Timeout());
+        Assert.Contains("err", result.Stderr);
+        Assert.Empty(result.Stdout);
+    }
+
+    [Fact]
     public async Task ShellChannel_CanWriteAndRead()
     {
         await using var server = await SshTestServer.StartAsync(shellMode: "echo");
