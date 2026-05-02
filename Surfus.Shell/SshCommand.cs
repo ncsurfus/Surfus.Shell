@@ -19,11 +19,6 @@ namespace Surfus.Shell
         private readonly SshChannel _channel;
 
         /// <summary>
-        /// The client the command will be sent to.
-        /// </summary>
-        private readonly SshClient _client;
-
-        /// <summary>
         /// The disposed state of the command.
         /// </summary>
         private bool _isDisposed;
@@ -43,9 +38,8 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="sshClient">The client to send the command to.</param>
         /// <param name="channel">The channel to send the command over.</param>
-        internal SshCommand(SshClient sshClient, SshChannel channel)
+        internal SshCommand(SshChannel channel)
         {
-            _client = sshClient;
             _channel = channel;
             _channel.OnDataReceived = OnDataReceived;
         }
@@ -103,6 +97,7 @@ namespace Surfus.Shell
             if (!_isDisposed)
             {
                 _isDisposed = true;
+                _channel.Dispose();
                 _memoryStream.Dispose();
             }
         }
@@ -128,20 +123,8 @@ namespace Surfus.Shell
                 throw new Exception("Command request is not opened");
             }
 
-            bool eof = false;
-            bool closed = false;
-
-            _channel.OnChannelEofReceived = (message) =>
-            {
-                eof = true;
-            };
-            _channel.OnChannelCloseReceived = (message) =>
-            {
-                closed = true;
-            };
-
             await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken).ConfigureAwait(false);
-            await _client.ReadWhileAsync(() => !eof && !closed, cancellationToken).ConfigureAwait(false);
+            await _channel.DrainUntilClosedAsync(cancellationToken).ConfigureAwait(false);
 
             _commandState = State.Completed;
 

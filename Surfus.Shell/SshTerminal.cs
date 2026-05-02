@@ -26,11 +26,6 @@ namespace Surfus.Shell
         private readonly SshChannel _channel;
 
         /// <summary>
-        /// The SshClient the terminal was opened to.
-        /// </summary>
-        private readonly SshClient _client;
-
-        /// <summary>
         /// The disposed state of the terminal.
         /// </summary>
         private bool _isDisposed;
@@ -45,9 +40,8 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="sshClient">The SSH client the terminal was opened to.</param>
         /// <param name="channel">The channel the terminal was opened for.</param>
-        internal SshTerminal(SshClient sshClient, SshChannel channel)
+        internal SshTerminal(SshChannel channel)
         {
-            _client = sshClient;
             _channel = channel;
             _channel.OnDataReceived = OnDataReceived;
             _channel.OnChannelCloseReceived = OnChannelCloseReceived;
@@ -191,7 +185,7 @@ namespace Surfus.Shell
 
             if (_readBuffer.Length == 0)
             {
-                await _client.ReadWhileAsync(() => _readBuffer.Length == 0, cancellationToken).ConfigureAwait(false);
+                await DrainUntilBufferHasDataAsync(cancellationToken).ConfigureAwait(false);
             }
             var text = _readBuffer.ToString();
             _readBuffer.Clear();
@@ -212,7 +206,7 @@ namespace Surfus.Shell
 
             if (_readBuffer.Length == 0)
             {
-                await _client.ReadWhileAsync(() => _readBuffer.Length == 0, cancellationToken).ConfigureAwait(false);
+                await DrainUntilBufferHasDataAsync(cancellationToken).ConfigureAwait(false);
             }
             var text = _readBuffer[0];
             _readBuffer.Remove(0, 1);
@@ -231,7 +225,7 @@ namespace Surfus.Shell
             while ((index = _readBuffer.IndexOf(plainText)) == -1)
             {
                 var currentBufferSize = _readBuffer.Length;
-                await _client.ReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
+                await DrainUntilBufferHasDataAsync(cancellationToken).ConfigureAwait(false);
             }
             index = index + plainText.Length;
             var result = _readBuffer.ToString().Substring(0, index);
@@ -263,7 +257,7 @@ namespace Surfus.Shell
             while (!(regexMatch = Regex.Match(_readBuffer.ToString(), regexText, regexOptions)).Success)
             {
                 var currentBufferSize = _readBuffer.Length;
-                await _client.ReadWhileAsync(() => currentBufferSize == _readBuffer.Length, cancellationToken).ConfigureAwait(false);
+                await DrainUntilBufferHasDataAsync(cancellationToken).ConfigureAwait(false);
             }
             var index = regexMatch.Index + regexMatch.Length;
             _readBuffer.Remove(0, index);
@@ -282,6 +276,18 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Drains messages from the channel inbox until the read buffer has new data.
+        /// </summary>
+        private async Task DrainUntilBufferHasDataAsync(CancellationToken cancellationToken)
+        {
+            var before = _readBuffer.Length;
+            while (_readBuffer.Length == before)
+            {
+                await _channel.ProcessOneInboxMessageAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
         /// Closes the terminal.
         /// </summary>
         public void Close()
@@ -289,6 +295,7 @@ namespace Surfus.Shell
             if (!_isDisposed)
             {
                 _isDisposed = true;
+                _channel.Dispose();
             }
         }
 

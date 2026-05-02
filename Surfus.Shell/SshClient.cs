@@ -32,11 +32,6 @@ namespace Surfus.Shell
         private uint _channelCounter;
 
         /// <summary>
-        /// _channels holds a list of the channels associated to this SshClient.
-        /// </summary>
-        private readonly Dictionary<uint, SshChannel> _channels = new Dictionary<uint, SshChannel>();
-
-        /// <summary>
         /// _disposables holds a list of the disposable objects.
         /// </summary>
         private readonly List<IDisposable> _disposables = new List<IDisposable>();
@@ -320,11 +315,12 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            // Setup the new terminal
-            var channel = new SshChannel(this, _channelCounter);
-            var terminal = new SshTerminal(this, channel);
+            var channel = new SshChannel(WriteMessageAsync, _channelCounter);
+            channel.Registration = RegisterMessageHandler(
+                msg => { if (msg.Message is IChannelRecipient r && r.RecipientChannel == channel.ClientId) channel.ProcessMessage(msg); },
+                channel.OnError);
+            var terminal = new SshTerminal(channel);
 
-            _channels[_channelCounter] = channel;
             _disposables.Add(terminal);
             _channelCounter++;
 
@@ -345,11 +341,12 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            // Setup the new terminal
-            var channel = new SshChannel(this, _channelCounter);
-            var command = new SshCommand(this, channel);
+            var channel = new SshChannel(WriteMessageAsync, _channelCounter);
+            channel.Registration = RegisterMessageHandler(
+                msg => { if (msg.Message is IChannelRecipient r && r.RecipientChannel == channel.ClientId) channel.ProcessMessage(msg); },
+                channel.OnError);
+            var command = new SshCommand(channel);
 
-            _channels[_channelCounter] = channel;
             _disposables.Add(command);
             _channelCounter++;
 
@@ -676,16 +673,7 @@ namespace Surfus.Shell
                     _disconnectReceived = true;
                     break;
                 // Auth and other messages are delivered to registered handlers below.
-                case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
-                case MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE:
-                case MessageType.SSH_MSG_CHANNEL_SUCCESS:
-                case MessageType.SSH_MSG_CHANNEL_FAILURE:
-                case MessageType.SSH_MSG_CHANNEL_WINDOW_ADJUST:
-                case MessageType.SSH_MSG_CHANNEL_DATA:
-                case MessageType.SSH_MSG_CHANNEL_CLOSE:
-                case MessageType.SSH_MSG_CHANNEL_EOF:
-                    await ProcessChannelMessageAsync(messageEvent, cancellationToken).ConfigureAwait(false);
-                    break;
+                // Channel messages are delivered to registered handlers below.
             }
 
             // Deliver to registered message handlers
@@ -703,53 +691,7 @@ namespace Surfus.Shell
             }
         }
 
-        /// <summary>
-        /// Forwards a message from the server to the the SshChannel
-        /// </summary>
-        /// <param name="messageEvent">The message to be processed</param>
-        /// <param name="cancellationToken">The cancellation token is used to cancel the process request</param>
-        /// <returns></returns>
-        private async Task ProcessChannelMessageAsync(MessageEvent messageEvent, CancellationToken cancellationToken)
-        {
-            // Runs on background thread
-            if (messageEvent.Message is IChannelRecipient channelMessage)
-            {
-                if (!_channels.ContainsKey(channelMessage.RecipientChannel))
-                {
-                    throw new SshException("Server sent a message for a invalid recipient channel.");
-                }
 
-                var channel = _channels[channelMessage.RecipientChannel];
-
-                switch (messageEvent.Message)
-                {
-                    case ChannelSuccess success:
-                        channel.ProcessMessageAsync(success);
-                        break;
-                    case ChannelFailure failure:
-                        channel.ProcessMessageAsync(failure);
-                        break;
-                    case ChannelOpenConfirmation openConfirmation:
-                        channel.ProcessMessageAsync(openConfirmation);
-                        break;
-                    case ChannelOpenFailure openFailure:
-                        channel.ProcessMessageAsync(openFailure);
-                        break;
-                    case ChannelWindowAdjust windowAdjust:
-                        channel.ProcessMessageAsync(windowAdjust);
-                        break;
-                    case ChannelData channelData:
-                        await channel.ProcessMessageAsync(channelData, cancellationToken).ConfigureAwait(false);
-                        break;
-                    case ChannelEof channelEof:
-                        channel.ProcessMessageAsync(channelEof);
-                        break;
-                    case ChannelClose channelClose:
-                        channel.ProcessMessageAsync(channelClose);
-                        break;
-                }
-            }
-        }
 
         /// <summary>
         /// Writes a message to the server
