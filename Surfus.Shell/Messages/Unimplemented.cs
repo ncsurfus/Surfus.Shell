@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages
 {
-    public class Unimplemented : IClientMessage
+    internal class Unimplemented : IClientMessage
     {
         public Unimplemented(SshPacket packet)
         {

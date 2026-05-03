@@ -1,6 +1,6 @@
 ﻿namespace Surfus.Shell.Messages.Channel
 {
-    internal interface IChannelRecipient
+    public interface IChannelRecipient
     {
         uint RecipientChannel { get; }
     }

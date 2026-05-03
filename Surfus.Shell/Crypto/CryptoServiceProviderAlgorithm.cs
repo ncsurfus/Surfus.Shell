@@ -11,7 +11,7 @@ namespace Surfus.Shell.Crypto
     /// <summary>
     /// Implements a common core of methods for crypto algorithms.
     /// </summary>
-    internal abstract class CryptoServiceProviderAlgorithm : CryptoAlgorithm
+    public abstract class CryptoServiceProviderAlgorithm : CryptoAlgorithm
     {
         /// <summary>
         /// The crypto provider.

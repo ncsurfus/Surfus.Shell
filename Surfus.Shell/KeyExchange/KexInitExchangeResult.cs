@@ -8,7 +8,7 @@ namespace Surfus.Shell.KeyExchange
     /// <summary>
     /// Compares the client and server KexInit messages and selects the appropriate ciphers.
     /// </summary>
-    internal class KexInitExchangeResult
+    public class KexInitExchangeResult
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="KexInitExchangeResult"/> class.

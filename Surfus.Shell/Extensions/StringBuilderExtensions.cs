@@ -5,7 +5,7 @@
 
 namespace Surfus.Shell.Extensions
 {
-    public static class StringBuilderExtensions
+    internal static class StringBuilderExtensions
     {
         /// <summary>
         /// Get index of a string

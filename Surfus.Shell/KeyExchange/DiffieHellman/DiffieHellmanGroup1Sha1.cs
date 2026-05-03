@@ -6,7 +6,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
     /// <summary>
     /// Implements the Diffie-Hellman Group2 Sha1 Exchange. In the context of SSH this is known as Group1.
     /// </summary>
-    internal sealed class DiffieHellmanGroup1Sha1 : DiffieHellmanKeyExchange
+    public sealed class DiffieHellmanGroup1Sha1 : DiffieHellmanKeyExchange
     {
         internal DiffieHellmanGroup1Sha1(KexContext context, KexInitExchangeResult kexInitExchangeResult)
             : base(context, kexInitExchangeResult) { }

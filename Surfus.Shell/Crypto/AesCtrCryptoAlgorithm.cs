@@ -3,7 +3,7 @@ using Surfus.Shell.Crypto.AesCtr;
 
 namespace Surfus.Shell.Crypto
 {
-    internal sealed class AesCtrCryptoAlgorithm : CryptoServiceProviderAlgorithm
+    public sealed class AesCtrCryptoAlgorithm : CryptoServiceProviderAlgorithm
     {
         /// <summary>
         /// Creates an AES CTR crypto algorithm.

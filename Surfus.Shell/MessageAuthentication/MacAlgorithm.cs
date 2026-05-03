@@ -2,7 +2,7 @@
 
 namespace Surfus.Shell.MessageAuthentication
 {
-    internal abstract class MacAlgorithm
+    public abstract class MacAlgorithm
     {
         public abstract int KeySize { get; protected set; }
         public abstract int OutputSize { get; }

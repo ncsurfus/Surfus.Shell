@@ -2,7 +2,7 @@
 
 namespace Surfus.Shell.Extensions
 {
-    public class NameList
+    internal class NameList
     {
         // Reference: https://tools.ietf.org/html/rfc4251#page-10
         public NameList(params string[] names)

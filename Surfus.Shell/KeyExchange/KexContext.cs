@@ -6,7 +6,7 @@ namespace Surfus.Shell.KeyExchange
     /// Carries the dependencies needed by key exchange algorithms,
     /// decoupling them from SshClient.
     /// </summary>
-    internal class KexContext
+    public class KexContext
     {
         internal SshMessageInbox Inbox { get; }
         internal string ClientVersion { get; }

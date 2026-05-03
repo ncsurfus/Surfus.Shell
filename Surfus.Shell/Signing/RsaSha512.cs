@@ -7,7 +7,7 @@ namespace Surfus.Shell.Signing
     {
         private string certificateNameType = "ssh-rsa";
 
-        public RsaSha512(byte[] publicCertificate)
+        internal RsaSha512(byte[] publicCertificate)
         {
             var reader = new ByteReader(publicCertificate);
             if (certificateNameType != reader.ReadString())

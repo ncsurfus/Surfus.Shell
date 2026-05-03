@@ -1,6 +1,6 @@
 ﻿namespace Surfus.Shell.MessageAuthentication
 {
-    internal sealed class NoMessageAuthentication : MacAlgorithm
+    public sealed class NoMessageAuthentication : MacAlgorithm
     {
         public override int KeySize { get; protected set; } = 0;
         public override int OutputSize { get; } = 0;

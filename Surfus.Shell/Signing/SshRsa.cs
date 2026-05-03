@@ -5,7 +5,7 @@ namespace Surfus.Shell.Signing
 {
     public sealed class SshRsa : Signer
     {
-        public SshRsa(byte[] publicCertificate)
+        internal SshRsa(byte[] publicCertificate)
         {
             var reader = new ByteReader(publicCertificate);
             if (Name != reader.ReadString())

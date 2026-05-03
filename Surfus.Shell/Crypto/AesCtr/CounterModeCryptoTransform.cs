@@ -13,7 +13,7 @@ namespace Surfus.Shell.Crypto.AesCtr
         private readonly Queue<byte> _xorMask = new Queue<byte>();
         private readonly SymmetricAlgorithm _symmetricAlgorithm;
 
-        public CounterModeCryptoTransform(SymmetricAlgorithm symmetricAlgorithm, byte[] key, byte[] counter)
+        internal CounterModeCryptoTransform(SymmetricAlgorithm symmetricAlgorithm, byte[] key, byte[] counter)
         {
             if (symmetricAlgorithm == null)
             {

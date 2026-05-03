@@ -4,7 +4,7 @@ namespace Surfus.Shell.Signing
 {
     public sealed class ECDsaSha2Nistp521 : ECDsaBase
     {
-        public ECDsaSha2Nistp521(byte[] publicCertificate)
+        internal ECDsaSha2Nistp521(byte[] publicCertificate)
             : base(publicCertificate) { }
 
         public override string Name { get; } = "ecdsa-sha2-nistp521";

@@ -13,7 +13,7 @@ namespace Surfus.Shell.KeyExchange
     /// <summary>
     /// Serves as the base for all key exchange algorithms.
     /// </summary>
-    internal abstract class KeyExchangeAlgorithm
+    public abstract class KeyExchangeAlgorithm
     {
         private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
 

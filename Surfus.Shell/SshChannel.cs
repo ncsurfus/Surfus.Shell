@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
@@ -7,7 +8,11 @@ using Surfus.Shell.Messages.Channel;
 
 namespace Surfus.Shell
 {
-    internal class SshChannel : IMessageHandler, IAsyncDisposable
+    /// <summary>
+    /// Represents an SSH channel with stdin/stdout/stderr streams.
+    /// Obtain via <see cref="SshClient.CreateChannelAsync"/>.
+    /// </summary>
+    public class SshChannel : IMessageHandler, IAsyncDisposable
     {
         internal readonly SshMessageInbox Inbox = new();
         internal IDisposable Registration { get; set; }
@@ -17,9 +22,33 @@ namespace Surfus.Shell
         internal int ReceiveWindow { get; set; }
         internal uint ServerId { get; set; }
         internal uint ClientId { get; }
-        internal bool IsOpen { get; private set; }
 
-        internal bool CombineStderr { get; set; }
+        /// <summary>
+        /// Whether the channel is still open.
+        /// </summary>
+        public bool IsOpen { get; private set; }
+
+        /// <summary>
+        /// When true, stderr data is interleaved into StandardOutput.
+        /// Must be set before data starts flowing.
+        /// </summary>
+        public bool CombineStderr { get; set; }
+
+        /// <summary>
+        /// Writable stream to send data to the remote side.
+        /// Dispose to send EOF.
+        /// </summary>
+        public Stream StandardInput => Stdin;
+
+        /// <summary>
+        /// Readable stream of stdout data from the remote side.
+        /// </summary>
+        public Stream StandardOutput => Stdout;
+
+        /// <summary>
+        /// Readable stream of stderr data from the remote side.
+        /// </summary>
+        public Stream StandardError => Stderr;
 
         internal readonly ChannelStream Stdout = new();
         internal readonly ChannelStream Stderr = new();
@@ -29,14 +58,7 @@ namespace Surfus.Shell
         private readonly CancellationTokenSource _pumpCts = new();
         private Task _pumpTask;
 
-        /// <summary>
-        /// Set by RequestAsync, completed by the pump when ChannelSuccess/ChannelFailure arrives.
-        /// </summary>
         private TaskCompletionSource<bool> _pendingRequest;
-
-        /// <summary>
-        /// Signaled by the pump when SendWindow becomes non-zero.
-        /// </summary>
         private TaskCompletionSource _sendWindowAvailable = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         internal SshChannel(uint channelId)
@@ -47,41 +69,45 @@ namespace Surfus.Shell
             Stderr.OnConsumed = OnBytesConsumed;
         }
 
-        private void StartMessagePump()
+        /// <summary>
+        /// Sends a channel request and waits for the server's success/failure reply.
+        /// </summary>
+        public async Task RequestAsync(ChannelRequest requestMessage, CancellationToken cancellationToken)
         {
-            _pumpTask = Task.Run(async () =>
-            {
-                try
-                {
-                    while (IsOpen)
-                    {
-                        var msg = await Inbox.ReadAsync(_pumpCts.Token).ConfigureAwait(false);
-                        ProcessMessage(msg);
-                    }
-                }
-                catch (OperationCanceledException) { }
-                catch (SshException) { }
-                finally
-                {
-                    Stdout.Complete();
-                    Stderr.Complete();
-                    _pendingRequest?.TrySetException(new SshException("Channel closed."));
-                    _sendWindowAvailable.TrySetResult();
-                }
-            });
+            _pendingRequest = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            await Inbox.SendAsync(requestMessage, cancellationToken).ConfigureAwait(false);
+
+            using var reg = cancellationToken.Register(() => _pendingRequest.TrySetCanceled(cancellationToken));
+            var success = await _pendingRequest.Task.ConfigureAwait(false);
+            _pendingRequest = null;
+
+            if (!success)
+                throw new SshException("Server had channel request failure.");
         }
 
-        private void OnBytesConsumed(int count)
+        /// <summary>
+        /// Sends an arbitrary message on this channel.
+        /// </summary>
+        public async Task SendMessageAsync(IClientMessage message, CancellationToken cancellationToken)
         {
-            _consumedBytes += count;
-            if (_consumedBytes >= WindowRefill)
+            await Inbox.SendAsync(message, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Closes the channel.
+        /// </summary>
+        public async Task CloseAsync(CancellationToken cancellationToken)
+        {
+            if (IsOpen)
             {
-                var toRefill = _consumedBytes;
-                _consumedBytes = 0;
-                _ = Inbox.SendAsync(new ChannelWindowAdjust(ServerId, (uint)toRefill), CancellationToken.None);
+                await Inbox.SendAsync(new ChannelClose(ServerId), cancellationToken).ConfigureAwait(false);
+                IsOpen = false;
             }
         }
 
+        /// <summary>
+        /// Disposes the channel, stopping the message pump and completing streams.
+        /// </summary>
         public async ValueTask DisposeAsync()
         {
             _pumpCts.Cancel();
@@ -96,12 +122,13 @@ namespace Surfus.Shell
             _pumpCts.Dispose();
         }
 
+        // --- Internal: framework plumbing ---
+
         internal async Task OpenAsync(ChannelOpen openMessage, CancellationToken cancellationToken)
         {
             ReceiveWindow = (int)openMessage.InitialWindowSize;
             await Inbox.SendAsync(openMessage, cancellationToken).ConfigureAwait(false);
 
-            // Read directly before pump starts.
             while (true)
             {
                 var msg = await Inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
@@ -117,19 +144,6 @@ namespace Surfus.Shell
                         throw new SshException("Server refused to open channel.");
                 }
             }
-        }
-
-        internal async Task RequestAsync(ChannelRequest requestMessage, CancellationToken cancellationToken)
-        {
-            _pendingRequest = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            await Inbox.SendAsync(requestMessage, cancellationToken).ConfigureAwait(false);
-
-            using var reg = cancellationToken.Register(() => _pendingRequest.TrySetCanceled(cancellationToken));
-            var success = await _pendingRequest.Task.ConfigureAwait(false);
-            _pendingRequest = null;
-
-            if (!success)
-                throw new SshException("Server had channel request failure.");
         }
 
         internal async Task WriteDataAsync(byte[] buffer, CancellationToken cancellationToken)
@@ -165,18 +179,39 @@ namespace Surfus.Shell
             await Inbox.SendAsync(new ChannelEof(ServerId), cancellationToken).ConfigureAwait(false);
         }
 
-        internal async Task CloseAsync(CancellationToken cancellationToken)
+        private void StartMessagePump()
         {
-            if (IsOpen)
+            _pumpTask = Task.Run(async () =>
             {
-                await Inbox.SendAsync(new ChannelClose(ServerId), cancellationToken).ConfigureAwait(false);
-                IsOpen = false;
-            }
+                try
+                {
+                    while (IsOpen)
+                    {
+                        var msg = await Inbox.ReadAsync(_pumpCts.Token).ConfigureAwait(false);
+                        ProcessMessage(msg);
+                    }
+                }
+                catch (OperationCanceledException) { }
+                catch (SshException) { }
+                finally
+                {
+                    Stdout.Complete();
+                    Stderr.Complete();
+                    _pendingRequest?.TrySetException(new SshException("Channel closed."));
+                    _sendWindowAvailable.TrySetResult();
+                }
+            });
         }
 
-        internal async Task SendMessageAsync(IClientMessage message, CancellationToken cancellationToken)
+        private void OnBytesConsumed(int count)
         {
-            await Inbox.SendAsync(message, cancellationToken).ConfigureAwait(false);
+            _consumedBytes += count;
+            if (_consumedBytes >= WindowRefill)
+            {
+                var toRefill = _consumedBytes;
+                _consumedBytes = 0;
+                _ = Inbox.SendAsync(new ChannelWindowAdjust(ServerId, (uint)toRefill), CancellationToken.None);
+            }
         }
 
         private void ProcessMessage(MessageEvent msg)
@@ -227,14 +262,14 @@ namespace Surfus.Shell
             ReceiveWindow -= Math.Min(data.Length, ReceiveWindow);
         }
 
-        public Func<IClientMessage, CancellationToken, Task> OnSend { set => Inbox.OnSend = value; }
+        Func<IClientMessage, CancellationToken, Task> IMessageHandler.OnSend { set => Inbox.OnSend = value; }
 
-        public async ValueTask ProcessMessageAsync(MessageEvent messageEvent)
+        async ValueTask IMessageHandler.ProcessMessageAsync(MessageEvent messageEvent)
         {
             if (messageEvent.Message is IChannelRecipient r && r.RecipientChannel == ClientId)
                 await Inbox.DeliverAsync(messageEvent).ConfigureAwait(false);
         }
 
-        public void OnError(Exception error) => Inbox.OnError(error);
+        void IMessageHandler.OnError(Exception error) => Inbox.OnError(error);
     }
 }

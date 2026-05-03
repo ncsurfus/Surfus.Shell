@@ -223,6 +223,18 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// AuthenticateAsync authenticates to the SSH server with the specified username and authentication method.
+        /// </summary>
+        public async Task AuthenticateAsync(string username, IAuthMethod authMethod, CancellationToken cancellationToken)
+        {
+            if (!IsConnected) ThrowOnInvalidState();
+            var auth = EnsureAuthentication();
+            using var _ = RegisterMessageHandler(auth);
+            await auth.LoginAsync(username, authMethod, cancellationToken).ConfigureAwait(false);
+            _sshClientState = State.Authenticated;
+        }
+
+        /// <summary>
         /// AuthenticateAsync authenticates to the SSH server with the specific username and interactive login callback.
         /// </summary>
         /// <param name="username">The username to login as</param>
@@ -290,6 +302,29 @@ namespace Surfus.Shell
             using var _ = RegisterMessageHandler(auth);
             await auth.LoginAsync(username, new AgentAuth(agent, key), cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
+        }
+
+        /// <summary>
+        /// Creates a raw SSH channel. Use this to build custom channel types (subsystems, tunnels, etc.).
+        /// The channel is opened as a session and ready for requests.
+        /// </summary>
+        /// <param name="cancellationToken">The cancellation token used to cancel the channel request</param>
+        /// <returns>An opened SSH channel</returns>
+        public async Task<SshChannel> CreateChannelAsync(CancellationToken cancellationToken)
+        {
+            if (!IsConnected)
+            {
+                ThrowOnInvalidState();
+            }
+
+            var channel = new SshChannel(_channelCounter);
+            channel.Registration = RegisterMessageHandler(channel);
+
+            _disposables.Add(channel);
+            _channelCounter++;
+
+            await channel.OpenAsync(new Messages.Channel.Open.ChannelOpenSession(channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
+            return channel;
         }
 
         /// <summary>

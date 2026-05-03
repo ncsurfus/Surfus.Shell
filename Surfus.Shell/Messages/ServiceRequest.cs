@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages
 {
-    public class ServiceRequest : IClientMessage
+    internal class ServiceRequest : IClientMessage
     {
         public ServiceRequest(string serviceName)
         {

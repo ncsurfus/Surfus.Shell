@@ -7,12 +7,12 @@ namespace Surfus.Shell.Authentication
     /// <summary>
     /// A delegate for sending SSH messages.
     /// </summary>
-    internal delegate Task SendMessageAsync(IClientMessage message, CancellationToken cancellationToken);
+    public delegate Task SendMessageAsync(IClientMessage message, CancellationToken cancellationToken);
 
     /// <summary>
     /// Defines an SSH authentication method.
     /// </summary>
-    internal interface IAuthMethod
+    public interface IAuthMethod
     {
         /// <summary>
         /// Returns the initial authentication request message to send.

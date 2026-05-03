@@ -5,7 +5,7 @@ namespace Surfus.Shell.Crypto
     /// <summary>
     /// Provides triple des crypto.
     /// </summary>
-    internal sealed class TripleDesCryptoAlgorithm : CryptoServiceProviderAlgorithm
+    public sealed class TripleDesCryptoAlgorithm : CryptoServiceProviderAlgorithm
     {
         /// <summary>
         /// Creates a triple des CBC with zero padding.
@@ -22,7 +22,7 @@ namespace Surfus.Shell.Crypto
         /// <summary>
         /// Creates a triple DES algorithm.
         /// </summary>
-        public TripleDesCryptoAlgorithm()
+        internal TripleDesCryptoAlgorithm()
             : base(CreateTripleDesCbcZeroPadding()) { }
 
         /// <summary>

@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.UserAuth
 {
-    public class UaRequest : IClientMessage
+    internal class UaRequest : IClientMessage
     {
         public UaRequest(string username, string serviceName, string methodName, string password)
         {

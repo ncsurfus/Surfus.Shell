@@ -7,7 +7,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
     /// <summary>
     /// Implements the Diffie-Hellman Group18 Sha512 Exchange.
     /// </summary>
-    internal sealed class DiffieHellmanGroup18Sha512 : DiffieHellmanKeyExchange
+    public sealed class DiffieHellmanGroup18Sha512 : DiffieHellmanKeyExchange
     {
         internal DiffieHellmanGroup18Sha512(KexContext context, KexInitExchangeResult kexInitExchangeResult)
             : base(context, kexInitExchangeResult) { }

@@ -5,7 +5,7 @@ namespace Surfus.Shell.Signing
 {
     public abstract class ECDsaBase : Signer
     {
-        public ECDsaBase(byte[] publicCertificate)
+        internal ECDsaBase(byte[] publicCertificate)
         {
             var reader = new ByteReader(publicCertificate);
             if (Name != reader.ReadString())

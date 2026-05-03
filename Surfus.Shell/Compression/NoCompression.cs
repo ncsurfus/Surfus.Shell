@@ -3,7 +3,7 @@
     /// <summary>
     /// This class implements no compression algorithm. The data is simply returned.
     /// </summary>
-    internal class NoCompression : CompressionAlgorithm
+    public class NoCompression : CompressionAlgorithm
     {
         /// <summary>
         /// Disposes the CompressionAlgorithm.

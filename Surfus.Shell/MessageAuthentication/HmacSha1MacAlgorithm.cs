@@ -3,7 +3,7 @@ using System;
 
 namespace Surfus.Shell.MessageAuthentication
 {
-    internal sealed class HmacSha1MacAlgorithm : MacAlgorithm
+    public sealed class HmacSha1MacAlgorithm : MacAlgorithm
     {
         private HMACSHA1 _macProvider;
 

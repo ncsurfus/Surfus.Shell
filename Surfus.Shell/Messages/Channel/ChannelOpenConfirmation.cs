@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelOpenConfirmation : IMessage, IChannelRecipient
+    internal class ChannelOpenConfirmation : IMessage, IChannelRecipient
     {
         public ChannelOpenConfirmation(SshPacket packet)
         {

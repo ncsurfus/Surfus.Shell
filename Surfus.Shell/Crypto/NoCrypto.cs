@@ -9,7 +9,7 @@ namespace Surfus.Shell.Crypto
     /// <summary>
     /// Represents no crypto algorithm.
     /// </summary>
-    internal class NoCrypto : CryptoAlgorithm
+    public class NoCrypto : CryptoAlgorithm
     {
         /// <summary>
         /// The minimum cipher block size specified by SSH.

@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelClose : IClientMessage, IChannelRecipient
+    internal class ChannelClose : IClientMessage, IChannelRecipient
     {
         public ChannelClose(SshPacket packet)
         {

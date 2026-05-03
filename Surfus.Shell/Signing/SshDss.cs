@@ -6,9 +6,9 @@ using System.Numerics;
 
 namespace Surfus.Shell.Signing
 {
-    internal sealed class SshDss : Signer
+    public sealed class SshDss : Signer
     {
-        public SshDss(byte[] signature)
+        internal SshDss(byte[] signature)
         {
             var reader = new ByteReader(signature);
             if (Name != reader.ReadString())

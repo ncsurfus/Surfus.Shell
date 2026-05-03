@@ -10,7 +10,7 @@ namespace Surfus.Shell.Crypto
     /// <summary>
     /// The base class for all crypto algorithms.
     /// </summary>
-    internal abstract class CryptoAlgorithm : IDisposable
+    public abstract class CryptoAlgorithm : IDisposable
     {
         /// <summary>
         /// Supported crypto algorithms.

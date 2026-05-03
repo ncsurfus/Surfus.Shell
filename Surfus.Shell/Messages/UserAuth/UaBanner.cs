@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.UserAuth
 {
-    public class UaBanner : IMessage
+    internal class UaBanner : IMessage
     {
         public UaBanner(SshPacket packet)
         {

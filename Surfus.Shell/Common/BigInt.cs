@@ -5,7 +5,7 @@ namespace Surfus.Shell
     /// <summary>
     /// Represents a BigInteger and any associated buffers.
     /// </summary>
-    internal class BigInt
+    public class BigInt
     {
         /// <summary>
         /// This should be the only type accessed directly outside of ByteReader/ByteWriter
@@ -22,21 +22,21 @@ namespace Surfus.Shell
         /// </summary>
         internal int Length { get; }
 
-        public BigInt(BigInteger bigInteger, byte[] buffer, int length)
+        internal BigInt(BigInteger bigInteger, byte[] buffer, int length)
         {
             BigInteger = bigInteger;
             Buffer = buffer;
             Length = length;
         }
 
-        public BigInt(byte[] buffer)
+        internal BigInt(byte[] buffer)
         {
             BigInteger = new BigInteger(buffer);
             Buffer = buffer;
             Length = Buffer.Length;
         }
 
-        public BigInt(BigInteger bigInteger)
+        internal BigInt(BigInteger bigInteger)
         {
             BigInteger = bigInteger;
             Buffer = bigInteger.ToByteArray();

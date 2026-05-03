@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.UserAuth
 {
-    public class UaInfoRequest : IMessage
+    internal class UaInfoRequest : IMessage
     {
         public UaInfoRequest(SshPacket packet)
         {

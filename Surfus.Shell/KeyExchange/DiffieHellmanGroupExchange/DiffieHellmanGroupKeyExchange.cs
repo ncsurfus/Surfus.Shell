@@ -13,7 +13,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
     /// <summary>
     /// Implements the Diffie-Hellman Group Exchange.
     /// </summary>
-    internal class DiffieHellmanGroupKeyExchange : KeyExchangeAlgorithm
+    public class DiffieHellmanGroupKeyExchange : KeyExchangeAlgorithm
     {
         /// <summary>
         /// The maximum group size.

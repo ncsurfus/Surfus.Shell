@@ -11,7 +11,7 @@ using System.Linq;
 namespace Surfus.Shell.Messages.KeyExchange
 {
     // Reference: https://tools.ietf.org/html/rfc4253#section-7.1
-    public class KexInit : IClientMessage
+    internal class KexInit : IClientMessage
     {
         private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
 

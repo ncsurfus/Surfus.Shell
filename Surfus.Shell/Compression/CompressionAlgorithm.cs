@@ -6,7 +6,7 @@ namespace Surfus.Shell.Compression
     /// <summary>
     /// Servers as the base for all compression algorithms.
     /// </summary>
-    internal abstract class CompressionAlgorithm : IDisposable
+    public abstract class CompressionAlgorithm : IDisposable
     {
         /// <summary>
         /// Supported compression algorithms.

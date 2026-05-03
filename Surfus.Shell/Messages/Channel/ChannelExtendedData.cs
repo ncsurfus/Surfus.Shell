@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelExtendedData : IClientMessage, IChannelRecipient
+    internal class ChannelExtendedData : IClientMessage, IChannelRecipient
     {
         [SuppressMessage("ReSharper", "InconsistentNaming")]
         public enum DataType : uint

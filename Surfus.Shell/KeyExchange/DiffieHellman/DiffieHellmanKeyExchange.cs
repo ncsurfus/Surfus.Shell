@@ -13,7 +13,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
     /// <summary>
     /// Implements the Diffie-Hellman Exchange.
     /// </summary>
-    internal abstract class DiffieHellmanKeyExchange : KeyExchangeAlgorithm
+    public abstract class DiffieHellmanKeyExchange : KeyExchangeAlgorithm
     {
         private readonly KexContext _context;
         private readonly KexInitExchangeResult _kexInitExchangeResult;

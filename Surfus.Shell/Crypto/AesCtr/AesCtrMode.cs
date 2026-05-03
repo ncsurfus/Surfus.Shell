@@ -9,7 +9,7 @@ namespace Surfus.Shell.Crypto.AesCtr
     {
         private readonly Aes _aes;
 
-        public AesCtrMode(int keySize)
+        internal AesCtrMode(int keySize)
         {
             _aes = Aes.Create();
             _aes.KeySize = keySize;

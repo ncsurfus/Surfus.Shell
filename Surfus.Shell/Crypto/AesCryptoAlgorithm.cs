@@ -2,7 +2,7 @@
 
 namespace Surfus.Shell.Crypto
 {
-    internal sealed class AesCryptoAlgorithm : CryptoServiceProviderAlgorithm
+    public sealed class AesCryptoAlgorithm : CryptoServiceProviderAlgorithm
     {
         /// <summary>
         /// Creates an AES Crypto CBC algorithm with zero padding.

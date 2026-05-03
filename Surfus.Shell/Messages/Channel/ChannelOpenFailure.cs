@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelOpenFailure : IMessage, IChannelRecipient
+    internal class ChannelOpenFailure : IMessage, IChannelRecipient
     {
         public ChannelOpenFailure(SshPacket packet)
         {

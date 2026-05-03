@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelSuccess : IMessage, IChannelRecipient
+    internal class ChannelSuccess : IMessage, IChannelRecipient
     {
         public ChannelSuccess(SshPacket packet)
         {
