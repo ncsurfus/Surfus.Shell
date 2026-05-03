@@ -140,7 +140,7 @@ public class KexInitExchangeResultTests
         string[] compressionC2S, string[] compressionS2C)
     {
         // Build a KexInit by serializing and deserializing through a packet
-        var kexInit = new KexInit();
+        var kexInit = new KexInit(new SshAlgorithms());
 
         // We can't easily set properties on KexInit since they're get-only.
         // Instead, build a wire-format packet and parse it.

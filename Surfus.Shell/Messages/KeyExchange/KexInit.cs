@@ -15,19 +15,19 @@ namespace Surfus.Shell.Messages.KeyExchange
     {
         private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
 
-        public KexInit()
+        public KexInit(SshAlgorithms algorithms)
         {
             RandomBytes = new byte[16];
             RandomGenerator.GetBytes(RandomBytes);
 
-            KexAlgorithms = new NameList(KeyExchangeAlgorithm.Supported);
-            ServerHostKeyAlgorithms = new NameList(Signer.Supported);
-            EncryptionClientToServer = new NameList(CryptoAlgorithm.Supported);
-            EncryptionServerToClient = new NameList(CryptoAlgorithm.Supported);
-            MacClientToServer = new NameList(MacAlgorithm.Supported);
-            MacServerToClient = new NameList(MacAlgorithm.Supported);
-            CompressionClientToServer = new NameList(CompressionAlgorithm.Supported);
-            CompressionServerToClient = new NameList(CompressionAlgorithm.Supported);
+            KexAlgorithms = new NameList(algorithms.KeyExchangeNames);
+            ServerHostKeyAlgorithms = new NameList(algorithms.HostKeyNames);
+            EncryptionClientToServer = new NameList(algorithms.EncryptionNames);
+            EncryptionServerToClient = new NameList(algorithms.EncryptionNames);
+            MacClientToServer = new NameList(algorithms.MacNames);
+            MacServerToClient = new NameList(algorithms.MacNames);
+            CompressionClientToServer = new NameList(algorithms.CompressionNames);
+            CompressionServerToClient = new NameList(algorithms.CompressionNames);
             LanguagesClientToServer = new NameList();
             LanguagesServerToClient = new NameList();
         }

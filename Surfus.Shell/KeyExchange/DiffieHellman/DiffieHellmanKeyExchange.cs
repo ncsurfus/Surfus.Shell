@@ -112,7 +112,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             var k = new BigInt(BigInteger.ModPow(reply.F.BigInteger, X.BigInteger, P.BigInteger));
 
             // Prepare the signing algorithm from the servers public key.
-            var signingAlgorithm = Signer.CreateSigner(
+            var signingAlgorithm = _context.Algorithms.CreateSigner(
                 _kexInitExchangeResult.ServerHostKeyAlgorithm,
                 reply.ServerPublicHostKeyAndCertificates
             );

@@ -9,27 +9,6 @@ namespace Surfus.Shell.Compression
     public abstract class CompressionAlgorithm : IDisposable
     {
         /// <summary>
-        /// Supported compression algorithms.
-        /// </summary>
-        internal static string[] Supported => new[] { "none" };
-
-        /// <summary>
-        /// Creates the specified compression algorithm.
-        /// </summary>
-        /// <param name="name">
-        /// The name of the compression algorithm.
-        /// </param>
-        internal static CompressionAlgorithm Create(string name)
-        {
-            if (name == "none")
-            {
-                return new NoCompression();
-            }
-
-            throw new SshException("Compression algorithm not supported");
-        }
-
-        /// <summary>
         /// Compresses the data.
         /// </summary>
         /// <param name="data">

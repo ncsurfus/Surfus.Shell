@@ -135,6 +135,11 @@ namespace Surfus.Shell
         public Func<byte[], bool> HostKeyCallback { get; set; }
 
         /// <summary>
+        /// Configures which algorithms are offered during key exchange. Defaults to all supported algorithms.
+        /// </summary>
+        public SshAlgorithms Algorithms { get; init; } = new();
+
+        /// <summary>
         /// An SshClient that can connect designated hostname and port.
         /// </summary>
         /// <param name="hostname">The remote SSH Server.</param>
@@ -162,7 +167,7 @@ namespace Surfus.Shell
             _sshClientState = State.Connecting;
 
             // Set SshClient defaults
-            ConnectionInfo.KeyExchanger = new SshKeyExchanger(ConnectionInfo, HostKeyCallback);
+            ConnectionInfo.KeyExchanger = new SshKeyExchanger(ConnectionInfo, HostKeyCallback, Algorithms);
             ConnectionInfo.KeyExchanger.OnSend = WriteMessageAsync;
 
             // Perform version exchange and key exchange

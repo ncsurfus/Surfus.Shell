@@ -16,54 +16,6 @@ namespace Surfus.Shell.KeyExchange
     public abstract class KeyExchangeAlgorithm
     {
         private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
-
-        /// <summary>
-        /// Supported key exchange algorithms.
-        /// </summary>
-        internal static string[] Supported =>
-            new[]
-            {
-                "diffie-hellman-group-exchange-sha256",
-                "diffie-hellman-group14-sha256",
-                "diffie-hellman-group16-sha512",
-                "diffie-hellman-group18-sha512",
-                "diffie-hellman-group-exchange-sha1",
-                "diffie-hellman-group14-sha1",
-                "diffie-hellman-group1-sha1",
-            };
-
-        /// <summary>
-        /// Creates the specified key exchange algorithm.
-        /// </summary>
-        /// <param name="client">
-        /// The key exchange context.
-        /// </param>
-        /// <param name="exchangeResult">
-        /// The result of the KexInit exchange.
-        /// </param>
-        internal static KeyExchangeAlgorithm Create(KexContext context, KexInitExchangeResult exchangeResult)
-        {
-            switch (exchangeResult.KeyExchangeAlgorithm)
-            {
-                case "diffie-hellman-group18-sha512":
-                    return new DiffieHellmanGroup18Sha512(context, exchangeResult);
-                case "diffie-hellman-group16-sha512":
-                    return new DiffieHellmanGroup16Sha512(context, exchangeResult);
-                case "diffie-hellman-group14-sha256":
-                    return new DiffieHellmanGroup14Sha256(context, exchangeResult);
-                case "diffie-hellman-group-exchange-sha256":
-                    return new DiffieHellmanGroupKeyExchange(context, exchangeResult, "SHA256");
-                case "diffie-hellman-group-exchange-sha1":
-                    return new DiffieHellmanGroupKeyExchange(context, exchangeResult, "SHA1");
-                case "diffie-hellman-group14-sha1":
-                    return new DiffieHellmanGroup14Sha1(context, exchangeResult);
-                case "diffie-hellman-group1-sha1":
-                    return new DiffieHellmanGroup1Sha1(context, exchangeResult);
-                default:
-                    throw new SshException($"Key Exchange type {exchangeResult.KeyExchangeAlgorithm} is not supported");
-            }
-        }
-
         public abstract Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken);
 
         protected static bool KexThrowIfNotMessageType(MessageEvent messageEvent, MessageType expectedMessageType)

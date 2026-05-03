@@ -16,15 +16,17 @@ namespace Surfus.Shell
     {
         private readonly SshConnectionInfo _connectionInfo;
         private readonly Func<byte[], bool> _hostKeyCallback;
+        private readonly SshAlgorithms _algorithms;
         private readonly SshMessageInbox _inbox = new();
         private readonly TaskCompletionSource _ready = new();
         private readonly TaskCompletionSource _initialKexComplete = new();
         private readonly Channel<Action> _newReadKeys = Channel.CreateUnbounded<Action>();
 
-        internal SshKeyExchanger(SshConnectionInfo connectionInfo, Func<byte[], bool> hostKeyCallback)
+        internal SshKeyExchanger(SshConnectionInfo connectionInfo, Func<byte[], bool> hostKeyCallback, SshAlgorithms algorithms)
         {
             _connectionInfo = connectionInfo;
             _hostKeyCallback = hostKeyCallback;
+            _algorithms = algorithms;
         }
 
         internal Task Ready => _ready.Task;
@@ -65,15 +67,15 @@ namespace Surfus.Shell
             {
                 var serverKexInit = await ReadKexInitAsync(cancellationToken).ConfigureAwait(false);
 
-                var clientKexInit = new KexInit();
+                var clientKexInit = new KexInit(_algorithms);
                 await _inbox.SendAsync(clientKexInit, cancellationToken).ConfigureAwait(false);
 
                 var kexResult = new KexInitExchangeResult(clientKexInit, serverKexInit);
                 var kexContext = new KexContext(
                     _inbox,
                     _connectionInfo.ClientVersion, _connectionInfo.ServerVersion,
-                    _hostKeyCallback);
-                var kexAlgorithm = KeyExchangeAlgorithm.Create(kexContext, kexResult);
+                    _hostKeyCallback, _algorithms);
+                var kexAlgorithm = _algorithms.CreateKeyExchange(kexResult.KeyExchangeAlgorithm, kexContext, kexResult);
 
                 var (h, k) = await kexAlgorithm.ExchangeAsync(cancellationToken).ConfigureAwait(false);
 
@@ -104,9 +106,9 @@ namespace Surfus.Shell
 
         private void ApplyWriteCrypto(Memory<byte> sessionId, Memory<byte> h, BigInt k, KeyExchangeAlgorithm kex, KexInitExchangeResult result)
         {
-            _connectionInfo.WriteCompressionAlgorithm = CompressionAlgorithm.Create(result.CompressionClientToServer);
-            _connectionInfo.WriteCryptoAlgorithm = CryptoAlgorithm.Create(result.EncryptionClientToServer);
-            _connectionInfo.WriteMacAlgorithm = MacAlgorithm.Create(result.MessageAuthenticationClientToServer);
+            _connectionInfo.WriteCompressionAlgorithm = _algorithms.CreateCompression(result.CompressionClientToServer);
+            _connectionInfo.WriteCryptoAlgorithm = _algorithms.CreateEncryption(result.EncryptionClientToServer);
+            _connectionInfo.WriteMacAlgorithm = _algorithms.CreateMac(result.MessageAuthenticationClientToServer);
 
             var iv = kex.GenerateKey(h, k, 'A', sessionId, _connectionInfo.WriteCryptoAlgorithm.InitializationVectorSize);
             var key = kex.GenerateKey(h, k, 'C', sessionId, _connectionInfo.WriteCryptoAlgorithm.KeySize);
@@ -118,9 +120,9 @@ namespace Surfus.Shell
 
         private Action CreateReadCrypto(Memory<byte> sessionId, Memory<byte> h, BigInt k, KeyExchangeAlgorithm kex, KexInitExchangeResult result)
         {
-            var readCompression = CompressionAlgorithm.Create(result.CompressionServerToClient);
-            var readCrypto = CryptoAlgorithm.Create(result.EncryptionServerToClient);
-            var readMac = MacAlgorithm.Create(result.MessageAuthenticationServerToClient);
+            var readCompression = _algorithms.CreateCompression(result.CompressionServerToClient);
+            var readCrypto = _algorithms.CreateEncryption(result.EncryptionServerToClient);
+            var readMac = _algorithms.CreateMac(result.MessageAuthenticationServerToClient);
 
             var iv = kex.GenerateKey(h, k, 'B', sessionId, readCrypto.InitializationVectorSize);
             var key = kex.GenerateKey(h, k, 'D', sessionId, readCrypto.KeySize);
