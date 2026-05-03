@@ -1,4 +1,4 @@
-﻿using Surfus.Shell.Cisco.Exceptions;
+using Surfus.Shell.Cisco.Exceptions;
 using Surfus.Shell.Exceptions;
 using System;
 using System.Text.RegularExpressions;
