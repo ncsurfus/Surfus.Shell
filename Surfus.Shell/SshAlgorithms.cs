@@ -13,7 +13,7 @@ namespace Surfus.Shell
     /// <summary>
     /// Describes an SSH algorithm by its wire name and a factory to create instances.
     /// </summary>
-    public class AlgorithmDescriptor<T>
+    public record AlgorithmDescriptor<T>
     {
         /// <summary>
         /// The SSH wire name (e.g., "aes256-ctr").
@@ -39,7 +39,7 @@ namespace Surfus.Shell
     /// <summary>
     /// Describes a host key algorithm that requires the server's public key to construct.
     /// </summary>
-    public class SignerDescriptor
+    public record SignerDescriptor
     {
         public string Name { get; }
         internal Func<byte[], Signer> Factory { get; }
@@ -56,7 +56,7 @@ namespace Surfus.Shell
     /// <summary>
     /// Describes a key exchange algorithm that requires context to construct.
     /// </summary>
-    public class KeyExchangeDescriptor
+    public record KeyExchangeDescriptor
     {
         public string Name { get; }
         internal Func<KexContext, KexInitExchangeResult, KeyExchangeAlgorithm> Factory { get; }

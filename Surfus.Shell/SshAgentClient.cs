@@ -10,7 +10,7 @@ namespace Surfus.Shell
     /// <summary>
     /// Represents a public key held by the SSH agent.
     /// </summary>
-    public class SshAgentKey
+    public record SshAgentKey
     {
         public byte[] KeyBlob { get; }
         public string Comment { get; }

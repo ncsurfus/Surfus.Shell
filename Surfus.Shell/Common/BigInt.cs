@@ -5,7 +5,7 @@ namespace Surfus.Shell
     /// <summary>
     /// Represents a BigInteger and any associated buffers.
     /// </summary>
-    public class BigInt
+    public record BigInt
     {
         /// <summary>
         /// This should be the only type accessed directly outside of ByteReader/ByteWriter
