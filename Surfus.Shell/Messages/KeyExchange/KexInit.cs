@@ -1,17 +1,11 @@
 using System;
-using Surfus.Shell.Compression;
-using Surfus.Shell.Crypto;
 using Surfus.Shell.Extensions;
-using Surfus.Shell.KeyExchange;
-using Surfus.Shell.MessageAuthentication;
-using Surfus.Shell.Signing;
 using System.Security.Cryptography;
-using System.Linq;
 
 namespace Surfus.Shell.Messages.KeyExchange
 {
     // Reference: https://tools.ietf.org/html/rfc4253#section-7.1
-    internal class KexInit : IClientMessage
+    internal record KexInit : IClientMessage
     {
         private static readonly RandomNumberGenerator RandomGenerator = RandomNumberGenerator.Create();
 
@@ -30,11 +24,12 @@ namespace Surfus.Shell.Messages.KeyExchange
             CompressionServerToClient = new NameList(algorithms.CompressionNames);
             LanguagesClientToServer = new NameList();
             LanguagesServerToClient = new NameList();
+
+            Bytes = ComputeBytes();
         }
 
         internal KexInit(SshPacket packet)
         {
-            // Backup the start position we can also grab the message id in the segement.
             var startPosition = packet.Reader.Position - 1;
             RandomBytes = packet.Reader.Read(16);
             KexAlgorithms = packet.Reader.ReadNameList();
@@ -48,55 +43,32 @@ namespace Surfus.Shell.Messages.KeyExchange
             LanguagesClientToServer = packet.Reader.ReadNameList();
             LanguagesServerToClient = packet.Reader.ReadNameList();
             FirstKexPacketFollows = packet.Reader.ReadBoolean();
-            // Add 4 to end position to grab the last uint32 that is to be ignored.
-            _bytes = new ArraySegment<byte>(packet.Reader.Bytes, startPosition, packet.Reader.Position - startPosition + 4);
+            Bytes = new ArraySegment<byte>(packet.Reader.Bytes, startPosition, packet.Reader.Position - startPosition + 4).ToArray();
         }
 
         public NameList CompressionClientToServer { get; }
-
         public NameList CompressionServerToClient { get; }
-
         public NameList EncryptionClientToServer { get; }
-
         public NameList EncryptionServerToClient { get; }
-
         public bool FirstKexPacketFollows { get; }
-
         public NameList KexAlgorithms { get; }
-
         public NameList LanguagesClientToServer { get; }
-
         public NameList LanguagesServerToClient { get; }
-
         public NameList MacClientToServer { get; }
-
         public NameList MacServerToClient { get; }
-
         public byte[] RandomBytes { get; }
-
         public NameList ServerHostKeyAlgorithms { get; }
-
         public MessageType Type => MessageType.SSH_MSG_KEXINIT;
-
         public byte MessageId => (byte)Type;
 
-        private ArraySegment<byte> _bytes { get; set; }
-
-        public byte[] GetBytes()
-        {
-            if (_bytes.Array != null)
-            {
-                return _bytes.ToArray();
-            }
-            var byteWriter = new ByteWriter(GetSize());
-            WriteBytes(byteWriter);
-            _bytes = new ArraySegment<byte>(byteWriter.Bytes);
-            return byteWriter.Bytes;
-        }
+        /// <summary>
+        /// The raw bytes of this KexInit message (used for key exchange hash computation).
+        /// </summary>
+        public byte[] Bytes { get; }
 
         public ByteWriter GetByteWriter()
         {
-            var writer = new ByteWriter(Type, GetSize() - 1); // Take off the initial message size.
+            var writer = new ByteWriter(Type, GetSize() - 1);
             writer.WriteByteBlob(RandomBytes);
             writer.WriteNameList(KexAlgorithms);
             writer.WriteNameList(ServerHostKeyAlgorithms);
@@ -133,12 +105,12 @@ namespace Surfus.Shell.Messages.KeyExchange
 
         internal void WriteBytes(ByteWriter writer)
         {
-            if (_bytes.Array != null)
-            {
-                writer.WriteByteBlob(_bytes);
-                return;
-            }
-            var start = writer.Position;
+            writer.WriteByteBlob(Bytes);
+        }
+
+        private byte[] ComputeBytes()
+        {
+            var writer = new ByteWriter(GetSize());
             writer.WriteByte(MessageId);
             writer.WriteByteBlob(RandomBytes);
             writer.WriteNameList(KexAlgorithms);
@@ -153,7 +125,7 @@ namespace Surfus.Shell.Messages.KeyExchange
             writer.WriteNameList(LanguagesServerToClient);
             writer.WriteByte(FirstKexPacketFollows ? (byte)1 : (byte)0);
             writer.WriteUint(0);
-            _bytes = new ArraySegment<byte>(writer.Bytes, start, writer.Position - start);
+            return writer.Bytes;
         }
     }
 }

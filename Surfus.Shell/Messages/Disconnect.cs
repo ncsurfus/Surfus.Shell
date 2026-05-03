@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Surfus.Shell.Messages
 {
-    internal class Disconnect : IClientMessage
+    internal record Disconnect : IClientMessage
     {
         [SuppressMessage("ReSharper", "InconsistentNaming")]
         internal enum DisconnectReason : uint

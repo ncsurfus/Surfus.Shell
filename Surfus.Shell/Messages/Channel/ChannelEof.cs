@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel
 {
-    internal class ChannelEof : IClientMessage, IChannelRecipient
+    internal record ChannelEof : IClientMessage, IChannelRecipient
     {
         public ChannelEof(SshPacket packet)
         {

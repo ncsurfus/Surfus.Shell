@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages
 {
-    internal class Ignore : IClientMessage
+    internal record Ignore : IClientMessage
     {
         public Ignore(SshPacket packet)
         {

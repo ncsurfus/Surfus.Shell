@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel.Requests
 {
-    internal class ChannelRequestPseudoTerminal : ChannelRequest
+    internal record ChannelRequestPseudoTerminal : ChannelRequest
     {
         public ChannelRequestPseudoTerminal(SshPacket packet, uint recipientChannel)
             : base(packet, "pty-req", recipientChannel)

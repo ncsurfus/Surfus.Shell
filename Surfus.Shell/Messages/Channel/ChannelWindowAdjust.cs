@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel
 {
-    internal class ChannelWindowAdjust : IClientMessage, IChannelRecipient
+    internal record ChannelWindowAdjust : IClientMessage, IChannelRecipient
     {
         public ChannelWindowAdjust(SshPacket packet)
         {

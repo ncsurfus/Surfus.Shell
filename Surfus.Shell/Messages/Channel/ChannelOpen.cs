@@ -2,7 +2,7 @@ using Surfus.Shell.Messages.Channel.Open;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    internal class ChannelOpen : IClientMessage
+    internal record ChannelOpen : IClientMessage
     {
         protected ChannelOpen(SshPacket packet, string channelType)
         {

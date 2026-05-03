@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel.Requests
 {
-    internal class ChannelRequestWindowChange : ChannelRequest
+    internal record ChannelRequestWindowChange : ChannelRequest
     {
         public ChannelRequestWindowChange(
             uint recipientChannel,

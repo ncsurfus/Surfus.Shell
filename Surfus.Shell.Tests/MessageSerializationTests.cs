@@ -71,7 +71,7 @@ public class MessageSerializationTests
     public void KexInit_RoundTrip()
     {
         var original = new Messages.KeyExchange.KexInit(new SshAlgorithms());
-        var bytes = original.GetBytes();
+        var bytes = original.Bytes;
 
         // Build a packet buffer: [0..3]=packetSize, [4]=paddingLen, [5..]=payload
         var buffer = new byte[5 + bytes.Length];

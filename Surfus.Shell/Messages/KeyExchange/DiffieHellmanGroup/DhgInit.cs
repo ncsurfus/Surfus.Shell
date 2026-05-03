@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
 {
-    internal class DhgInit : IClientMessage
+    internal record DhgInit : IClientMessage
     {
         public DhgInit(BigInt e)
         {

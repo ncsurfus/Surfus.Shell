@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages
 {
-    internal class ServiceAccept : IMessage
+    internal record ServiceAccept : IMessage
     {
         public ServiceAccept(SshPacket packet)
         {

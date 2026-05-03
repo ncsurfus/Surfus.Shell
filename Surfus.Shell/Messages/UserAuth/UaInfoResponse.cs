@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.UserAuth
 {
-    internal class UaInfoResponse : IClientMessage
+    internal record UaInfoResponse : IClientMessage
     {
         public UaInfoResponse(uint promptNumber, string[] responses)
         {

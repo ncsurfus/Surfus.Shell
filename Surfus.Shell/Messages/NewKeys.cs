@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages
 {
-    internal class NewKeys : IClientMessage
+    internal record NewKeys : IClientMessage
     {
         public MessageType Type { get; } = MessageType.SSH_MSG_NEWKEYS;
         public byte MessageId => (byte)Type;

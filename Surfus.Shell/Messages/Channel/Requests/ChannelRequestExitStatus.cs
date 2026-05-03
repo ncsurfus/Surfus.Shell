@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel.Requests
 {
-    internal class ChannelRequestExitStatus : ChannelRequest
+    internal record ChannelRequestExitStatus : ChannelRequest
     {
         public ChannelRequestExitStatus(SshPacket packet, uint recipientChannel)
             : base(packet, "exec", recipientChannel)

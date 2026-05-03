@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel
 {
-    internal class ChannelFailure : IClientMessage, IChannelRecipient
+    internal record ChannelFailure : IClientMessage, IChannelRecipient
     {
         public ChannelFailure(SshPacket packet)
         {

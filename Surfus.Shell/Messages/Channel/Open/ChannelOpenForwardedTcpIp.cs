@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel.Open
 {
-    internal class ChannelOpenForwardedTcpIp : ChannelOpen
+    internal record ChannelOpenForwardedTcpIp : ChannelOpen
     {
         public ChannelOpenForwardedTcpIp(SshPacket packet)
             : base(packet, "forwarded-tcpip")

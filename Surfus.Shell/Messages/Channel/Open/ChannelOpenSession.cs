@@ -1,6 +1,6 @@
 ﻿namespace Surfus.Shell.Messages.Channel.Open
 {
-    internal class ChannelOpenSession : ChannelOpen
+    internal record ChannelOpenSession : ChannelOpen
     {
         public ChannelOpenSession(SshPacket packet)
             : base(packet, "session") { }

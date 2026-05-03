@@ -2,7 +2,7 @@ using Surfus.Shell.Messages.Channel.Requests;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    public class ChannelRequest : IClientMessage, IChannelRecipient
+    public record ChannelRequest : IClientMessage, IChannelRecipient
     {
         protected ChannelRequest(SshPacket packet, string requestType, uint recipientChannel)
         {

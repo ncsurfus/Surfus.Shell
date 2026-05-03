@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
 {
-    internal class DhgRequest : IClientMessage
+    internal record DhgRequest : IClientMessage
     {
         public DhgRequest(uint min, uint n, uint max)
         {

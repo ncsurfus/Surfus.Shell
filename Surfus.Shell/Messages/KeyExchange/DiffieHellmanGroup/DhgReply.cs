@@ -1,6 +1,6 @@
 ﻿namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
 {
-    internal class DhgReply : IMessage
+    internal record DhgReply : IMessage
     {
         internal DhgReply(SshPacket packet)
         {

@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel.Open
 {
-    internal class ChannelOpenX11 : ChannelOpen
+    internal record ChannelOpenX11 : ChannelOpen
     {
         public ChannelOpenX11(SshPacket packet)
             : base(packet, "x11")
