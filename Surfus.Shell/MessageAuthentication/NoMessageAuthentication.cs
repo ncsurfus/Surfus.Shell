@@ -2,7 +2,7 @@
 {
     public sealed class NoMessageAuthentication : MacAlgorithm
     {
-        public override int KeySize { get; protected set; } = 0;
+        public override int KeySize => 0;
         public override int OutputSize { get; } = 0;
 
         public override void Initialize(byte[] key) { }

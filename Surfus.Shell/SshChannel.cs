@@ -32,7 +32,7 @@ namespace Surfus.Shell
         /// When true, stderr data is interleaved into StandardOutput.
         /// Must be set before data starts flowing.
         /// </summary>
-        public bool CombineStderr { get; set; }
+        public bool CombineStderr { get; init; }
 
         /// <summary>
         /// Writable stream to send data to the remote side.

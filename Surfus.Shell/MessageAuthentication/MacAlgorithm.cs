@@ -4,7 +4,7 @@ namespace Surfus.Shell.MessageAuthentication
 {
     public abstract class MacAlgorithm
     {
-        public abstract int KeySize { get; protected set; }
+        public abstract int KeySize { get; }
         public abstract int OutputSize { get; }
         public abstract void Initialize(byte[] key);
 

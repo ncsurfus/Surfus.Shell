@@ -102,8 +102,7 @@ public class SshIntegrationTests
         await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());
-        var command = await client.CreateCommandAsync(Timeout());
-        command.CombineStderr = true;
+        var command = await client.CreateCommandAsync(Timeout(), combineStderr: true);
         await command.StartAsync("echo out && echo err >&2", Timeout());
         var stdout = await ReadAllAsync(command.StandardOutput, Timeout());
         var stderr = await ReadAllAsync(command.StandardError, Timeout());
@@ -169,8 +168,7 @@ public class SshIntegrationTests
     {
         await using var server = await SshTestServer.StartAsync();
         byte[]? receivedKey = null;
-        await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
-        client.HostKeyCallback = key => { receivedKey = key; return true; };
+        await using var client = new SshClient("127.0.0.1", (ushort)server.Port) { HostKeyCallback = key => { receivedKey = key; return true; } };
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());
         Assert.NotNull(receivedKey);
@@ -181,8 +179,7 @@ public class SshIntegrationTests
     public async Task HostKeyCallback_RejectDisconnects()
     {
         await using var server = await SshTestServer.StartAsync();
-        await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
-        client.HostKeyCallback = _ => false;
+        await using var client = new SshClient("127.0.0.1", (ushort)server.Port) { HostKeyCallback = _ => false };
         await Assert.ThrowsAsync<Exceptions.SshException>(
             () => client.ConnectAsync(Timeout()));
     }

@@ -19,7 +19,7 @@ namespace Surfus.Shell
         /// When true, stderr data is interleaved into StandardOutput.
         /// Must be set before calling StartAsync.
         /// </summary>
-        public bool CombineStderr { get; set; }
+        public bool CombineStderr { get; init; }
 
         /// <summary>
         /// Writable stream to send data to the remote process stdin.
@@ -61,7 +61,6 @@ namespace Surfus.Shell
             if (_commandState != State.Opened)
                 throw new Exception("Command is not opened.");
 
-            _channel.CombineStderr = CombineStderr;
             await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken).ConfigureAwait(false);
 
             _commandState = State.Started;

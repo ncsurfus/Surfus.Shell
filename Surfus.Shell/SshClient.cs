@@ -122,7 +122,7 @@ namespace Surfus.Shell
         /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
         /// </summary>
-        public SshConnectionInfo ConnectionInfo { get; } = new SshConnectionInfo();
+        public SshConnectionInfo ConnectionInfo { get; }
 
         /// <summary>
         /// Banner holds the banner message sent by the SSH server after login. If null, no banner was sent.
@@ -132,7 +132,7 @@ namespace Surfus.Shell
         /// <summary>
         /// When set, calls this callback function to determine if the host key is valid and if the connection should continue.
         /// </summary>
-        public Func<byte[], bool> HostKeyCallback { get; set; }
+        public Func<byte[], bool> HostKeyCallback { get; init; }
 
         /// <summary>
         /// Configures which algorithms are offered during key exchange. Defaults to all supported algorithms.
@@ -146,8 +146,7 @@ namespace Surfus.Shell
         /// <param name="port">The remote SSH port.</param>
         public SshClient(string hostname, ushort port = 22)
         {
-            ConnectionInfo.Hostname = hostname;
-            ConnectionInfo.Port = port;
+            ConnectionInfo = new SshConnectionInfo { Hostname = hostname, Port = port };
         }
 
         /// <summary>
@@ -361,7 +360,7 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="cancellationToken">The cancellation token used to cancel the terminal request</param>
         /// <returns>A task representing the state of the terminal request</returns>
-        public async Task<SshCommand> CreateCommandAsync(CancellationToken cancellationToken)
+        public async Task<SshCommand> CreateCommandAsync(CancellationToken cancellationToken, bool combineStderr = false)
         {
             // Validate current state of SshClient
             if (!IsConnected)
@@ -369,9 +368,9 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            var channel = new SshChannel(_channelCounter);
+            var channel = new SshChannel(_channelCounter) { CombineStderr = combineStderr };
             channel.Registration = RegisterMessageHandler(channel);
-            var command = new SshCommand(channel);
+            var command = new SshCommand(channel) { CombineStderr = combineStderr };
 
             _disposables.Add(command);
             _channelCounter++;

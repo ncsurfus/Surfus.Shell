@@ -13,17 +13,17 @@ namespace Surfus.Shell
         /// <summary>
         /// The provided hostname of the server.
         /// </summary>
-        public string Hostname { get; internal set; }
+        public string Hostname { get; internal init; }
 
         /// <summary>
         /// The port that was connected to.
         /// </summary>
-        public ushort Port { get; internal set; }
+        public ushort Port { get; internal init; }
 
         /// <summary>
         /// Our SSH client version.
         /// </summary>
-        public string ClientVersion { get; internal set; } = "SSH-2.0-Surfus-1.00";
+        public string ClientVersion { get; internal init; } = "SSH-2.0-Surfus-1.00";
 
         /// <summary>
         /// The SSH version sent by the server.

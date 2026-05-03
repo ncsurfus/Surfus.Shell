@@ -7,7 +7,7 @@ namespace Surfus.Shell.MessageAuthentication
     {
         private HMACSHA256 _macProvider;
 
-        public override int KeySize { get; protected set; } = 32;
+        public override int KeySize => 32;
         public override int OutputSize => 32;
 
         public override void Initialize(byte[] key)
