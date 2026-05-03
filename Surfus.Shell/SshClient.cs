@@ -34,7 +34,7 @@ namespace Surfus.Shell
         /// <summary>
         /// _disposables holds a list of the disposable objects.
         /// </summary>
-        private readonly List<IDisposable> _disposables = new List<IDisposable>();
+        private readonly List<IAsyncDisposable> _disposables = new List<IAsyncDisposable>();
 
         /// <summary>
         /// _isDisposed holds the disposed state of the SshClient.
@@ -93,12 +93,13 @@ namespace Surfus.Shell
                 handler.OnError(error);
         }
 
-        private sealed class HandlerRegistration : IDisposable
+        private sealed class HandlerRegistration : IDisposable, IAsyncDisposable
         {
             private readonly SshClient _client;
             private readonly IMessageHandler _handler;
             public HandlerRegistration(SshClient client, IMessageHandler handler) { _client = client; _handler = handler; }
             public void Dispose() => _client.UnregisterMessageHandler(_handler);
+            public ValueTask DisposeAsync() { Dispose(); return default; }
         }
 
         /// <summary>
@@ -168,7 +169,7 @@ namespace Surfus.Shell
             ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
 
             // Register key exchanger to receive kex-related messages
-            _disposables.Add(RegisterMessageHandler(ConnectionInfo.KeyExchanger));
+            _disposables.Add((IAsyncDisposable)RegisterMessageHandler(ConnectionInfo.KeyExchanger));
 
             var keyExchangeTask = ConnectionInfo.KeyExchanger.HandleKeyExchangeAsync(cancellationToken);
             await ConnectionInfo.KeyExchanger.Ready.ConfigureAwait(false);
@@ -502,7 +503,7 @@ namespace Surfus.Shell
             // Deliver to registered message handlers
             var handlers = _messageHandlers;
             foreach (var handler in handlers)
-                handler.ProcessMessage(messageEvent);
+                await handler.ProcessMessageAsync(messageEvent).ConfigureAwait(false);
 
             // After delivering SSH_MSG_NEWKEYS, wait for the key exchanger
             // to provide the new read-side crypto before reading the next packet.
@@ -568,12 +569,6 @@ namespace Surfus.Shell
             if (!_isDisposed)
             {
                 _isDisposed = true;
-
-                foreach (var disposable in _disposables)
-                {
-                    disposable.Dispose();
-                }
-
                 _sshClientState = State.Closed;
                 ConnectionInfo.Dispose();
                 _tcpStream?.Dispose();
@@ -618,6 +613,12 @@ namespace Surfus.Shell
         public async ValueTask DisposeAsync()
         {
             _closeCts.Cancel();
+
+            foreach (var disposable in _disposables)
+            {
+                try { await disposable.DisposeAsync().ConfigureAwait(false); } catch { }
+            }
+
             Close();
             if (_readLoop != null)
             {

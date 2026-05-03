@@ -9,11 +9,21 @@ namespace Surfus.Shell
 {
     internal class SshMessageInbox : IDisposable
     {
-        private readonly Channel<MessageEvent> _channel = Channel.CreateUnbounded<MessageEvent>();
+        private readonly Channel<MessageEvent> _channel;
+
+        internal SshMessageInbox(int capacity = 64)
+        {
+            _channel = Channel.CreateBounded<MessageEvent>(new BoundedChannelOptions(capacity)
+            {
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = true
+            });
+        }
 
         internal Func<IClientMessage, CancellationToken, Task> OnSend { get; set; }
 
-        internal void Deliver(MessageEvent message) => _channel.Writer.TryWrite(message);
+        internal ValueTask DeliverAsync(MessageEvent message, CancellationToken cancellationToken = default)
+            => _channel.Writer.WriteAsync(message, cancellationToken);
 
         internal void Complete(Exception error = null) => _channel.Writer.TryComplete(error);
 

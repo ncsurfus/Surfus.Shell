@@ -120,7 +120,7 @@ namespace Surfus.Shell
 
         public Func<IClientMessage, CancellationToken, Task> OnSend { set => _inbox.OnSend = value; }
 
-        public void ProcessMessage(MessageEvent messageEvent) => _inbox.Deliver(messageEvent);
+        public ValueTask ProcessMessageAsync(MessageEvent messageEvent) => _inbox.DeliverAsync(messageEvent);
 
         public void OnError(Exception error) => _inbox.OnError(error);
 

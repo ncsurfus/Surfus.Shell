@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace Surfus.Shell.Tests;
@@ -107,7 +108,10 @@ public class SshAgentIntegrationTests : IAsyncLifetime
         await client.AuthenticateAsync("testuser", agent, keys[0], Timeout());
 
         var command = await client.CreateCommandAsync(Timeout());
-        var result = await command.ExecuteAsync("echo agent-works", Timeout());
+        await command.StartAsync("echo agent-works", Timeout());
+        var ms = new MemoryStream();
+        await command.StandardOutput.CopyToAsync(ms, Timeout());
+        var result = System.Text.Encoding.UTF8.GetString(ms.ToArray());
         Assert.Contains("agent-works", result);
     }
 

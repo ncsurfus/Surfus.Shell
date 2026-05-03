@@ -44,8 +44,8 @@ public class SshAuthenticationTests
         var task = auth.LoginAsync("user", new PasswordAuth("pass"), CancellationToken.None);
 
         // Simulate: server sends ServiceAccept, then Success
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_USERAUTH_SUCCESS));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_USERAUTH_SUCCESS));
 
         await task;
 
@@ -61,8 +61,8 @@ public class SshAuthenticationTests
         var auth = CreateAuth();
         var task = auth.LoginAsync("user", new PasswordAuth("wrong"), CancellationToken.None);
 
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_USERAUTH_FAILURE));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_USERAUTH_FAILURE));
 
         await Assert.ThrowsAsync<SshInvalidCredentials>(() => task);
     }
@@ -74,15 +74,15 @@ public class SshAuthenticationTests
 
         // First attempt: fails
         var task1 = auth.LoginAsync("user", new PasswordAuth("wrong"), CancellationToken.None);
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_USERAUTH_FAILURE));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_USERAUTH_FAILURE));
         await Assert.ThrowsAsync<SshInvalidCredentials>(() => task1);
 
         _sent.Clear();
 
         // Second attempt: should NOT send ServiceRequest again
         var task2 = auth.LoginAsync("user", new PasswordAuth("right"), CancellationToken.None);
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_USERAUTH_SUCCESS));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_USERAUTH_SUCCESS));
         await task2;
 
         // Only the auth request, no service request
@@ -102,11 +102,11 @@ public class SshAuthenticationTests
 
         var task = auth.LoginAsync("user", methods, CancellationToken.None);
 
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
         // First method fails
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_USERAUTH_FAILURE));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_USERAUTH_FAILURE));
         // Second method succeeds
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_USERAUTH_SUCCESS));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_USERAUTH_SUCCESS));
 
         await task;
 
@@ -126,9 +126,9 @@ public class SshAuthenticationTests
 
         var task = auth.LoginAsync("user", methods, CancellationToken.None);
 
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_USERAUTH_FAILURE));
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_USERAUTH_FAILURE));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_USERAUTH_FAILURE));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_USERAUTH_FAILURE));
 
         await Assert.ThrowsAsync<SshInvalidCredentials>(() => task);
     }
@@ -146,13 +146,13 @@ public class SshAuthenticationTests
         var auth = CreateAuth();
         var task = auth.LoginAsync("user", method, CancellationToken.None);
 
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
 
         // Simulate INFO_REQUEST (message 60) with a prompt
-        auth.ProcessMessage(FakeInfoRequest("Password: "));
+        await auth.ProcessMessageAsync(FakeInfoRequest("Password: "));
 
         // Then success
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_USERAUTH_SUCCESS));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_USERAUTH_SUCCESS));
 
         await task;
 
@@ -170,9 +170,9 @@ public class SshAuthenticationTests
 
         var task = auth.LoginAsync("user", new PasswordAuth("pass"), CancellationToken.None);
 
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
-        auth.ProcessMessage(FakeBanner("Welcome!"));
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_USERAUTH_SUCCESS));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
+        await auth.ProcessMessageAsync(FakeBanner("Welcome!"));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_USERAUTH_SUCCESS));
 
         await task;
 
@@ -185,8 +185,8 @@ public class SshAuthenticationTests
         var auth = CreateAuth();
         var task = auth.LoginAsync("user", new PasswordAuth("pass"), CancellationToken.None);
 
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
-        auth.ProcessMessage(FakeDisconnect());
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
+        await auth.ProcessMessageAsync(FakeDisconnect());
 
         await Assert.ThrowsAsync<SshDisconnectException>(() => task);
     }
@@ -199,7 +199,7 @@ public class SshAuthenticationTests
 
         var task = auth.LoginAsync("user", new PasswordAuth("pass"), cts.Token);
 
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
         // Cancel before server responds
         cts.Cancel();
 
@@ -212,7 +212,7 @@ public class SshAuthenticationTests
         var auth = CreateAuth();
         var task = auth.LoginAsync("user", new PasswordAuth("pass"), CancellationToken.None);
 
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
 
         // Simulate read loop dying with an IOException
         auth.OnError(new System.IO.IOException("connection reset"));
@@ -227,7 +227,7 @@ public class SshAuthenticationTests
         var auth = CreateAuth();
         var task = auth.LoginAsync("user", new PasswordAuth("pass"), CancellationToken.None);
 
-        auth.ProcessMessage(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
+        await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
         auth.OnError(null);
 
         await Assert.ThrowsAsync<Exceptions.SshException>(() => task);

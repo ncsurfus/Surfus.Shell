@@ -1,3 +1,6 @@
+using System.IO;
+using System.Text;
+
 namespace Surfus.Shell.Tests;
 
 public class SshIntegrationTests
@@ -7,6 +10,13 @@ public class SshIntegrationTests
 
     private static CancellationToken Timeout(int seconds = 10)
         => new CancellationTokenSource(TimeSpan.FromSeconds(seconds)).Token;
+
+    private static async Task<string> ReadAllAsync(Stream stream, CancellationToken ct)
+    {
+        var ms = new MemoryStream();
+        await stream.CopyToAsync(ms, ct);
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
 
     // --- Auth ---
 
@@ -47,11 +57,9 @@ public class SshIntegrationTests
         await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
         await client.ConnectAsync(Timeout());
 
-        // First attempt fails
         await Assert.ThrowsAsync<Exceptions.SshInvalidCredentials>(
             () => client.AuthenticateAsync(User, "wrong", Timeout()));
 
-        // Second attempt succeeds without reconnecting
         await client.AuthenticateAsync(User, Pass, Timeout());
         Assert.True(client.IsConnected);
     }
@@ -66,8 +74,9 @@ public class SshIntegrationTests
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());
         var command = await client.CreateCommandAsync(Timeout());
-        var result = await command.ExecuteAsync("echo hello", Timeout());
-        Assert.Contains("hello", result);
+        await command.StartAsync("echo hello", Timeout());
+        var stdout = await ReadAllAsync(command.StandardOutput, Timeout());
+        Assert.Contains("hello", stdout);
     }
 
     [Fact]
@@ -78,10 +87,12 @@ public class SshIntegrationTests
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());
         var command = await client.CreateCommandAsync(Timeout());
-        var result = await command.ExecuteWithResultAsync("echo out && echo err >&2", Timeout());
-        Assert.Contains("out", result.Stdout);
-        Assert.Contains("err", result.Stderr);
-        Assert.DoesNotContain("err", result.Stdout);
+        await command.StartAsync("echo out && echo err >&2", Timeout());
+        var stdout = await ReadAllAsync(command.StandardOutput, Timeout());
+        var stderr = await ReadAllAsync(command.StandardError, Timeout());
+        Assert.Contains("out", stdout);
+        Assert.Contains("err", stderr);
+        Assert.DoesNotContain("err", stdout);
     }
 
     [Fact]
@@ -93,10 +104,12 @@ public class SshIntegrationTests
         await client.AuthenticateAsync(User, Pass, Timeout());
         var command = await client.CreateCommandAsync(Timeout());
         command.CombineStderr = true;
-        var result = await command.ExecuteWithResultAsync("echo out && echo err >&2", Timeout());
-        Assert.Contains("out", result.Stdout);
-        Assert.Contains("err", result.Stdout);
-        Assert.Empty(result.Stderr);
+        await command.StartAsync("echo out && echo err >&2", Timeout());
+        var stdout = await ReadAllAsync(command.StandardOutput, Timeout());
+        var stderr = await ReadAllAsync(command.StandardError, Timeout());
+        Assert.Contains("out", stdout);
+        Assert.Contains("err", stdout);
+        Assert.Empty(stderr);
     }
 
     [Fact]
@@ -107,9 +120,11 @@ public class SshIntegrationTests
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());
         var command = await client.CreateCommandAsync(Timeout());
-        var result = await command.ExecuteWithResultAsync("echo err >&2", Timeout());
-        Assert.Contains("err", result.Stderr);
-        Assert.Empty(result.Stdout);
+        await command.StartAsync("echo err >&2", Timeout());
+        var stdout = await ReadAllAsync(command.StandardOutput, Timeout());
+        var stderr = await ReadAllAsync(command.StandardError, Timeout());
+        Assert.Contains("err", stderr);
+        Assert.Empty(stdout);
     }
 
     [Fact]
@@ -120,9 +135,10 @@ public class SshIntegrationTests
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());
         var terminal = await client.CreateTerminalAsync(Timeout());
-        // Just verify we can read something from the shell
-        var data = await terminal.ReadAsync(Timeout());
-        Assert.False(string.IsNullOrEmpty(data));
+        // Read some initial output from the shell
+        var buf = new byte[4096];
+        var n = await terminal.StandardOutput.ReadAsync(buf, 0, buf.Length, Timeout());
+        Assert.True(n > 0);
     }
 
     [Fact]
@@ -133,12 +149,17 @@ public class SshIntegrationTests
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());
         var terminal = await client.CreateTerminalAsync(Timeout());
-        await terminal.ReadAsync(Timeout());
-        // Send window-change and verify the terminal still works after
+        // Read initial prompt
+        var buf = new byte[4096];
+        await terminal.StandardOutput.ReadAsync(buf, 0, buf.Length, Timeout());
+        // Send window-change and verify the terminal still works
         await terminal.SendWindowChangeAsync(120, 40, Timeout());
-        await terminal.WriteLineAsync("hello", Timeout());
-        var data = await terminal.ReadAsync(Timeout());
-        Assert.Contains("hello", data);
+        var data = Encoding.UTF8.GetBytes("hello\n");
+        await terminal.StandardInput.WriteAsync(data, 0, data.Length, Timeout());
+        await terminal.StandardInput.FlushAsync(Timeout());
+        var n = await terminal.StandardOutput.ReadAsync(buf, 0, buf.Length, Timeout());
+        var output = Encoding.UTF8.GetString(buf, 0, n);
+        Assert.Contains("hello", output);
     }
 
     // --- Host key ---
@@ -189,7 +210,6 @@ public class SshIntegrationTests
     [InlineData("diffie-hellman-group1-sha1")]
     [InlineData("diffie-hellman-group-exchange-sha256")]
     [InlineData("diffie-hellman-group-exchange-sha1")]
-    // group18-sha512 not tested: Go's x/crypto/ssh doesn't implement it
     public async Task KexAlgorithm(string kex)
     {
         await using var server = await SshTestServer.StartAsync(kex: kex);

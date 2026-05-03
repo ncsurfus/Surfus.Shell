@@ -8,7 +8,7 @@ namespace Surfus.Shell
     internal interface IMessageHandler
     {
         Func<IClientMessage, CancellationToken, Task> OnSend { set; }
-        void ProcessMessage(MessageEvent messageEvent);
+        ValueTask ProcessMessageAsync(MessageEvent messageEvent);
         void OnError(Exception error);
     }
 }

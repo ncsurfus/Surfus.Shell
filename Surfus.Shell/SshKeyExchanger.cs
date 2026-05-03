@@ -139,11 +139,11 @@ namespace Surfus.Shell
 
         public Func<IClientMessage, CancellationToken, Task> OnSend { set => _inbox.OnSend = value; }
 
-        public void ProcessMessage(MessageEvent messageEvent)
+        public async ValueTask ProcessMessageAsync(MessageEvent messageEvent)
         {
             var id = (int)messageEvent.Type;
             if (id >= 20 && id <= 49)
-                _inbox.Deliver(messageEvent);
+                await _inbox.DeliverAsync(messageEvent).ConfigureAwait(false);
         }
         public void OnError(Exception error) => _inbox.OnError(error);
     }
