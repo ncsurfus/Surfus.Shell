@@ -29,7 +29,7 @@ namespace Surfus.Shell
         /// <summary>
         /// _channelCounter holds the current channel index used to derive new channel IDs.
         /// </summary>
-        private uint _channelCounter;
+        private int _channelCounter;
 
         /// <summary>
         /// _disposables holds a list of the disposable objects.
@@ -321,11 +321,10 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            var channel = new SshChannel(_channelCounter);
+            var channel = new SshChannel((uint)Interlocked.Increment(ref _channelCounter));
             channel.Registration = RegisterMessageHandler(channel);
 
             _disposables.Add(channel);
-            _channelCounter++;
 
             await channel.OpenAsync(new Messages.Channel.Open.ChannelOpenSession(channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
             return channel;
@@ -344,12 +343,11 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            var channel = new SshChannel(_channelCounter);
+            var channel = new SshChannel((uint)Interlocked.Increment(ref _channelCounter));
             channel.Registration = RegisterMessageHandler(channel);
             var terminal = new SshTerminal(channel);
 
             _disposables.Add(terminal);
-            _channelCounter++;
 
             await terminal.OpenAsync(cancellationToken).ConfigureAwait(false);
             return terminal;
@@ -368,12 +366,11 @@ namespace Surfus.Shell
                 ThrowOnInvalidState();
             }
 
-            var channel = new SshChannel(_channelCounter) { CombineStderr = combineStderr };
+            var channel = new SshChannel((uint)Interlocked.Increment(ref _channelCounter)) { CombineStderr = combineStderr };
             channel.Registration = RegisterMessageHandler(channel);
             var command = new SshCommand(channel) { CombineStderr = combineStderr };
 
             _disposables.Add(command);
-            _channelCounter++;
 
             await command.OpenAsync(cancellationToken).ConfigureAwait(false);
             return command;
