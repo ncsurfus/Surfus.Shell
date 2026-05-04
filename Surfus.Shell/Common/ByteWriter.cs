@@ -122,7 +122,7 @@ namespace Surfus.Shell
         /// Writes an unsigned integer to the byte array.
         /// </summary>
         /// <param name="value"></param>
-        internal static void WriteUint(byte[] bytes, int position, uint value)
+        internal static void WriteUint(Span<byte> bytes, int position, uint value)
         {
             if (BitConverter.IsLittleEndian)
             {

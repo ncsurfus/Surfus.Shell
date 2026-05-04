@@ -265,23 +265,23 @@ namespace Surfus.Shell
             switch (msg.Message)
             {
                 case ChannelData data:
-                    HandleReceiveWindow(data.Data);
-                    Stdout.Push(data.Data, 0, data.Data.Length);
+                    HandleReceiveWindow(data.Data.Length);
+                    Stdout.Push(data.Data);
                     break;
 
                 case ChannelExtendedData extData:
-                    HandleReceiveWindow(extData.Data);
+                    HandleReceiveWindow(extData.Data.Length);
                     if (CombineStderr)
-                        Stdout.Push(extData.Data, 0, extData.Data.Length);
+                        Stdout.Push(extData.Data);
                     else
-                        Stderr.Push(extData.Data, 0, extData.Data.Length);
+                        Stderr.Push(extData.Data);
                     break;
             }
         }
 
-        private void HandleReceiveWindow(byte[] data)
+        private void HandleReceiveWindow(int dataLength)
         {
-            ReceiveWindow -= Math.Min(data.Length, ReceiveWindow);
+            ReceiveWindow -= Math.Min(dataLength, ReceiveWindow);
         }
 
         private void DequeueRequest(bool success)

@@ -43,7 +43,7 @@ namespace Surfus.Shell.Messages.KeyExchange
             LanguagesClientToServer = packet.Reader.ReadNameList();
             LanguagesServerToClient = packet.Reader.ReadNameList();
             FirstKexPacketFollows = packet.Reader.ReadBoolean();
-            Bytes = new ArraySegment<byte>(packet.Reader.Bytes, startPosition, packet.Reader.Position - startPosition + 4).ToArray();
+            Bytes = packet.Reader.Bytes.Slice(startPosition, packet.Reader.Position - startPosition + 4).ToArray();
         }
 
         public NameList CompressionClientToServer { get; }

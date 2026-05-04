@@ -41,18 +41,17 @@ namespace Surfus.Shell
         /// <summary>
         /// Pushes data into the stream for consumers to read.
         /// </summary>
-        internal void Push(byte[] data, int offset, int count)
+        internal void Push(ReadOnlySpan<byte> data)
         {
-            if (count == 0) return;
+            if (data.Length == 0) return;
 
-            // Append to existing buffer
-            var newBuffer = new byte[_count + count];
+            var newBuffer = new byte[_count + data.Length];
             if (_count > 0)
                 Array.Copy(_buffer, _offset, newBuffer, 0, _count);
-            Array.Copy(data, offset, newBuffer, _count, count);
+            data.CopyTo(newBuffer.AsSpan(_count));
             _buffer = newBuffer;
             _offset = 0;
-            _count += count;
+            _count += data.Length;
 
             _dataAvailable.Release();
         }
