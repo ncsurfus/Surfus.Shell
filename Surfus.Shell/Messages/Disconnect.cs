@@ -4,7 +4,6 @@ namespace Surfus.Shell.Messages
 {
     internal record Disconnect : IClientMessage
     {
-        [SuppressMessage("ReSharper", "InconsistentNaming")]
         internal enum DisconnectReason : uint
         {
             SSH_DISCONNECT_HOST_NOT_ALLOWED_TO_CONNECT = 1,

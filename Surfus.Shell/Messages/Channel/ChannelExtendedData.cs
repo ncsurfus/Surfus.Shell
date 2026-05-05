@@ -5,7 +5,6 @@ namespace Surfus.Shell.Messages.Channel
 {
     internal record ChannelExtendedData : IClientMessage, IChannelRecipient
     {
-        [SuppressMessage("ReSharper", "InconsistentNaming")]
         public enum DataType : uint
         {
             SSH_EXTENDED_DATA_STDERR = 1

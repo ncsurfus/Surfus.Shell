@@ -1,6 +1,4 @@
-﻿// ReSharper disable InconsistentNaming
-
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 
 namespace Surfus.Shell.Messages
 {
