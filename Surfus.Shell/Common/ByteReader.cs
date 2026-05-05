@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using System.Text;
+using Surfus.Shell.Exceptions;
 using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell
@@ -27,8 +28,15 @@ namespace Surfus.Shell
 
         private ReadOnlySpan<byte> Span => Bytes.Span;
 
+        private void EnsureAvailable(int bytes)
+        {
+            if (Position + bytes > Bytes.Length)
+                throw new SshException("Malformed packet: unexpected end of data");
+        }
+
         internal byte[] Read(int amount)
         {
+            EnsureAvailable(amount);
             var buffer = Span.Slice(Position, amount).ToArray();
             Position += amount;
             return buffer;
@@ -36,16 +44,19 @@ namespace Surfus.Shell
 
         internal byte ReadByte()
         {
+            EnsureAvailable(1);
             return Span[Position++];
         }
 
         internal bool ReadBoolean()
         {
+            EnsureAvailable(1);
             return Span[Position++] == 1;
         }
 
         internal uint ReadUInt32()
         {
+            EnsureAvailable(4);
             var span = Span;
             uint value;
             if (BitConverter.IsLittleEndian)
@@ -79,6 +90,7 @@ namespace Surfus.Shell
         {
             var span = Span;
             var length = (int)ReadUInt32();
+            EnsureAvailable(length);
 
             var bigIntegerBuffer = span[length + Position - 1] <= 127 ? new byte[length] : new byte[length + 1];
 
@@ -105,19 +117,20 @@ namespace Surfus.Shell
 
         internal static BigInteger ReadBigInteger(byte[] buffer)
         {
-            if (buffer[buffer.Length - 1] <= 127)
+            Array.Reverse(buffer);
+            if (buffer[buffer.Length - 1] > 127)
             {
-                Array.Reverse(buffer);
-                return new BigInteger(buffer);
+                Array.Resize(ref buffer, buffer.Length + 1);
             }
-            Array.Resize(ref buffer, buffer.Length + 1);
-
             return new BigInteger(buffer);
         }
 
         internal string ReadString()
         {
             var length = (int)ReadUInt32();
+            if (length < 0)
+                throw new SshException("Invalid string length in SSH message.");
+            EnsureAvailable(length);
             var str = length != 0 ? Encoding.UTF8.GetString(Span.Slice(Position, length)) : null;
             Position += length;
             return str;
@@ -126,6 +139,9 @@ namespace Surfus.Shell
         internal string ReadAsciiString()
         {
             var length = (int)ReadUInt32();
+            if (length < 0)
+                throw new SshException("Invalid string length in SSH message.");
+            EnsureAvailable(length);
             var str = length != 0 ? Encoding.ASCII.GetString(Span.Slice(Position, length)) : null;
             Position += length;
             return str;
@@ -134,6 +150,9 @@ namespace Surfus.Shell
         internal byte[] ReadBinaryString()
         {
             var length = (int)ReadUInt32();
+            if (length < 0)
+                throw new SshException("Invalid string length in SSH message.");
+            EnsureAvailable(length);
             var binaryString = Span.Slice(Position, length).ToArray();
             Position += length;
             return binaryString;
@@ -143,6 +162,7 @@ namespace Surfus.Shell
         {
             var span = Span;
             var length = (int)ReadUInt32();
+            EnsureAvailable(length);
             var offset = 0;
             if (span[Position] == 0)
             {

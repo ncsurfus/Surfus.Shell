@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Threading;
@@ -64,8 +63,8 @@ namespace Surfus.Shell.Crypto
         /// <param name="key">The key for the cipher.</param>
         internal override void Initialize(byte[] initializationVector, byte[] key)
         {
-            var usableEncryptionKey = key.Take(KeySize).ToArray();
-            var usableInitialIv = initializationVector.Take(InitializationVectorSize).ToArray();
+            var usableEncryptionKey = key.AsSpan(0, KeySize).ToArray();
+            var usableInitialIv = initializationVector.AsSpan(0, InitializationVectorSize).ToArray();
             _encryptor = _cryptoProvider.CreateEncryptor(usableEncryptionKey, usableInitialIv);
             _decryptor = _cryptoProvider.CreateDecryptor(usableEncryptionKey, usableInitialIv);
 
@@ -98,7 +97,9 @@ namespace Surfus.Shell.Crypto
             // Read enough data until we have at least 1 block.
             while (bufferPosition != blockSize + packetStart)
             {
-                bufferPosition += await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, blockSize + packetStart - bufferPosition), cancellationToken);
+                var bytesRead = await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, blockSize + packetStart - bufferPosition), cancellationToken);
+                if (bytesRead == 0) throw new SshException("Connection closed.");
+                bufferPosition += bytesRead;
             }
 
             _decryptor.TransformBlock(buffer, bufferPosition - blockSize, blockSize, buffer, bufferPosition - blockSize); // Decrypt the first block in the buffer.
@@ -115,7 +116,9 @@ namespace Surfus.Shell.Crypto
 
             while (bufferPosition != bufferLength) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
             {
-                bufferPosition += await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, bufferLength - bufferPosition), cancellationToken);
+                var bytesRead = await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, bufferLength - bufferPosition), cancellationToken);
+                if (bytesRead == 0) throw new SshException("Connection closed.");
+                bufferPosition += bytesRead;
             }
 
             if (sshPacketSize > blockSize) // Check if this was more than a single block..

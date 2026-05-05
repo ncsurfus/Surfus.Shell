@@ -29,13 +29,19 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// </param>
         protected DiffieHellmanKeyExchange(KexContext context, KexInitExchangeResult kexInitExchangeResult)
         {
-            var e = BigInteger.Zero;
-            var x = BigInteger.Zero;
-            while (e < 1 || e > P.BigInteger - 1)
-            {
-                x = GenerateRandomBigInteger(Bits, Bits * 2);
-                e = BigInteger.ModPow(G.BigInteger, x, P.BigInteger);
-            }
+            // Per RFC 4419, the private exponent must have sufficient entropy.
+            // Use at least max(256, hashOutputBits * 2) bits.
+            using var hashAlg = CreateHashAlgorithm();
+            var exponentBits = Math.Max(256, hashAlg.HashSize * 2);
+            var minValue = BigInteger.One << (exponentBits - 1); // 2^(bits-1)
+            var maxValue = (BigInteger.One << exponentBits) - 1; // 2^bits - 1
+            // Clamp to [2, P-2]
+            if (minValue < 2) minValue = 2;
+            var pMinus2 = P.BigInteger - 2;
+            if (maxValue > pMinus2) maxValue = pMinus2;
+
+            var x = GenerateRandomBigInteger(minValue, maxValue);
+            var e = BigInteger.ModPow(G.BigInteger, x, P.BigInteger);
             E = new BigInt(e);
             X = new BigInt(x);
             _context = context;

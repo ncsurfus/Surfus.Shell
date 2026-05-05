@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace Surfus.Shell.Tests;
@@ -210,7 +211,12 @@ public class SshIntegrationTests
     public async Task KexAlgorithm(string kex)
     {
         await using var server = await SshTestServer.StartAsync(kex: kex);
-        await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
+        await using var client = new SshClient("127.0.0.1", (ushort)server.Port)
+        {
+            Algorithms = new SshAlgorithms { KeyExchange = SshAlgorithms.DefaultKeyExchange.Append(
+                new KeyExchangeDescriptor("diffie-hellman-group1-sha1", (ctx, k) => new KeyExchange.DiffieHellman.DiffieHellmanGroup1Sha1(ctx, k))
+            ).ToArray() }
+        };
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());
         Assert.True(client.IsConnected);

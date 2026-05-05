@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Diagnostics;
 using System.Text;
 using Surfus.Shell.Extensions;
 using Surfus.Shell.Messages.KeyExchange;
@@ -93,6 +94,7 @@ namespace Surfus.Shell
         /// <param name="value"></param>
         internal void WriteByte(byte value)
         {
+            Debug.Assert(Position < Bytes.Length, "ByteWriter overflow: Position exceeds buffer length.");
             Bytes[Position++] = value;
         }
 
@@ -102,6 +104,7 @@ namespace Surfus.Shell
         /// <param name="value"></param>
         internal void WriteUint(uint value)
         {
+            Debug.Assert(Position + 4 <= Bytes.Length, "ByteWriter overflow: Position exceeds buffer length.");
             if (BitConverter.IsLittleEndian)
             {
                 Bytes[Position++] = (byte)(value >> 24);
@@ -146,6 +149,7 @@ namespace Surfus.Shell
         /// <param name="binaryString"></param>
         internal void WriteBinaryString(ReadOnlySpan<byte> binaryString)
         {
+            Debug.Assert(Position + 4 + binaryString.Length <= Bytes.Length, "ByteWriter overflow: Position exceeds buffer length.");
             WriteUint((uint)binaryString.Length);
             binaryString.CopyTo(Bytes.AsSpan(Position));
             Position += binaryString.Length;

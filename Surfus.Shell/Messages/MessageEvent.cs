@@ -12,7 +12,7 @@ namespace Surfus.Shell.Messages
         /// <summary>
         /// Caches the message for property Message.
         /// </summary>
-        private IMessage _message;
+        private volatile IMessage _message;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MessageEvent"/> class.

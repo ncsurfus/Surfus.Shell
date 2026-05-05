@@ -17,6 +17,8 @@ namespace Surfus.Shell.Messages.UserAuth
             Username = username;
             ServiceName = serviceName;
             MethodName = methodName;
+            Language = language;
+            Submethods = subMethods;
         }
 
         public string Username { get; }

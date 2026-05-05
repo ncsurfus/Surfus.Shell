@@ -1,7 +1,6 @@
-﻿// Credit to hanswolff https://gist.github.com/hanswolff/8809275
+// Credit to hanswolff https://gist.github.com/hanswolff/8809275
 
 using System;
-using System.Collections.Generic;
 using System.Security.Cryptography;
 
 namespace Surfus.Shell.Crypto.AesCtr
@@ -10,8 +9,9 @@ namespace Surfus.Shell.Crypto.AesCtr
     {
         private readonly byte[] _counter;
         private readonly ICryptoTransform _counterEncryptor;
-        private readonly Queue<byte> _xorMask = new Queue<byte>();
         private readonly SymmetricAlgorithm _symmetricAlgorithm;
+        private readonly byte[] _xorMask;
+        private int _xorMaskIndex;
 
         internal CounterModeCryptoTransform(SymmetricAlgorithm symmetricAlgorithm, byte[] key, byte[] counter)
         {
@@ -40,6 +40,8 @@ namespace Surfus.Shell.Crypto.AesCtr
 
             _symmetricAlgorithm = symmetricAlgorithm;
             _counter = counter;
+            _xorMask = new byte[symmetricAlgorithm.BlockSize / 8];
+            _xorMaskIndex = _xorMask.Length; // Force generation on first use
 
             var zeroIv = new byte[_symmetricAlgorithm.BlockSize / 8];
             _counterEncryptor = symmetricAlgorithm.CreateEncryptor(key, zeroIv);
@@ -56,32 +58,20 @@ namespace Surfus.Shell.Crypto.AesCtr
         {
             for (var i = 0; i < inputCount; i++)
             {
-                if (NeedMoreXorMaskBytes())
+                if (_xorMaskIndex >= _xorMask.Length)
                     EncryptCounterThenIncrement();
 
-                var mask = _xorMask.Dequeue();
-                outputBuffer[outputOffset + i] = (byte)(inputBuffer[inputOffset + i] ^ mask);
+                outputBuffer[outputOffset + i] = (byte)(inputBuffer[inputOffset + i] ^ _xorMask[_xorMaskIndex++]);
             }
 
             return inputCount;
         }
 
-        private bool NeedMoreXorMaskBytes()
-        {
-            return _xorMask.Count == 0;
-        }
-
         private void EncryptCounterThenIncrement()
         {
-            var counterModeBlock = new byte[_symmetricAlgorithm.BlockSize / 8];
-
-            _counterEncryptor.TransformBlock(_counter, 0, _counter.Length, counterModeBlock, 0);
+            _counterEncryptor.TransformBlock(_counter, 0, _counter.Length, _xorMask, 0);
+            _xorMaskIndex = 0;
             IncrementCounter();
-
-            foreach (var b in counterModeBlock)
-            {
-                _xorMask.Enqueue(b);
-            }
         }
 
         private void IncrementCounter()
@@ -98,6 +88,6 @@ namespace Surfus.Shell.Crypto.AesCtr
         public bool CanTransformMultipleBlocks => true;
         public bool CanReuseTransform => false;
 
-        public void Dispose() { }
+        public void Dispose() { _counterEncryptor?.Dispose(); }
     }
 }

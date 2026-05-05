@@ -24,10 +24,12 @@ namespace Surfus.Shell
         /// <summary>
         /// _sshClientState holds the state of the SshClient.
         /// </summary>
-        private State _sshClientState = State.Initial;
+        private volatile State _sshClientState = State.Initial;
 
         /// <summary>
         /// _channelCounter holds the current channel index used to derive new channel IDs.
+        /// Interlocked.Increment returns the incremented value, so IDs start at 1. This is
+        /// intentional — SSH does not require channel 0 and starting at 1 is valid.
         /// </summary>
         private int _channelCounter;
 
@@ -39,7 +41,7 @@ namespace Surfus.Shell
         /// <summary>
         /// _isDisposed holds the disposed state of the SshClient.
         /// </summary>
-        private bool _isDisposed;
+        private int _isDisposed;
 
         /// <summary>
         /// Holds the value of us getting a disconnected message or not.
@@ -115,9 +117,11 @@ namespace Surfus.Shell
 
         /// <summary>
         /// IsConnected determines if the SshClient is connected to the remote SSH server.
+        /// Note: This is best-effort and subject to TOCTOU races inherent to network programming.
+        /// The connection may drop immediately after this returns true.
         /// </summary>
         public bool IsConnected =>
-            _tcpConnection?.Connected == true && !_disconnectReceived && !_isDisposed && (_sshClientState == State.Connected || _sshClientState == State.Authenticated);
+            _tcpConnection?.Connected == true && !_disconnectReceived && _isDisposed == 0 && (_sshClientState == State.Connected || _sshClientState == State.Authenticated);
 
         /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
@@ -165,51 +169,62 @@ namespace Surfus.Shell
             // Set new state of SshClient
             _sshClientState = State.Connecting;
 
-            // Set SshClient defaults
-            ConnectionInfo.KeyExchanger = new SshKeyExchanger(ConnectionInfo, HostKeyCallback, Algorithms);
-            ConnectionInfo.KeyExchanger.OnSend = WriteMessageAsync;
-
-            // Perform version exchange and key exchange
-            ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
-
-            // Register key exchanger to receive kex-related messages
-            _disposables.Add((IAsyncDisposable)RegisterMessageHandler(ConnectionInfo.KeyExchanger));
-
-            var keyExchangeTask = ConnectionInfo.KeyExchanger.HandleKeyExchangeAsync(cancellationToken);
-            await ConnectionInfo.KeyExchanger.Ready.ConfigureAwait(false);
-
-            // Start the read loop. When the loop exits for any reason,
-            async Task readLoop()
+            try
             {
-                Exception loopError = null;
-                try
+                // Set SshClient defaults
+                ConnectionInfo.KeyExchanger = new SshKeyExchanger(ConnectionInfo, HostKeyCallback, Algorithms);
+                ConnectionInfo.KeyExchanger.OnSend = WriteMessageAsync;
+
+                // Perform version exchange and key exchange
+                ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
+
+                // Register key exchanger to receive kex-related messages
+                _disposables.Add((IAsyncDisposable)RegisterMessageHandler(ConnectionInfo.KeyExchanger));
+
+                var keyExchangeTask = ConnectionInfo.KeyExchanger.HandleKeyExchangeAsync(cancellationToken);
+                await ConnectionInfo.KeyExchanger.Ready.ConfigureAwait(false);
+
+                // Start the read loop. When the loop exits for any reason,
+                async Task readLoop()
                 {
-                    while (true)
+                    Exception loopError = null;
+                    try
                     {
-                        await ReadMessageAsync(_closeCts.Token);
+                        while (true)
+                        {
+                            await ReadMessageAsync(_closeCts.Token);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        loopError = ex;
+                    }
+                    finally
+                    {
+                        _closeCts.Cancel();
+                        NotifyHandlersOfError(loopError);
                     }
                 }
-                catch (Exception ex)
-                {
-                    loopError = ex;
-                }
-                finally
-                {
-                    _closeCts.Cancel();
-                    NotifyHandlersOfError(loopError);
-                }
-            }
-            _readLoop = readLoop();
+                _readLoop = readLoop();
 
-            await ConnectionInfo.KeyExchanger.InitialKeyExchangeComplete.ConfigureAwait(false);
-            _sshClientState = State.Connected;
+                await ConnectionInfo.KeyExchanger.InitialKeyExchangeComplete.ConfigureAwait(false);
+                _sshClientState = State.Connected;
+            }
+            catch
+            {
+                _sshClientState = State.Error;
+                _tcpStream?.Dispose();
+                _tcpConnection?.Dispose();
+                throw;
+            }
         }
 
         /// <summary>
         /// AuthenticateAsync authenticates to the SSH server with the specific username and password.
         /// </summary>
         /// <param name="username">The username to login as</param>
-        /// <param name="password">The password to login with</param>
+        /// <param name="password">The password to login with. Note: stored as an immutable string in memory;
+        /// SecureString is deprecated in .NET Core and offers no real protection.</param>
         /// <param name="cancellationToken">The cancellation token used to cancel the connection request</param>
         /// <returns>A task representing the state of the connection attempt</returns>
         public async Task AuthenticateAsync(string username, string password, CancellationToken cancellationToken)
@@ -602,13 +617,13 @@ namespace Surfus.Shell
         /// </summary>
         public void Close()
         {
-            if (!_isDisposed)
+            if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
             {
-                _isDisposed = true;
                 _sshClientState = State.Closed;
                 ConnectionInfo.Dispose();
                 _tcpStream?.Dispose();
                 _tcpConnection?.Dispose();
+                _writeSemaphore.Dispose();
             }
         }
 
@@ -648,6 +663,16 @@ namespace Surfus.Shell
 
         public async ValueTask DisposeAsync()
         {
+            // Best-effort: send disconnect before tearing down
+            if (IsConnected)
+            {
+                try
+                {
+                    await WriteMessageAsync(new Messages.Disconnect(Messages.Disconnect.DisconnectReason.SSH_DISCONNECT_BY_APPLICATION, "Client disconnecting"), CancellationToken.None).ConfigureAwait(false);
+                }
+                catch { }
+            }
+
             _closeCts.Cancel();
 
             foreach (var disposable in _disposables)

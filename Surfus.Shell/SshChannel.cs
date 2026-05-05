@@ -20,7 +20,12 @@ namespace Surfus.Shell
         internal IDisposable Registration { get; set; }
 
         internal int WindowRefill { get; set; } = 50000;
-        internal int SendWindow { get; set; }
+        private int _sendWindow;
+        internal int SendWindow
+        {
+            get => Interlocked.CompareExchange(ref _sendWindow, 0, 0);
+            set => Interlocked.Exchange(ref _sendWindow, value);
+        }
         internal int ReceiveWindow { get; set; }
         internal uint ServerId { get; set; }
         internal uint ClientId { get; }
@@ -49,12 +54,12 @@ namespace Surfus.Shell
         private Task _pumpTask;
 
         private readonly Queue<TaskCompletionSource<bool>> _pendingRequests = new();
-        private TaskCompletionSource _sendWindowAvailable = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly SemaphoreSlim _sendWindowAvailable = new(0);
         private volatile bool _pumpRunning;
 
         /// <summary>
         /// Bounded channel for data messages (ChannelData, ChannelExtendedData).
-        /// Back pressure here is expected and desired.
+        /// Back-pressure here is by design: the SSH receive window (50KB) limits in-flight data to 2-3 packets, so 64 slots is generous. If the consumer stalls, blocking the read loop is correct — it prevents unbounded memory growth and signals the server to stop sending.
         /// </summary>
         private readonly Channel<MessageEvent> _dataInbox = Channel.CreateBounded<MessageEvent>(
             new BoundedChannelOptions(64) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true });
@@ -124,6 +129,7 @@ namespace Surfus.Shell
             Registration?.Dispose();
             Inbox.Dispose();
             _pumpCts.Dispose();
+            _sendWindowAvailable.Dispose();
         }
 
         internal async Task OpenAsync(ChannelOpen openMessage, CancellationToken cancellationToken)
@@ -158,15 +164,13 @@ namespace Surfus.Shell
                 while (SendWindow == 0)
                 {
                     if (!IsOpen) throw new SshException("Channel closed.");
-                    await _sendWindowAvailable.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-                    if (SendWindow == 0)
-                        _sendWindowAvailable = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    await _sendWindowAvailable.WaitAsync(cancellationToken).ConfigureAwait(false);
                 }
 
                 var chunkSize = Math.Min(totalBytesLeft, SendWindow);
                 var chunk = buffer.Slice(offset, chunkSize).ToArray();
                 await Inbox.SendAsync(new ChannelData(ServerId, chunk), cancellationToken).ConfigureAwait(false);
-                SendWindow -= chunkSize;
+                Interlocked.Add(ref _sendWindow, -chunkSize);
                 totalBytesLeft -= chunkSize;
                 offset += chunkSize;
             }
@@ -204,6 +208,8 @@ namespace Surfus.Shell
                     }
 
                     // Nothing available — wait for either channel to have data.
+                    // TODO: Task.WhenAny allocates a Task per iteration causing GC pressure.
+                    // A future optimization could use a custom awaiter or ValueTask-based approach.
                     var controlReady = _controlInbox.Reader.WaitToReadAsync(ct).AsTask();
                     var dataReady = _dataInbox.Reader.WaitToReadAsync(ct).AsTask();
                     await Task.WhenAny(controlReady, dataReady).ConfigureAwait(false);
@@ -212,6 +218,7 @@ namespace Surfus.Shell
             catch (OperationCanceledException) { }
             catch (SshException) { }
             catch (ChannelClosedException) { }
+            catch (Exception) { }
             finally
             {
                 Stdout.Complete();
@@ -221,7 +228,7 @@ namespace Surfus.Shell
                     while (_pendingRequests.Count > 0)
                         _pendingRequests.Dequeue().TrySetException(new SshException("Channel closed."));
                 }
-                _sendWindowAvailable.TrySetResult();
+                _sendWindowAvailable.Release();
             }
         }
 
@@ -230,8 +237,8 @@ namespace Surfus.Shell
             switch (msg.Message)
             {
                 case ChannelWindowAdjust adjust:
-                    SendWindow += (int)adjust.BytesToAdd;
-                    _sendWindowAvailable.TrySetResult();
+                    Interlocked.Add(ref _sendWindow, (int)adjust.BytesToAdd);
+                    _sendWindowAvailable.Release();
                     break;
 
                 case ChannelSuccess:
@@ -292,12 +299,26 @@ namespace Surfus.Shell
 
         private void OnBytesConsumed(int count)
         {
-            _consumedBytes += count;
-            if (_consumedBytes >= WindowRefill)
+            var newValue = Interlocked.Add(ref _consumedBytes, count);
+            if (newValue >= WindowRefill)
             {
-                var toRefill = _consumedBytes;
-                _consumedBytes = 0;
-                _ = Inbox.SendAsync(new ChannelWindowAdjust(ServerId, (uint)toRefill), CancellationToken.None);
+                var toRefill = Interlocked.Exchange(ref _consumedBytes, 0);
+                if (toRefill > 0)
+                {
+                    _ = SendWindowAdjustAsync(toRefill);
+                }
+            }
+        }
+
+        private async Task SendWindowAdjustAsync(int toRefill)
+        {
+            try
+            {
+                await Inbox.SendAsync(new ChannelWindowAdjust(ServerId, (uint)toRefill), CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Best-effort: if sending fails, the channel will stall but not crash.
             }
         }
 
@@ -339,3 +360,4 @@ namespace Surfus.Shell
         }
     }
 }
+

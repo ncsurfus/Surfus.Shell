@@ -142,7 +142,6 @@ namespace Surfus.Shell
             new SignerDescriptor("ecdsa-sha2-nistp384", key => new ECDsaSha2Nistp384(key)),
             new SignerDescriptor("ecdsa-sha2-nistp521", key => new ECDsaSha2Nistp521(key)),
             new SignerDescriptor("ssh-rsa", key => new SshRsa(key)),
-            new SignerDescriptor("ssh-dss", key => new SshDss(key)),
         };
 
         public static readonly KeyExchangeDescriptor[] DefaultKeyExchange = new[]
@@ -153,7 +152,6 @@ namespace Surfus.Shell
             new KeyExchangeDescriptor("diffie-hellman-group18-sha512", (ctx, kex) => new DiffieHellmanGroup18Sha512(ctx, kex)),
             new KeyExchangeDescriptor("diffie-hellman-group-exchange-sha1", (ctx, kex) => new DiffieHellmanGroupKeyExchange(ctx, kex, "SHA1")),
             new KeyExchangeDescriptor("diffie-hellman-group14-sha1", (ctx, kex) => new DiffieHellmanGroup14Sha1(ctx, kex)),
-            new KeyExchangeDescriptor("diffie-hellman-group1-sha1", (ctx, kex) => new DiffieHellmanGroup1Sha1(ctx, kex)),
         };
     }
 }

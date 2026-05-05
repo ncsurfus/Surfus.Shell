@@ -54,7 +54,15 @@ namespace Surfus.Shell
                 ?? throw new InvalidOperationException("SSH_AUTH_SOCK is not set.");
 
             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
             return new SshAgentClient(socket);
         }
 
@@ -100,6 +108,9 @@ namespace Surfus.Shell
             WriteUInt32(buf, ref pos, (uint)data.Length);
             data.Span.CopyTo(buf.AsSpan(pos));
             pos += data.Length;
+            // TODO: flags=0 means SSH_AGENT_RSA_SHA2_256/512 are not requested, so the agent
+            // defaults to SHA-1 for RSA keys. For rsa-sha2-256 set flags=2, for rsa-sha2-512 set flags=4.
+            // This requires knowing which algorithm was negotiated.
             WriteUInt32(buf, ref pos, 0); // flags
 
             await SendAsync(buf, cancellationToken).ConfigureAwait(false);

@@ -44,6 +44,8 @@ namespace Surfus.Shell.Signing
                     throw new SshException("Invalid DSS Header.");
                 }
                 var blob = reader.ReadBinaryString();
+                if (blob.Length != 40)
+                    return false;
                 var r = ByteReader.ReadBigInteger(blob.AsSpan(0, 20));
                 var s = ByteReader.ReadBigInteger(blob.AsSpan(20, 20));
 

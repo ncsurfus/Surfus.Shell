@@ -89,7 +89,15 @@ namespace Surfus.Shell
 
                 // Send NewKeys with OLD crypto, then apply new write crypto
                 await _inbox.SendAsync(new NewKeys(), cancellationToken).ConfigureAwait(false);
-                ApplyWriteCrypto(sessionIdentifier, h, k, kexAlgorithm, kexResult);
+                try
+                {
+                    ApplyWriteCrypto(sessionIdentifier, h, k, kexAlgorithm, kexResult);
+                }
+                catch
+                {
+                    await _inbox.SendAsync(new NewKeysComplete(), cancellationToken).ConfigureAwait(false);
+                    throw;
+                }
                 await _inbox.SendAsync(new NewKeysComplete(), cancellationToken).ConfigureAwait(false);
 
                 // Hand read crypto to the read loop
@@ -107,9 +115,15 @@ namespace Surfus.Shell
 
         private void ApplyWriteCrypto(Memory<byte> sessionId, Memory<byte> h, BigInt k, KeyExchangeAlgorithm kex, KexInitExchangeResult result)
         {
+            var oldCompression = _connectionInfo.WriteCompressionAlgorithm;
+            var oldCrypto = _connectionInfo.WriteCryptoAlgorithm;
+
             _connectionInfo.WriteCompressionAlgorithm = _algorithms.CreateCompression(result.CompressionClientToServer);
             _connectionInfo.WriteCryptoAlgorithm = _algorithms.CreateEncryption(result.EncryptionClientToServer);
             _connectionInfo.WriteMacAlgorithm = _algorithms.CreateMac(result.MessageAuthenticationClientToServer);
+
+            oldCompression?.Dispose();
+            oldCrypto?.Dispose();
 
             var iv = kex.GenerateKey(h, k, 'A', sessionId, _connectionInfo.WriteCryptoAlgorithm.InitializationVectorSize);
             var key = kex.GenerateKey(h, k, 'C', sessionId, _connectionInfo.WriteCryptoAlgorithm.KeySize);
@@ -132,11 +146,21 @@ namespace Surfus.Shell
             readCrypto.Initialize(iv, key);
             readMac.Initialize(intKey);
 
+            System.Security.Cryptography.CryptographicOperations.ZeroMemory(iv);
+            System.Security.Cryptography.CryptographicOperations.ZeroMemory(key);
+            System.Security.Cryptography.CryptographicOperations.ZeroMemory(intKey);
+
             return () =>
             {
+                var oldCompression = _connectionInfo.ReadCompressionAlgorithm;
+                var oldCrypto = _connectionInfo.ReadCryptoAlgorithm;
+
                 _connectionInfo.ReadCompressionAlgorithm = readCompression;
                 _connectionInfo.ReadCryptoAlgorithm = readCrypto;
                 _connectionInfo.ReadMacAlgorithm = readMac;
+
+                oldCompression?.Dispose();
+                oldCrypto?.Dispose();
             };
         }
 

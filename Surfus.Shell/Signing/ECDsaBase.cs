@@ -29,6 +29,7 @@ namespace Surfus.Shell.Signing
                 Curve = Curve,
                 Q = new ECPoint { X = x.ToArray(), Y = y.ToArray() }
             };
+            KeySize = x.Length * 8;
         }
 
         public ECParameters Parameters { get; }

@@ -33,6 +33,9 @@ namespace Surfus.Shell
 
         internal async Task LoginAsync(string username, IReadOnlyList<IAuthMethod> methods, CancellationToken cancellationToken)
         {
+            if (methods == null || methods.Count == 0)
+                throw new ArgumentException("At least one authentication method must be provided.", nameof(methods));
+
             await EnsureServiceAcceptedAsync(cancellationToken).ConfigureAwait(false);
 
             for (var i = 0; i < methods.Count; i++)
@@ -120,7 +123,14 @@ namespace Surfus.Shell
 
         public Func<IClientMessage, CancellationToken, Task> OnSend { set => _inbox.OnSend = value; }
 
-        public ValueTask ProcessMessageAsync(MessageEvent messageEvent) => _inbox.DeliverAsync(messageEvent);
+        public ValueTask ProcessMessageAsync(MessageEvent messageEvent)
+        {
+            var id = (int)messageEvent.Type;
+            // Only deliver service accept (6), disconnect (1), and auth-range messages (50-79)
+            if (id == 6 || id == 1 || (id >= 50 && id <= 79))
+                return _inbox.DeliverAsync(messageEvent);
+            return ValueTask.CompletedTask;
+        }
 
         public void OnError(Exception error) => _inbox.OnError(error);
 

@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Surfus.Shell\Surfus.Shell.csproj" />
+    <ProjectReference Include="..\Surfus.Shell.Cisco\Surfus.Shell.Cisco.csproj" />
   </ItemGroup>
 
   <ItemGroup>

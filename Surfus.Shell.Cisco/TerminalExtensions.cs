@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -10,8 +11,6 @@ namespace Surfus.Shell.Cisco
     /// </summary>
     internal static class TerminalExtensions
     {
-        private static readonly byte[] _readBuf = new byte[4096];
-
         public static async Task<string> ReadAsync(this SshTerminal terminal, CancellationToken cancellationToken)
         {
             var buf = new byte[4096];
@@ -39,10 +38,9 @@ namespace Surfus.Shell.Cisco
             while ((index = sb.ToString().IndexOf(plainText)) == -1)
             {
                 var n = await terminal.StandardOutput.ReadAsync(buf, 0, buf.Length, cancellationToken).ConfigureAwait(false);
-                if (n == 0) break;
+                if (n == 0) throw new EndOfStreamException("Connection closed before expected data was received");
                 sb.Append(Encoding.UTF8.GetString(buf, 0, n));
             }
-            if (index == -1) return sb.ToString();
             index += plainText.Length;
             return sb.ToString().Substring(0, index);
         }
@@ -58,7 +56,7 @@ namespace Surfus.Shell.Cisco
             while (!(match = Regex.Match(sb.ToString(), regexText, regexOptions)).Success)
             {
                 var n = await terminal.StandardOutput.ReadAsync(buf, 0, buf.Length, cancellationToken).ConfigureAwait(false);
-                if (n == 0) break;
+                if (n == 0) throw new EndOfStreamException("Connection closed before expected data was received");
                 sb.Append(Encoding.UTF8.GetString(buf, 0, n));
             }
             return match;

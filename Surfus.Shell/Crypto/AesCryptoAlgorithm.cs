@@ -5,17 +5,17 @@ namespace Surfus.Shell.Crypto
     public sealed class AesCryptoAlgorithm : CryptoServiceProviderAlgorithm
     {
         /// <summary>
-        /// Creates an AES Crypto CBC algorithm with zero padding.
+        /// Creates an AES Crypto CBC algorithm with no padding. SSH packets are always block-aligned.
         /// </summary>
         /// <param name="keySize">The AES key size.</param>
         /// <param name="cipherMode">The AES cipher mode.</param>
         /// <returns></returns>
-        private static Aes CreateAesCbcZeroPadding(int keySize, CipherMode cipherMode)
+        private static Aes CreateAesCbc(int keySize, CipherMode cipherMode)
         {
             var aes = Aes.Create();
             aes.KeySize = keySize;
             aes.Mode = cipherMode;
-            aes.Padding = PaddingMode.Zeros;
+            aes.Padding = PaddingMode.None;
             return aes;
         }
 
@@ -25,7 +25,7 @@ namespace Surfus.Shell.Crypto
         /// <param name="keySizeBits">The AES key size.</param>
         /// <param name="cipherMode">The AES cipher mode.</param>
         internal AesCryptoAlgorithm(int keySizeBits, CipherMode cipherMode)
-            : base(CreateAesCbcZeroPadding(keySizeBits, cipherMode))
+            : base(CreateAesCbc(keySizeBits, cipherMode))
         {
             KeySize = keySizeBits / 8;
         }

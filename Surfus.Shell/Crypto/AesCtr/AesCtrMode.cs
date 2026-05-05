@@ -1,4 +1,4 @@
-﻿// Credit to hanswolff https://gist.github.com/hanswolff/8809275
+// Credit to hanswolff https://gist.github.com/hanswolff/8809275
 
 using System;
 using System.Security.Cryptography;
@@ -57,6 +57,12 @@ namespace Surfus.Shell.Crypto.AesCtr
         public override void GenerateIV()
         {
             // IV not needed in Counter Mode
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            _aes.Dispose();
+            base.Dispose(disposing);
         }
     }
 }

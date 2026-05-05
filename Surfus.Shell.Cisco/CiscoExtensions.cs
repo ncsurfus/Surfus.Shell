@@ -72,7 +72,7 @@ namespace Surfus.Shell.Cisco
             // Attempt to get enable prompt
             await terminal.WriteLineAsync("enable", cancellationToken).ConfigureAwait(false);
 
-            var enablePrompt = await terminal.ExpectRegexMatchAsync(@"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>)>)\s*", cancellationToken).ConfigureAwait(false);
+            var enablePrompt = await terminal.ExpectRegexMatchAsync(@"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>[^#>]*)>)\s*", cancellationToken).ConfigureAwait(false);
 
             // Server gave privileged prompt with no password.
             if (enablePrompt.Groups["privileged"].Success)
@@ -96,7 +96,7 @@ namespace Surfus.Shell.Cisco
             await terminal.WriteLineAsync(enablePassword, cancellationToken).ConfigureAwait(false);
 
             // Check result of new prompt
-            var enableResult = await terminal.ExpectRegexMatchAsync(@"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>)>)\s*", cancellationToken).ConfigureAwait(false);
+            var enableResult = await terminal.ExpectRegexMatchAsync(@"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>[^#>]*)>)\s*", cancellationToken).ConfigureAwait(false);
             if (enableResult.Groups["privileged"].Success)
             {
                 return;
@@ -124,9 +124,9 @@ namespace Surfus.Shell.Cisco
 
     public class CiscoTerminal
     {
-        public string Prompt { get; set; }
-        public string Name { get; set; }
-        public TerminalMode Mode { get; set; }
+        public string Prompt { get; init; }
+        public string Name { get; init; }
+        public TerminalMode Mode { get; init; }
     }
 
     public enum TerminalMode
