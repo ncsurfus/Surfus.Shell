@@ -29,30 +29,36 @@ namespace Surfus.Shell
             set => throw new NotSupportedException();
         }
 
-        public override void Write(byte[] buffer, int offset, int count)
-            => throw new NotSupportedException("Use WriteAsync instead.");
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException("Use WriteAsync instead.");
 
         public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            if (_closed) throw new ObjectDisposedException(nameof(ChannelInputStream));
-            if (count == 0) return;
+            if (_closed)
+                throw new ObjectDisposedException(nameof(ChannelInputStream));
+            if (count == 0)
+                return;
 
             await _channel.WriteDataAsync(new ReadOnlyMemory<byte>(buffer, offset, count), cancellationToken).ConfigureAwait(false);
         }
 
         public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            if (_closed) throw new ObjectDisposedException(nameof(ChannelInputStream));
-            if (buffer.Length == 0) return;
+            if (_closed)
+                throw new ObjectDisposedException(nameof(ChannelInputStream));
+            if (buffer.Length == 0)
+                return;
 
             await _channel.WriteDataAsync(buffer, cancellationToken).ConfigureAwait(false);
         }
 
         public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
         public override void Flush() { }
 
         public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
         public override void SetLength(long value) => throw new NotSupportedException();
 
         public override async ValueTask DisposeAsync()

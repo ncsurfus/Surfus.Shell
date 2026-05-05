@@ -70,7 +70,11 @@ namespace Surfus.Shell
         {
             if (_commandState == State.Opened || _commandState == State.Started)
             {
-                try { await _channel.CloseAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+                try
+                {
+                    await _channel.CloseAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch { }
             }
             _commandState = State.Closed;
             await _channel.DisposeAsync().ConfigureAwait(false);
@@ -82,7 +86,7 @@ namespace Surfus.Shell
             Opened,
             Started,
             Closed,
-            Errored
+            Errored,
         }
     }
 }

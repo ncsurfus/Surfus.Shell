@@ -18,11 +18,11 @@
     <RepositoryType>git</RepositoryType>
     <Version Condition=" '$(Configuration)' == 'Debug' ">$(Version)-Debug</Version>
   </PropertyGroup>
-    <ItemGroup>
-        <None Include="..\README.md" Pack="true" PackagePath="/"/>
-        <None Include="..\LICENSE" Pack="true" PackagePath="/"/>
-    </ItemGroup>
-    <ItemGroup>
-        <InternalsVisibleTo Include="Surfus.Shell.Benchmarks" />
-    </ItemGroup>
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="/" />
+    <None Include="..\LICENSE" Pack="true" PackagePath="/" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Surfus.Shell.Benchmarks" />
+  </ItemGroup>
 </Project>

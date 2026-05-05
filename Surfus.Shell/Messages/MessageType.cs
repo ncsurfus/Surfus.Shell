@@ -127,6 +127,6 @@ namespace Surfus.Shell.Messages
         SSH_MSG_CHANNEL_CLOSE = 97,
         SSH_MSG_CHANNEL_REQUEST = 98,
         SSH_MSG_CHANNEL_SUCCESS = 99,
-        SSH_MSG_CHANNEL_FAILURE = 100
+        SSH_MSG_CHANNEL_FAILURE = 100,
     }
 }

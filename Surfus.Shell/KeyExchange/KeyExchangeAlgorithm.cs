@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Numerics;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
-using Surfus.Shell.Messages;
-using System.Threading;
-using Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange;
 using Surfus.Shell.KeyExchange.DiffieHellman;
+using Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange;
+using Surfus.Shell.Messages;
 
 namespace Surfus.Shell.KeyExchange
 {
@@ -30,8 +30,7 @@ namespace Surfus.Shell.KeyExchange
                 or MessageType.SSH_MSG_KEX_Exchange_31
                 or MessageType.SSH_MSG_KEX_Exchange_32
                 or MessageType.SSH_MSG_KEX_Exchange_33
-                or MessageType.SSH_MSG_KEX_Exchange_34
-                    => throw new NotImplementedException(),
+                or MessageType.SSH_MSG_KEX_Exchange_34 => throw new NotImplementedException(),
                 _ => false,
             };
         }

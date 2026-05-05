@@ -1,9 +1,4 @@
-﻿using Surfus.Shell.Authentication;
-using Surfus.Shell.Exceptions;
-using Surfus.Shell.Messages;
-using Surfus.Shell.Messages.Channel;
-using Surfus.Shell.Messages.UserAuth;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Net.Sockets;
@@ -11,6 +6,11 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Surfus.Shell.Authentication;
+using Surfus.Shell.Exceptions;
+using Surfus.Shell.Messages;
+using Surfus.Shell.Messages.Channel;
+using Surfus.Shell.Messages.UserAuth;
 
 [assembly: InternalsVisibleTo("Surfus.Shell.Tests")]
 
@@ -99,9 +99,20 @@ namespace Surfus.Shell
         {
             private readonly SshClient _client;
             private readonly IMessageHandler _handler;
-            public HandlerRegistration(SshClient client, IMessageHandler handler) { _client = client; _handler = handler; }
+
+            public HandlerRegistration(SshClient client, IMessageHandler handler)
+            {
+                _client = client;
+                _handler = handler;
+            }
+
             public void Dispose() => _client.UnregisterMessageHandler(_handler);
-            public ValueTask DisposeAsync() { Dispose(); return default; }
+
+            public ValueTask DisposeAsync()
+            {
+                Dispose();
+                return default;
+            }
         }
 
         /// <summary>
@@ -114,14 +125,16 @@ namespace Surfus.Shell
         /// </summary>
         private readonly SemaphoreSlim _writeSemaphore = new(1, 1);
 
-
         /// <summary>
         /// IsConnected determines if the SshClient is connected to the remote SSH server.
         /// Note: This is best-effort and subject to TOCTOU races inherent to network programming.
         /// The connection may drop immediately after this returns true.
         /// </summary>
         public bool IsConnected =>
-            _tcpConnection?.Connected == true && !_disconnectReceived && _isDisposed == 0 && (_sshClientState == State.Connected || _sshClientState == State.Authenticated);
+            _tcpConnection?.Connected == true
+            && !_disconnectReceived
+            && _isDisposed == 0
+            && (_sshClientState == State.Connected || _sshClientState == State.Authenticated);
 
         /// <summary>
         /// ConnectionInfo contains connection information of the SshClient.
@@ -246,7 +259,8 @@ namespace Surfus.Shell
         /// </summary>
         public async Task AuthenticateAsync(string username, IAuthMethod authMethod, CancellationToken cancellationToken)
         {
-            if (!IsConnected) ThrowOnInvalidState();
+            if (!IsConnected)
+                ThrowOnInvalidState();
             var auth = EnsureAuthentication();
             using var _ = RegisterMessageHandler(auth);
             await auth.LoginAsync(username, authMethod, cancellationToken).ConfigureAwait(false);
@@ -341,7 +355,9 @@ namespace Surfus.Shell
 
             _disposables.Add(channel);
 
-            await channel.OpenAsync(new Messages.Channel.Open.ChannelOpenSession(channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
+            await channel
+                .OpenAsync(new Messages.Channel.Open.ChannelOpenSession(channel.ClientId, 50000), cancellationToken)
+                .ConfigureAwait(false);
             return channel;
         }
 
@@ -429,7 +445,9 @@ namespace Surfus.Shell
                     }
 
                     // It appears in some cases ReadAsync can get hung and not properly respond to the CancellationToken.
-                    var readTask = _tcpStream.ReadAsync(buffer.AsMemory(bufferPosition, buffer.Length - bufferPosition), cancellationToken).AsTask();
+                    var readTask = _tcpStream
+                        .ReadAsync(buffer.AsMemory(bufferPosition, buffer.Length - bufferPosition), cancellationToken)
+                        .AsTask();
                     var readResult = await Task.WhenAny(timeout.Task, readTask).ConfigureAwait(false);
 
                     if (readResult == timeout.Task)
@@ -547,8 +565,8 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_DISCONNECT:
                     _disconnectReceived = true;
                     break;
-                    // Auth and other messages are delivered to registered handlers below.
-                    // Channel messages are delivered to registered handlers below.
+                // Auth and other messages are delivered to registered handlers below.
+                // Channel messages are delivered to registered handlers below.
             }
 
             // Deliver to registered message handlers
@@ -563,10 +581,7 @@ namespace Surfus.Shell
                 var applyReadCrypto = await ConnectionInfo.KeyExchanger.GetNewReadKeysAsync(cancellationToken).ConfigureAwait(false);
                 applyReadCrypto();
             }
-
         }
-
-
 
         /// <summary>
         /// Writes a message to the server
@@ -590,7 +605,9 @@ namespace Surfus.Shell
                 byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
 
                 ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
-                await _tcpStream.WriteAsync(sshPacket.Buffer.AsMemory(sshPacket.Offset, sshPacket.Length), cancellationToken).ConfigureAwait(false);
+                await _tcpStream
+                    .WriteAsync(sshPacket.Buffer.AsMemory(sshPacket.Offset, sshPacket.Length), cancellationToken)
+                    .ConfigureAwait(false);
 
                 if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
                 {
@@ -668,7 +685,14 @@ namespace Surfus.Shell
             {
                 try
                 {
-                    await WriteMessageAsync(new Messages.Disconnect(Messages.Disconnect.DisconnectReason.SSH_DISCONNECT_BY_APPLICATION, "Client disconnecting"), CancellationToken.None).ConfigureAwait(false);
+                    await WriteMessageAsync(
+                            new Messages.Disconnect(
+                                Messages.Disconnect.DisconnectReason.SSH_DISCONNECT_BY_APPLICATION,
+                                "Client disconnecting"
+                            ),
+                            CancellationToken.None
+                        )
+                        .ConfigureAwait(false);
                 }
                 catch { }
             }
@@ -677,7 +701,11 @@ namespace Surfus.Shell
 
             foreach (var disposable in _disposables)
             {
-                try { await disposable.DisposeAsync().ConfigureAwait(false); } catch { }
+                try
+                {
+                    await disposable.DisposeAsync().ConfigureAwait(false);
+                }
+                catch { }
             }
 
             Close();
@@ -702,7 +730,7 @@ namespace Surfus.Shell
             Connected,
             Authenticated,
             Closed,
-            Error
+            Error,
         }
     }
 }

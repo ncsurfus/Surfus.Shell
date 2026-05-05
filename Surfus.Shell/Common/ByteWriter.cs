@@ -2,8 +2,8 @@ using System;
 using System.Diagnostics;
 using System.Text;
 using Surfus.Shell.Extensions;
-using Surfus.Shell.Messages.KeyExchange;
 using Surfus.Shell.Messages;
+using Surfus.Shell.Messages.KeyExchange;
 
 namespace Surfus.Shell
 {
@@ -181,8 +181,6 @@ namespace Surfus.Shell
             byteBlob.Span.CopyTo(Bytes.AsSpan(Position));
             Position += byteBlob.Length;
         }
-
-
 
         /// <summary>
         /// Writes a UTF8 string to the byte array.

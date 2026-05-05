@@ -17,7 +17,8 @@ public class KeyExchangeSecurityTests
     /// </summary>
     private sealed class TestDiffieHellman : DiffieHellmanKeyExchange
     {
-        internal TestDiffieHellman() : base(null!, null!) { }
+        internal TestDiffieHellman()
+            : base(null!, null!) { }
 
         protected override BigInt P { get; } =
             new BigInt(

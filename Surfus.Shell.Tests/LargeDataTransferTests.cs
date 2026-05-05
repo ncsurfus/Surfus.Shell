@@ -8,8 +8,7 @@ public class LargeDataTransferTests
     private const string User = "testuser";
     private const string Pass = "testpass";
 
-    private static CancellationToken Timeout(int seconds = 15)
-        => new CancellationTokenSource(TimeSpan.FromSeconds(seconds)).Token;
+    private static CancellationToken Timeout(int seconds = 15) => new CancellationTokenSource(TimeSpan.FromSeconds(seconds)).Token;
 
     [Fact]
     public async Task ExecChannel_LargeOutput_AllDataReceived()

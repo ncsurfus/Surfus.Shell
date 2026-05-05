@@ -123,7 +123,11 @@ public class BugFixTests
     {
         var auth = new SshAuthentication(() => new byte[32]);
         var sent = new List<IClientMessage>();
-        auth.OnSend = (msg, ct) => { sent.Add(msg); return Task.CompletedTask; };
+        auth.OnSend = (msg, ct) =>
+        {
+            sent.Add(msg);
+            return Task.CompletedTask;
+        };
 
         // Start login - it will wait for ServiceAccept
         var loginTask = auth.LoginAsync("user", new Surfus.Shell.Authentication.PasswordAuth("pass"), CancellationToken.None);
@@ -225,8 +229,7 @@ public class BugFixTests
     public async Task LoginAsync_EmptyMethodsList_ThrowsArgumentException()
     {
         var auth = new SshAuthentication(() => ReadOnlyMemory<byte>.Empty);
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            auth.LoginAsync("user", Array.Empty<IAuthMethod>(), CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() => auth.LoginAsync("user", Array.Empty<IAuthMethod>(), CancellationToken.None));
     }
 
     [Fact]
@@ -234,7 +237,8 @@ public class BugFixTests
     {
         var auth = new SshAuthentication(() => ReadOnlyMemory<byte>.Empty);
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            auth.LoginAsync("user", (IReadOnlyList<IAuthMethod>)null, CancellationToken.None));
+            auth.LoginAsync("user", (IReadOnlyList<IAuthMethod>)null, CancellationToken.None)
+        );
     }
 
     // Fix #38: SshDss validates blob is 40 bytes

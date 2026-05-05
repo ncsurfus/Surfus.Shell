@@ -28,15 +28,20 @@ public sealed class SshTestServer : IAsyncDisposable
         string? macs = null,
         string user = "testuser",
         string pass = "testpass",
-        string? authorizedKeyPath = null)
+        string? authorizedKeyPath = null
+    )
     {
         var serverPath = FindServerBinary();
 
         var args = $"--timeout 30 --hostkey {hostKey} --shell {shellMode} --user {user} --pass {pass}";
-        if (kex != null) args += $" --kex {kex}";
-        if (ciphers != null) args += $" --ciphers {ciphers}";
-        if (macs != null) args += $" --macs {macs}";
-        if (authorizedKeyPath != null) args += $" --authorized-key {authorizedKeyPath}";
+        if (kex != null)
+            args += $" --kex {kex}";
+        if (ciphers != null)
+            args += $" --ciphers {ciphers}";
+        if (macs != null)
+            args += $" --macs {macs}";
+        if (authorizedKeyPath != null)
+            args += $" --authorized-key {authorizedKeyPath}";
 
         var psi = new ProcessStartInfo(serverPath, args)
         {
@@ -54,8 +59,7 @@ public sealed class SshTestServer : IAsyncDisposable
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         for (var i = 0; i < 2; i++)
         {
-            var line = await process.StandardOutput.ReadLineAsync(cts.Token)
-                ?? throw new Exception("Test SSH server exited unexpectedly");
+            var line = await process.StandardOutput.ReadLineAsync(cts.Token) ?? throw new Exception("Test SSH server exited unexpectedly");
 
             if (line.StartsWith("LISTENING:"))
                 port = int.Parse(line["LISTENING:".Length..]);
@@ -102,6 +106,7 @@ public sealed class SshTestServer : IAsyncDisposable
             dir = Path.GetDirectoryName(dir)!;
         }
         throw new FileNotFoundException(
-            "Could not find testserver binary. Run 'go build -o testserver .' in Surfus.Shell.Tests/testserver/");
+            "Could not find testserver binary. Run 'go build -o testserver .' in Surfus.Shell.Tests/testserver/"
+        );
     }
 }

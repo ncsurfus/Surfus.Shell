@@ -17,16 +17,24 @@ namespace Surfus.Shell.Authentication
             _key = key;
         }
 
-        public Task<IClientMessage> CreateRequestAsync(string username, CancellationToken cancellationToken)
-            => Task.FromResult<IClientMessage>(new UaRequest(username, "ssh-connection", _key.KeyType, _key.KeyBlob, null));
+        public Task<IClientMessage> CreateRequestAsync(string username, CancellationToken cancellationToken) =>
+            Task.FromResult<IClientMessage>(new UaRequest(username, "ssh-connection", _key.KeyType, _key.KeyBlob, null));
 
-        public async Task<IClientMessage> HandleMessage60Async(string username, ReadOnlyMemory<byte> sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken)
+        public async Task<IClientMessage> HandleMessage60Async(
+            string username,
+            ReadOnlyMemory<byte> sessionIdentifier,
+            MessageEvent messageEvent,
+            CancellationToken cancellationToken
+        )
         {
-            var dataSize = sessionIdentifier.GetBinaryStringSize()
-                + 1 + username.GetStringSize()
+            var dataSize =
+                sessionIdentifier.GetBinaryStringSize()
+                + 1
+                + username.GetStringSize()
                 + "ssh-connection".GetAsciiStringSize()
                 + "publickey".GetAsciiStringSize()
-                + 1 + _key.KeyType.GetAsciiStringSize()
+                + 1
+                + _key.KeyType.GetAsciiStringSize()
                 + _key.KeyBlob.GetBinaryStringSize();
 
             var w = new ByteWriter(dataSize);

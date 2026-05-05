@@ -134,17 +134,23 @@ public class KexInitExchangeResultTests
     }
 
     private static KexInit CreateKexInit(
-        string[] kex, string[] hostKey,
-        string[] encryptionC2S, string[] encryptionS2C,
-        string[] macC2S, string[] macS2C,
-        string[] compressionC2S, string[] compressionS2C)
+        string[] kex,
+        string[] hostKey,
+        string[] encryptionC2S,
+        string[] encryptionS2C,
+        string[] macC2S,
+        string[] macS2C,
+        string[] compressionC2S,
+        string[] compressionS2C
+    )
     {
         // Build a KexInit by serializing and deserializing through a packet
         var kexInit = new KexInit(new SshAlgorithms());
 
         // We can't easily set properties on KexInit since they're get-only.
         // Instead, build a wire-format packet and parse it.
-        var size = 1 // message type
+        var size =
+            1 // message type
             + 16 // random bytes
             + GetNameListWireSize(kex)
             + GetNameListWireSize(hostKey)
@@ -189,7 +195,8 @@ public class KexInitExchangeResultTests
 
     private static int GetNameListWireSize(string[] names)
     {
-        if (names.Length == 0) return 4;
+        if (names.Length == 0)
+            return 4;
         return 4 + System.Text.Encoding.ASCII.GetByteCount(string.Join(",", names));
     }
 

@@ -1,5 +1,5 @@
-﻿using System.Security.Cryptography;
-using System;
+﻿using System;
+using System.Security.Cryptography;
 
 namespace Surfus.Shell.MessageAuthentication
 {
@@ -31,7 +31,8 @@ namespace Surfus.Shell.MessageAuthentication
             var computedMac = ComputeHash(sequenceNumber, sshPacket);
             return CryptographicOperations.FixedTimeEquals(
                 computedMac.AsSpan(0, OutputSize),
-                sshPacket.Buffer.AsSpan(sshPacket.Length + 4, OutputSize));
+                sshPacket.Buffer.AsSpan(sshPacket.Length + 4, OutputSize)
+            );
         }
     }
 }

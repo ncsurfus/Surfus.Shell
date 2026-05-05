@@ -66,17 +66,20 @@ namespace Surfus.Shell
             if (_terminalState != State.Opened)
                 throw new Exception("Terminal not opened.");
 
-            await _channel.SendMessageAsync(
-                new ChannelRequestWindowChange(_channel.ServerId, columns, rows),
-                cancellationToken
-            ).ConfigureAwait(false);
+            await _channel
+                .SendMessageAsync(new ChannelRequestWindowChange(_channel.ServerId, columns, rows), cancellationToken)
+                .ConfigureAwait(false);
         }
 
         public async ValueTask DisposeAsync()
         {
             if (_terminalState == State.Opened)
             {
-                try { await _channel.CloseAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+                try
+                {
+                    await _channel.CloseAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch { }
             }
             _terminalState = State.Closed;
             await _channel.DisposeAsync().ConfigureAwait(false);
@@ -87,7 +90,7 @@ namespace Surfus.Shell
             Initial,
             Opened,
             Closed,
-            Errored
+            Errored,
         }
     }
 }

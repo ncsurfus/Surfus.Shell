@@ -46,9 +46,7 @@ namespace Surfus.Shell
                     await AuthenticateWithMethodAsync(username, methods[i], cancellationToken).ConfigureAwait(false);
                     return;
                 }
-                catch (SshInvalidCredentials) when (!isLast)
-                {
-                }
+                catch (SshInvalidCredentials) when (!isLast) { }
             }
         }
 
@@ -84,7 +82,9 @@ namespace Surfus.Shell
                         throw new SshInvalidCredentials();
 
                     case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                        var response = await method.HandleMessage60Async(username, _getSessionIdentifier(), msg, cancellationToken).ConfigureAwait(false);
+                        var response = await method
+                            .HandleMessage60Async(username, _getSessionIdentifier(), msg, cancellationToken)
+                            .ConfigureAwait(false);
                         if (response != null)
                             await _inbox.SendAsync(response, cancellationToken).ConfigureAwait(false);
                         continue;
@@ -121,7 +121,10 @@ namespace Surfus.Shell
             }
         }
 
-        public Func<IClientMessage, CancellationToken, Task> OnSend { set => _inbox.OnSend = value; }
+        public Func<IClientMessage, CancellationToken, Task> OnSend
+        {
+            set => _inbox.OnSend = value;
+        }
 
         public ValueTask ProcessMessageAsync(MessageEvent messageEvent)
         {

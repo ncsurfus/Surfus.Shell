@@ -35,8 +35,7 @@ public class CryptoFixTests
 
         var crypto = new NoCrypto();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var ex = await Assert.ThrowsAsync<SshException>(() =>
-            crypto.ReadPacketAsync(ns, 0, 0, cts.Token));
+        var ex = await Assert.ThrowsAsync<SshException>(() => crypto.ReadPacketAsync(ns, 0, 0, cts.Token));
         Assert.Contains("closed", ex.Message, StringComparison.OrdinalIgnoreCase);
 
         client.Dispose();
@@ -56,8 +55,7 @@ public class CryptoFixTests
         transform.Dispose();
 
         // After dispose, the inner encryptor is disposed - using it throws.
-        Assert.ThrowsAny<Exception>(() =>
-            transform.TransformBlock(new byte[16], 0, 16, new byte[16], 0));
+        Assert.ThrowsAny<Exception>(() => transform.TransformBlock(new byte[16], 0, 16, new byte[16], 0));
     }
 
     // Fix #26: AES CBC should use PaddingMode.None (SSH handles its own padding)

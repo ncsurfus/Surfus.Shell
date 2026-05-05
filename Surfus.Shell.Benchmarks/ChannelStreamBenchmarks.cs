@@ -86,7 +86,8 @@ public class ChannelStreamBenchmarks
             while (total < totalBytes)
             {
                 var read = await stream.ReadAsync(buf, 0, buf.Length, CancellationToken.None);
-                if (read == 0) break;
+                if (read == 0)
+                    break;
                 total += read;
             }
         });

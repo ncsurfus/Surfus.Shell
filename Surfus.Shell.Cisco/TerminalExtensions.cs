@@ -24,11 +24,11 @@ namespace Surfus.Shell.Cisco
             await terminal.StandardInput.WriteAsync(bytes, 0, bytes.Length, cancellationToken).ConfigureAwait(false);
         }
 
-        public static Task WriteLineAsync(this SshTerminal terminal, string text, CancellationToken cancellationToken)
-            => terminal.WriteAsync(text + "\n", cancellationToken);
+        public static Task WriteLineAsync(this SshTerminal terminal, string text, CancellationToken cancellationToken) =>
+            terminal.WriteAsync(text + "\n", cancellationToken);
 
-        public static Task WriteLineAsync(this SshTerminal terminal, CancellationToken cancellationToken)
-            => terminal.WriteAsync("\n", cancellationToken);
+        public static Task WriteLineAsync(this SshTerminal terminal, CancellationToken cancellationToken) =>
+            terminal.WriteAsync("\n", cancellationToken);
 
         public static async Task<string> ExpectAsync(this SshTerminal terminal, string plainText, CancellationToken cancellationToken)
         {
@@ -38,17 +38,26 @@ namespace Surfus.Shell.Cisco
             while ((index = sb.ToString().IndexOf(plainText)) == -1)
             {
                 var n = await terminal.StandardOutput.ReadAsync(buf, 0, buf.Length, cancellationToken).ConfigureAwait(false);
-                if (n == 0) throw new EndOfStreamException("Connection closed before expected data was received");
+                if (n == 0)
+                    throw new EndOfStreamException("Connection closed before expected data was received");
                 sb.Append(Encoding.UTF8.GetString(buf, 0, n));
             }
             index += plainText.Length;
             return sb.ToString().Substring(0, index);
         }
 
-        public static async Task<Match> ExpectRegexMatchAsync(this SshTerminal terminal, string regexText, CancellationToken cancellationToken)
-            => await terminal.ExpectRegexMatchAsync(regexText, RegexOptions.None, cancellationToken).ConfigureAwait(false);
+        public static async Task<Match> ExpectRegexMatchAsync(
+            this SshTerminal terminal,
+            string regexText,
+            CancellationToken cancellationToken
+        ) => await terminal.ExpectRegexMatchAsync(regexText, RegexOptions.None, cancellationToken).ConfigureAwait(false);
 
-        public static async Task<Match> ExpectRegexMatchAsync(this SshTerminal terminal, string regexText, RegexOptions regexOptions, CancellationToken cancellationToken)
+        public static async Task<Match> ExpectRegexMatchAsync(
+            this SshTerminal terminal,
+            string regexText,
+            RegexOptions regexOptions,
+            CancellationToken cancellationToken
+        )
         {
             var sb = new StringBuilder();
             var buf = new byte[4096];
@@ -56,7 +65,8 @@ namespace Surfus.Shell.Cisco
             while (!(match = Regex.Match(sb.ToString(), regexText, regexOptions)).Success)
             {
                 var n = await terminal.StandardOutput.ReadAsync(buf, 0, buf.Length, cancellationToken).ConfigureAwait(false);
-                if (n == 0) throw new EndOfStreamException("Connection closed before expected data was received");
+                if (n == 0)
+                    throw new EndOfStreamException("Connection closed before expected data was received");
                 sb.Append(Encoding.UTF8.GetString(buf, 0, n));
             }
             return match;

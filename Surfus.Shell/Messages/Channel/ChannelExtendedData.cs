@@ -7,7 +7,7 @@ namespace Surfus.Shell.Messages.Channel
     {
         public enum DataType : uint
         {
-            SSH_EXTENDED_DATA_STDERR = 1
+            SSH_EXTENDED_DATA_STDERR = 1,
         }
 
         public ChannelExtendedData(SshPacket packet)

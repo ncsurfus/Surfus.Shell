@@ -26,6 +26,7 @@ namespace Surfus.Shell.Crypto
         /// Gets the key size.
         /// </summary>
         internal abstract int KeySize { get; }
+
         /// <summary>
         /// Disposes the crypto algorithm.
         /// </summary>

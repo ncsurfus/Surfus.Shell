@@ -94,11 +94,7 @@ public class SshAuthenticationTests
     public async Task MultipleMethodsTried_FirstFails_SecondSucceeds()
     {
         var auth = CreateAuth();
-        var methods = new List<IAuthMethod>
-        {
-            new PasswordAuth("wrong"),
-            new PasswordAuth("right"),
-        };
+        var methods = new List<IAuthMethod> { new PasswordAuth("wrong"), new PasswordAuth("right") };
 
         var task = auth.LoginAsync("user", methods, CancellationToken.None);
 
@@ -118,11 +114,7 @@ public class SshAuthenticationTests
     public async Task MultipleMethodsTried_AllFail_Throws()
     {
         var auth = CreateAuth();
-        var methods = new List<IAuthMethod>
-        {
-            new PasswordAuth("wrong1"),
-            new PasswordAuth("wrong2"),
-        };
+        var methods = new List<IAuthMethod> { new PasswordAuth("wrong1"), new PasswordAuth("wrong2") };
 
         var task = auth.LoginAsync("user", methods, CancellationToken.None);
 
@@ -137,11 +129,13 @@ public class SshAuthenticationTests
     public async Task KeyboardInteractive_HandlesMessage60()
     {
         string? receivedPrompt = null;
-        var method = new KeyboardInteractiveAuth((prompt, ct) =>
-        {
-            receivedPrompt = prompt;
-            return Task.FromResult("mypassword");
-        });
+        var method = new KeyboardInteractiveAuth(
+            (prompt, ct) =>
+            {
+                receivedPrompt = prompt;
+                return Task.FromResult("mypassword");
+            }
+        );
 
         var auth = CreateAuth();
         var task = auth.LoginAsync("user", method, CancellationToken.None);
@@ -238,7 +232,8 @@ public class SshAuthenticationTests
     private static MessageEvent FakeInfoRequest(string prompt)
     {
         // INFO_REQUEST format: string name, string instruction, string language, uint32 num-prompts, [string prompt, bool echo]...
-        var size = 1 // message type
+        var size =
+            1 // message type
             + "".GetStringSize() // name
             + "".GetStringSize() // instruction
             + "".GetStringSize() // language

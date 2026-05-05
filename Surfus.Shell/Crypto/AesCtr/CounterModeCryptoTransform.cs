@@ -79,7 +79,8 @@ namespace Surfus.Shell.Crypto.AesCtr
         private void EnsureXorMask(int needed)
         {
             var available = _xorMask.Length - _xorMaskIndex;
-            if (available >= needed) return;
+            if (available >= needed)
+                return;
 
             var blocksNeeded = (needed + InputBlockSize - 1) / InputBlockSize;
             var newMask = new byte[blocksNeeded * InputBlockSize];
@@ -106,6 +107,9 @@ namespace Surfus.Shell.Crypto.AesCtr
         public bool CanTransformMultipleBlocks => true;
         public bool CanReuseTransform => false;
 
-        public void Dispose() { _counterEncryptor?.Dispose(); }
+        public void Dispose()
+        {
+            _counterEncryptor?.Dispose();
+        }
     }
 }

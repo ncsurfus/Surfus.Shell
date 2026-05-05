@@ -9,8 +9,7 @@ public class SshIntegrationTests
     private const string User = "testuser";
     private const string Pass = "testpass";
 
-    private static CancellationToken Timeout(int seconds = 10)
-        => new CancellationTokenSource(TimeSpan.FromSeconds(seconds)).Token;
+    private static CancellationToken Timeout(int seconds = 10) => new CancellationTokenSource(TimeSpan.FromSeconds(seconds)).Token;
 
     private static async Task<string> ReadAllAsync(Stream stream, CancellationToken ct)
     {
@@ -47,8 +46,7 @@ public class SshIntegrationTests
         await using var server = await SshTestServer.StartAsync();
         await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
         await client.ConnectAsync(Timeout());
-        await Assert.ThrowsAsync<Exceptions.SshInvalidCredentials>(
-            () => client.AuthenticateAsync(User, "wrong", Timeout()));
+        await Assert.ThrowsAsync<Exceptions.SshInvalidCredentials>(() => client.AuthenticateAsync(User, "wrong", Timeout()));
     }
 
     [Fact]
@@ -58,8 +56,7 @@ public class SshIntegrationTests
         await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
         await client.ConnectAsync(Timeout());
 
-        await Assert.ThrowsAsync<Exceptions.SshInvalidCredentials>(
-            () => client.AuthenticateAsync(User, "wrong", Timeout()));
+        await Assert.ThrowsAsync<Exceptions.SshInvalidCredentials>(() => client.AuthenticateAsync(User, "wrong", Timeout()));
 
         await client.AuthenticateAsync(User, Pass, Timeout());
         Assert.True(client.IsConnected);
@@ -169,7 +166,14 @@ public class SshIntegrationTests
     {
         await using var server = await SshTestServer.StartAsync();
         byte[]? receivedKey = null;
-        await using var client = new SshClient("127.0.0.1", (ushort)server.Port) { HostKeyCallback = key => { receivedKey = key.ToArray(); return true; } };
+        await using var client = new SshClient("127.0.0.1", (ushort)server.Port)
+        {
+            HostKeyCallback = key =>
+            {
+                receivedKey = key.ToArray();
+                return true;
+            },
+        };
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());
         Assert.NotNull(receivedKey);
@@ -181,8 +185,7 @@ public class SshIntegrationTests
     {
         await using var server = await SshTestServer.StartAsync();
         await using var client = new SshClient("127.0.0.1", (ushort)server.Port) { HostKeyCallback = _ => false };
-        await Assert.ThrowsAsync<Exceptions.SshException>(
-            () => client.ConnectAsync(Timeout()));
+        await Assert.ThrowsAsync<Exceptions.SshException>(() => client.ConnectAsync(Timeout()));
     }
 
     [Theory]
@@ -213,9 +216,17 @@ public class SshIntegrationTests
         await using var server = await SshTestServer.StartAsync(kex: kex);
         await using var client = new SshClient("127.0.0.1", (ushort)server.Port)
         {
-            Algorithms = new SshAlgorithms { KeyExchange = SshAlgorithms.DefaultKeyExchange.Append(
-                new KeyExchangeDescriptor("diffie-hellman-group1-sha1", (ctx, k) => new KeyExchange.DiffieHellman.DiffieHellmanGroup1Sha1(ctx, k))
-            ).ToArray() }
+            Algorithms = new SshAlgorithms
+            {
+                KeyExchange = SshAlgorithms
+                    .DefaultKeyExchange.Append(
+                        new KeyExchangeDescriptor(
+                            "diffie-hellman-group1-sha1",
+                            (ctx, k) => new KeyExchange.DiffieHellman.DiffieHellmanGroup1Sha1(ctx, k)
+                        )
+                    )
+                    .ToArray(),
+            },
         };
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());

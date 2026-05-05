@@ -40,10 +40,7 @@ public class MessageSerializationTests
     [Fact]
     public void Disconnect_RoundTrip()
     {
-        var original = new Disconnect(
-            Disconnect.DisconnectReason.SSH_DISCONNECT_BY_APPLICATION,
-            "goodbye",
-            "en");
+        var original = new Disconnect(Disconnect.DisconnectReason.SSH_DISCONNECT_BY_APPLICATION, "goodbye", "en");
         var writer = original.GetByteWriter();
 
         var packet = MakeReadPacket(writer);
@@ -56,9 +53,7 @@ public class MessageSerializationTests
     [Fact]
     public void Disconnect_NullLanguageTag()
     {
-        var original = new Disconnect(
-            Disconnect.DisconnectReason.SSH_DISCONNECT_PROTOCOL_ERROR,
-            "error");
+        var original = new Disconnect(Disconnect.DisconnectReason.SSH_DISCONNECT_PROTOCOL_ERROR, "error");
         var writer = original.GetByteWriter();
 
         var packet = MakeReadPacket(writer);
@@ -96,8 +91,7 @@ public class MessageSerializationTests
         var writer = original.GetByteWriter();
 
         // MessageEvent expects to read the type byte itself, so build packet at DataIndex
-        var packet = new SshPacket(writer.Bytes, packetStart: SshPacket.PacketSizeIndex,
-            packetLength: writer.DataLength + 5);
+        var packet = new SshPacket(writer.Bytes, packetStart: SshPacket.PacketSizeIndex, packetLength: writer.DataLength + 5);
         var messageEvent = new MessageEvent(packet);
 
         Assert.Equal(MessageType.SSH_MSG_IGNORE, messageEvent.Type);
@@ -114,8 +108,7 @@ public class MessageSerializationTests
         // The writer buffer layout: [0..3]=seq, [4..7]=packetSize, [8]=paddingLen, [9]=msgType, [10..]=data
         // For reading, we create a packet starting at PacketSizeIndex (4) so the reader starts at index 5 (after packet header)
         // But we need the reader to start after the message type byte (index 10 = DataIndex + 1)
-        var packet = new SshPacket(writer.Bytes, packetStart: SshPacket.PacketSizeIndex,
-            packetLength: writer.DataLength + 5);
+        var packet = new SshPacket(writer.Bytes, packetStart: SshPacket.PacketSizeIndex, packetLength: writer.DataLength + 5);
         packet.Reader.ReadByte(); // consume message type byte
         return packet;
     }

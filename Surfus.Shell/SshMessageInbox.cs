@@ -13,17 +13,15 @@ namespace Surfus.Shell
 
         internal SshMessageInbox(int capacity = 64)
         {
-            _channel = Channel.CreateBounded<MessageEvent>(new BoundedChannelOptions(capacity)
-            {
-                FullMode = BoundedChannelFullMode.Wait,
-                SingleReader = true
-            });
+            _channel = Channel.CreateBounded<MessageEvent>(
+                new BoundedChannelOptions(capacity) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true }
+            );
         }
 
         internal Func<IClientMessage, CancellationToken, Task> OnSend { get; set; }
 
-        internal ValueTask DeliverAsync(MessageEvent message, CancellationToken cancellationToken = default)
-            => _channel.Writer.WriteAsync(message, cancellationToken);
+        internal ValueTask DeliverAsync(MessageEvent message, CancellationToken cancellationToken = default) =>
+            _channel.Writer.WriteAsync(message, cancellationToken);
 
         internal void Complete(Exception error = null) => _channel.Writer.TryComplete(error);
 
@@ -49,7 +47,8 @@ namespace Surfus.Shell
             return msg;
         }
 
-        internal async ValueTask<T> ReadAsync<T>(CancellationToken cancellationToken) where T : class, IMessage
+        internal async ValueTask<T> ReadAsync<T>(CancellationToken cancellationToken)
+            where T : class, IMessage
         {
             var msg = await ReadAsync(cancellationToken).ConfigureAwait(false);
             if (msg.Message is T typed)

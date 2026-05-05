@@ -39,14 +39,24 @@ namespace Surfus.Shell
         /// <summary>
         /// Returns the number of bytes currently buffered and available for reading without blocking.
         /// </summary>
-        internal int Available { get { lock (_lock) { return _totalBytes; } } }
+        internal int Available
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _totalBytes;
+                }
+            }
+        }
 
         /// <summary>
         /// Pushes data into the stream for consumers to read.
         /// </summary>
         internal void Push(ReadOnlySpan<byte> data)
         {
-            if (data.Length == 0) return;
+            if (data.Length == 0)
+                return;
 
             lock (_lock)
             {
@@ -73,10 +83,14 @@ namespace Surfus.Shell
 
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            if (buffer == null) throw new ArgumentNullException(nameof(buffer));
-            if (offset < 0) throw new ArgumentOutOfRangeException(nameof(offset));
-            if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
-            if (offset + count > buffer.Length) throw new ArgumentException("Offset and count exceed buffer length.");
+            if (buffer == null)
+                throw new ArgumentNullException(nameof(buffer));
+            if (offset < 0)
+                throw new ArgumentOutOfRangeException(nameof(offset));
+            if (count < 0)
+                throw new ArgumentOutOfRangeException(nameof(count));
+            if (offset + count > buffer.Length)
+                throw new ArgumentException("Offset and count exceed buffer length.");
 
             while (true)
             {
@@ -108,19 +122,22 @@ namespace Surfus.Shell
                         return bytesToRead;
                     }
 
-                    if (_completed) return 0;
+                    if (_completed)
+                        return 0;
                 }
 
                 await _dataAvailable.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
         }
 
-        public override int Read(byte[] buffer, int offset, int count)
-            => throw new NotSupportedException("Use ReadAsync instead.");
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException("Use ReadAsync instead.");
 
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
         public override void Flush() { }
+
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
         public override void SetLength(long value) => throw new NotSupportedException();
 
         protected override void Dispose(bool disposing)

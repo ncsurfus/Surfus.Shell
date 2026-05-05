@@ -36,9 +36,11 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             var minValue = BigInteger.One << (exponentBits - 1); // 2^(bits-1)
             var maxValue = (BigInteger.One << exponentBits) - 1; // 2^bits - 1
             // Clamp to [2, P-2]
-            if (minValue < 2) minValue = 2;
+            if (minValue < 2)
+                minValue = 2;
             var pMinus2 = P.BigInteger - 2;
-            if (maxValue > pMinus2) maxValue = pMinus2;
+            if (maxValue > pMinus2)
+                maxValue = pMinus2;
 
             var x = GenerateRandomBigInteger(minValue, maxValue);
             var e = BigInteger.ModPow(G.BigInteger, x, P.BigInteger);
@@ -105,7 +107,9 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         public override async Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken)
         {
             await _context.Inbox.SendAsync(new DhInit(E), cancellationToken).ConfigureAwait(false);
-            var dhReplyMessage = await _context.Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_31, cancellationToken).ConfigureAwait(false);
+            var dhReplyMessage = await _context
+                .Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_31, cancellationToken)
+                .ConfigureAwait(false);
             var reply = new DhReply(dhReplyMessage.Packet);
 
             // Verify 'F' is in the range of [1, p-1]

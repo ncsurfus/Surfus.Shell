@@ -12,10 +12,14 @@ namespace Surfus.Shell.Authentication
 
         internal PasswordAuth(string password) => _password = password;
 
-        public Task<IClientMessage> CreateRequestAsync(string username, CancellationToken cancellationToken)
-            => Task.FromResult<IClientMessage>(new UaRequest(username, "ssh-connection", "password", _password));
+        public Task<IClientMessage> CreateRequestAsync(string username, CancellationToken cancellationToken) =>
+            Task.FromResult<IClientMessage>(new UaRequest(username, "ssh-connection", "password", _password));
 
-        public Task<IClientMessage> HandleMessage60Async(string username, ReadOnlyMemory<byte> sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken)
-            => Task.FromResult<IClientMessage>(null);
+        public Task<IClientMessage> HandleMessage60Async(
+            string username,
+            ReadOnlyMemory<byte> sessionIdentifier,
+            MessageEvent messageEvent,
+            CancellationToken cancellationToken
+        ) => Task.FromResult<IClientMessage>(null);
     }
 }

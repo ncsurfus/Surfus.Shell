@@ -50,8 +50,8 @@ namespace Surfus.Shell
         /// </summary>
         public static async Task<SshAgentClient> ConnectAsync(string socketPath = null, CancellationToken cancellationToken = default)
         {
-            socketPath ??= Environment.GetEnvironmentVariable("SSH_AUTH_SOCK")
-                ?? throw new InvalidOperationException("SSH_AUTH_SOCK is not set.");
+            socketPath ??=
+                Environment.GetEnvironmentVariable("SSH_AUTH_SOCK") ?? throw new InvalidOperationException("SSH_AUTH_SOCK is not set.");
 
             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             try
@@ -95,7 +95,11 @@ namespace Surfus.Shell
         /// <summary>
         /// Asks the agent to sign data with the specified key.
         /// </summary>
-        public async Task<byte[]> SignAsync(ReadOnlyMemory<byte> keyBlob, ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
+        public async Task<byte[]> SignAsync(
+            ReadOnlyMemory<byte> keyBlob,
+            ReadOnlyMemory<byte> data,
+            CancellationToken cancellationToken = default
+        )
         {
             // Build: byte type + string key_blob + string data + uint32 flags
             var size = 1 + 4 + keyBlob.Length + 4 + data.Length + 4;
@@ -153,7 +157,8 @@ namespace Surfus.Shell
             while (offset < buffer.Length)
             {
                 var read = await _stream.ReadAsync(buffer.AsMemory(offset), cancellationToken).ConfigureAwait(false);
-                if (read == 0) throw new Exceptions.SshException("SSH agent connection closed.");
+                if (read == 0)
+                    throw new Exceptions.SshException("SSH agent connection closed.");
                 offset += read;
             }
         }

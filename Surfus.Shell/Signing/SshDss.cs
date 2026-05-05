@@ -1,8 +1,7 @@
 using System;
-
-using Surfus.Shell.Exceptions;
-using System.Security.Cryptography;
 using System.Numerics;
+using System.Security.Cryptography;
+using Surfus.Shell.Exceptions;
 
 namespace Surfus.Shell.Signing
 {

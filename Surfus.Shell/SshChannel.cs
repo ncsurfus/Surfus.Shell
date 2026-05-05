@@ -62,14 +62,16 @@ namespace Surfus.Shell
         /// Back-pressure here is by design: the SSH receive window (50KB) limits in-flight data to 2-3 packets, so 64 slots is generous. If the consumer stalls, blocking the read loop is correct — it prevents unbounded memory growth and signals the server to stop sending.
         /// </summary>
         private readonly Channel<MessageEvent> _dataInbox = Channel.CreateBounded<MessageEvent>(
-            new BoundedChannelOptions(64) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true });
+            new BoundedChannelOptions(64) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true }
+        );
 
         /// <summary>
         /// Unbounded channel for control messages (WindowAdjust, Success, Failure, EOF, Close, etc.).
         /// These must never block the read loop.
         /// </summary>
         private readonly Channel<MessageEvent> _controlInbox = Channel.CreateUnbounded<MessageEvent>(
-            new UnboundedChannelOptions { SingleReader = true });
+            new UnboundedChannelOptions { SingleReader = true }
+        );
 
         internal SshChannel(uint channelId)
         {
@@ -92,7 +94,8 @@ namespace Surfus.Shell
             }
             await Inbox.SendAsync(requestMessage, cancellationToken).ConfigureAwait(false);
 
-            if (tcs == null) return;
+            if (tcs == null)
+                return;
 
             using var reg = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
             var success = await tcs.Task.ConfigureAwait(false);
@@ -122,7 +125,11 @@ namespace Surfus.Shell
             _controlInbox.Writer.TryComplete();
             if (_pumpTask != null)
             {
-                try { await _pumpTask.ConfigureAwait(false); } catch { }
+                try
+                {
+                    await _pumpTask.ConfigureAwait(false);
+                }
+                catch { }
             }
             Stdout.Complete();
             Stderr.Complete();
@@ -163,7 +170,8 @@ namespace Surfus.Shell
             {
                 while (SendWindow == 0)
                 {
-                    if (!IsOpen) throw new SshException("Channel closed.");
+                    if (!IsOpen)
+                        throw new SshException("Channel closed.");
                     await _sendWindowAvailable.WaitAsync(cancellationToken).ConfigureAwait(false);
                 }
 
@@ -291,7 +299,8 @@ namespace Surfus.Shell
             TaskCompletionSource<bool> tcs;
             lock (_pendingRequests)
             {
-                if (_pendingRequests.Count == 0) return;
+                if (_pendingRequests.Count == 0)
+                    return;
                 tcs = _pendingRequests.Dequeue();
             }
             tcs.TrySetResult(success);
@@ -324,7 +333,10 @@ namespace Surfus.Shell
 
         // --- IMessageHandler (called from SshClient read loop) ---
 
-        Func<IClientMessage, CancellationToken, Task> IMessageHandler.OnSend { set => Inbox.OnSend = value; }
+        Func<IClientMessage, CancellationToken, Task> IMessageHandler.OnSend
+        {
+            set => Inbox.OnSend = value;
+        }
 
         async ValueTask IMessageHandler.ProcessMessageAsync(MessageEvent messageEvent)
         {
@@ -360,4 +372,3 @@ namespace Surfus.Shell
         }
     }
 }
-

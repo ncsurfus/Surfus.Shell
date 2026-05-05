@@ -48,7 +48,6 @@ namespace Surfus.Shell
         /// </summary>
         internal ReadOnlyMemory<byte> SessionIdentifier { get; set; }
 
-
         internal uint InboundPacketSequence { get; set; }
 
         /// <summary>
@@ -60,7 +59,6 @@ namespace Surfus.Shell
         /// The Key Exchanger that sets up a secure connection.
         /// </summary>
         internal SshKeyExchanger KeyExchanger { get; set; }
-
 
         /// <summary>
         /// The algorithm used to compress data from the server.

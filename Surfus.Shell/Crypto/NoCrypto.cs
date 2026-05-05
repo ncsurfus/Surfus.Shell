@@ -1,8 +1,8 @@
-﻿using Surfus.Shell.Exceptions;
-using System;
+﻿using System;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Surfus.Shell.Exceptions;
 
 namespace Surfus.Shell.Crypto
 {
@@ -52,8 +52,12 @@ namespace Surfus.Shell.Crypto
             // Read enough data until we have at least 1 block.
             while (bufferPosition != blockSize + packetStart)
             {
-                var bytesRead = await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, blockSize + packetStart - bufferPosition), cancellationToken);
-                if (bytesRead == 0) throw new SshException("Connection closed.");
+                var bytesRead = await networkStream.ReadAsync(
+                    buffer.AsMemory(bufferPosition, blockSize + packetStart - bufferPosition),
+                    cancellationToken
+                );
+                if (bytesRead == 0)
+                    throw new SshException("Connection closed.");
                 bufferPosition += bytesRead;
             }
 
@@ -69,8 +73,12 @@ namespace Surfus.Shell.Crypto
 
             while (bufferPosition != bufferLength) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
             {
-                var bytesRead = await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, bufferLength - bufferPosition), cancellationToken);
-                if (bytesRead == 0) throw new SshException("Connection closed.");
+                var bytesRead = await networkStream.ReadAsync(
+                    buffer.AsMemory(bufferPosition, bufferLength - bufferPosition),
+                    cancellationToken
+                );
+                if (bytesRead == 0)
+                    throw new SshException("Connection closed.");
                 bufferPosition += bytesRead;
             }
 

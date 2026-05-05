@@ -10,13 +10,18 @@ namespace Surfus.Shell.Authentication
     {
         private readonly Func<string, CancellationToken, Task<string>> _responseCallback;
 
-        internal KeyboardInteractiveAuth(Func<string, CancellationToken, Task<string>> responseCallback)
-            => _responseCallback = responseCallback;
+        internal KeyboardInteractiveAuth(Func<string, CancellationToken, Task<string>> responseCallback) =>
+            _responseCallback = responseCallback;
 
-        public Task<IClientMessage> CreateRequestAsync(string username, CancellationToken cancellationToken)
-            => Task.FromResult<IClientMessage>(new UaRequest(username, "ssh-connection", "keyboard-interactive", (string)null, (string)null));
+        public Task<IClientMessage> CreateRequestAsync(string username, CancellationToken cancellationToken) =>
+            Task.FromResult<IClientMessage>(new UaRequest(username, "ssh-connection", "keyboard-interactive", (string)null, (string)null));
 
-        public async Task<IClientMessage> HandleMessage60Async(string username, ReadOnlyMemory<byte> sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken)
+        public async Task<IClientMessage> HandleMessage60Async(
+            string username,
+            ReadOnlyMemory<byte> sessionIdentifier,
+            MessageEvent messageEvent,
+            CancellationToken cancellationToken
+        )
         {
             var message = (UaInfoRequest)messageEvent.Message;
             var responses = new string[message.PromptNumber];

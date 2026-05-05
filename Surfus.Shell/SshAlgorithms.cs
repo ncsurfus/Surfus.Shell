@@ -1,4 +1,5 @@
 using System;
+using System.Security.Cryptography;
 using Surfus.Shell.Compression;
 using Surfus.Shell.Crypto;
 using Surfus.Shell.KeyExchange;
@@ -6,7 +7,6 @@ using Surfus.Shell.KeyExchange.DiffieHellman;
 using Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange;
 using Surfus.Shell.MessageAuthentication;
 using Surfus.Shell.Signing;
-using System.Security.Cryptography;
 
 namespace Surfus.Shell
 {
@@ -89,22 +89,31 @@ namespace Surfus.Shell
         internal string[] KeyExchangeNames => Array.ConvertAll(KeyExchange, a => a.Name);
 
         internal CryptoAlgorithm CreateEncryption(string name) => Find(Encryption, name).Create();
+
         internal MacAlgorithm CreateMac(string name) => Find(Mac, name).Create();
+
         internal CompressionAlgorithm CreateCompression(string name) => Find(Compression, name).Create();
-        internal Signer CreateSigner(string name, ReadOnlyMemory<byte> serverHostKey) => FindDescriptor(HostKey, name).Factory(serverHostKey);
-        internal KeyExchangeAlgorithm CreateKeyExchange(string name, KexContext ctx, KexInitExchangeResult kex) => FindDescriptor(KeyExchange, name).Factory(ctx, kex);
+
+        internal Signer CreateSigner(string name, ReadOnlyMemory<byte> serverHostKey) =>
+            FindDescriptor(HostKey, name).Factory(serverHostKey);
+
+        internal KeyExchangeAlgorithm CreateKeyExchange(string name, KexContext ctx, KexInitExchangeResult kex) =>
+            FindDescriptor(KeyExchange, name).Factory(ctx, kex);
 
         private static AlgorithmDescriptor<T> Find<T>(AlgorithmDescriptor<T>[] descriptors, string name)
         {
             foreach (var d in descriptors)
-                if (d.Name == name) return d;
+                if (d.Name == name)
+                    return d;
             throw new Exceptions.SshException($"Algorithm '{name}' is not configured.");
         }
 
-        private static T FindDescriptor<T>(T[] descriptors, string name) where T : class
+        private static T FindDescriptor<T>(T[] descriptors, string name)
+            where T : class
         {
             foreach (var d in descriptors)
-                if (d.ToString() == name) return d;
+                if (d.ToString() == name)
+                    return d;
             throw new Exceptions.SshException($"Algorithm '{name}' is not configured.");
         }
 
@@ -146,11 +155,17 @@ namespace Surfus.Shell
 
         public static readonly KeyExchangeDescriptor[] DefaultKeyExchange = new[]
         {
-            new KeyExchangeDescriptor("diffie-hellman-group-exchange-sha256", (ctx, kex) => new DiffieHellmanGroupKeyExchange(ctx, kex, "SHA256")),
+            new KeyExchangeDescriptor(
+                "diffie-hellman-group-exchange-sha256",
+                (ctx, kex) => new DiffieHellmanGroupKeyExchange(ctx, kex, "SHA256")
+            ),
             new KeyExchangeDescriptor("diffie-hellman-group14-sha256", (ctx, kex) => new DiffieHellmanGroup14Sha256(ctx, kex)),
             new KeyExchangeDescriptor("diffie-hellman-group16-sha512", (ctx, kex) => new DiffieHellmanGroup16Sha512(ctx, kex)),
             new KeyExchangeDescriptor("diffie-hellman-group18-sha512", (ctx, kex) => new DiffieHellmanGroup18Sha512(ctx, kex)),
-            new KeyExchangeDescriptor("diffie-hellman-group-exchange-sha1", (ctx, kex) => new DiffieHellmanGroupKeyExchange(ctx, kex, "SHA1")),
+            new KeyExchangeDescriptor(
+                "diffie-hellman-group-exchange-sha1",
+                (ctx, kex) => new DiffieHellmanGroupKeyExchange(ctx, kex, "SHA1")
+            ),
             new KeyExchangeDescriptor("diffie-hellman-group14-sha1", (ctx, kex) => new DiffieHellmanGroup14Sha1(ctx, kex)),
         };
     }

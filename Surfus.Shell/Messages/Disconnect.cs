@@ -20,7 +20,7 @@ namespace Surfus.Shell.Messages
             SSH_DISCONNECT_TOO_MANY_CONNECTIONS = 12,
             SSH_DISCONNECT_AUTH_CANCELLED_BY_USER = 13,
             SSH_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE = 14,
-            SSH_DISCONNECT_ILLEGAL_USER_NAME = 15
+            SSH_DISCONNECT_ILLEGAL_USER_NAME = 15,
         }
 
         internal Disconnect(SshPacket packet)

@@ -38,7 +38,8 @@ namespace Surfus.Shell.Tests
             while (true)
             {
                 var n = await stream.ReadAsync(readBuffer, 0, readBuffer.Length, CancellationToken.None);
-                if (n == 0) break;
+                if (n == 0)
+                    break;
                 Array.Copy(readBuffer, 0, received, totalRead, n);
                 totalRead += n;
             }

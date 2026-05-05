@@ -1,6 +1,6 @@
 using System;
-using Surfus.Shell.Extensions;
 using System.Security.Cryptography;
+using Surfus.Shell.Extensions;
 
 namespace Surfus.Shell.Messages.KeyExchange
 {

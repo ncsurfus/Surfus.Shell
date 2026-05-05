@@ -105,8 +105,12 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
         public override async Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken)
         {
-            await _context.Inbox.SendAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken).ConfigureAwait(false);
-            var dhgGroupMessage = await _context.Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_31, cancellationToken).ConfigureAwait(false);
+            await _context
+                .Inbox.SendAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken)
+                .ConfigureAwait(false);
+            var dhgGroupMessage = await _context
+                .Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_31, cancellationToken)
+                .ConfigureAwait(false);
 
             var dhgGroup = new DhgGroup(dhgGroupMessage.Packet);
 
@@ -125,7 +129,9 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             var e = new BigInt(BigInteger.ModPow(dhgGroup.G.BigInteger, x, dhgGroup.P.BigInteger));
 
             await _context.Inbox.SendAsync(new DhgInit(e), cancellationToken).ConfigureAwait(false);
-            var dhgReplyMessage = await _context.Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_33, cancellationToken).ConfigureAwait(false);
+            var dhgReplyMessage = await _context
+                .Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_33, cancellationToken)
+                .ConfigureAwait(false);
 
             // Send 'e' to the server with the 'Init' message.
             var replyMessage = new DhgReply(dhgReplyMessage.Packet);

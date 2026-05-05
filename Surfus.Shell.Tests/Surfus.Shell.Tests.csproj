@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -27,5 +26,4 @@
   <Target Name="BuildGoTestServer" BeforeTargets="Build">
     <Exec Command="mise exec -- go build -o testserver ." WorkingDirectory="$(MSBuildProjectDirectory)/testserver" />
   </Target>
-
 </Project>

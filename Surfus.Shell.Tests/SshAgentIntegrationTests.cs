@@ -14,12 +14,12 @@ public class SshAgentIntegrationTests : IAsyncLifetime
     private string _agentSocket = null!;
     private int _agentPid;
 
-    private static CancellationToken Timeout(int seconds = 10)
-        => new CancellationTokenSource(TimeSpan.FromSeconds(seconds)).Token;
+    private static CancellationToken Timeout(int seconds = 10) => new CancellationTokenSource(TimeSpan.FromSeconds(seconds)).Token;
 
     public async Task InitializeAsync()
     {
-        if (IsWindows) return;
+        if (IsWindows)
+            return;
 
         _tempDir = Path.Combine(Path.GetTempPath(), $"ss-{Guid.NewGuid().ToString("N")[..8]}");
         Directory.CreateDirectory(_tempDir);
@@ -42,20 +42,30 @@ public class SshAgentIntegrationTests : IAsyncLifetime
 
     public Task DisposeAsync()
     {
-        if (IsWindows) return Task.CompletedTask;
+        if (IsWindows)
+            return Task.CompletedTask;
 
         if (_agentPid > 0)
         {
-            try { Process.GetProcessById(_agentPid).Kill(); } catch { }
+            try
+            {
+                Process.GetProcessById(_agentPid).Kill();
+            }
+            catch { }
         }
-        try { Directory.Delete(_tempDir, recursive: true); } catch { }
+        try
+        {
+            Directory.Delete(_tempDir, recursive: true);
+        }
+        catch { }
         return Task.CompletedTask;
     }
 
     [Fact]
     public async Task AgentAuth_ListKeys()
     {
-        if (IsWindows) return;
+        if (IsWindows)
+            return;
 
         using var agent = await SshAgentClient.ConnectAsync(_agentSocket, Timeout());
         var keys = await agent.ListKeysAsync(Timeout());
@@ -66,7 +76,8 @@ public class SshAgentIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task AgentAuth_ConnectAndAuthenticate()
     {
-        if (IsWindows) return;
+        if (IsWindows)
+            return;
 
         await using var server = await SshTestServer.StartAsync(authorizedKeyPath: _pubKeyPath);
         using var agent = await SshAgentClient.ConnectAsync(_agentSocket, Timeout());
@@ -82,7 +93,8 @@ public class SshAgentIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task AgentAuth_TryAllKeys()
     {
-        if (IsWindows) return;
+        if (IsWindows)
+            return;
 
         await using var server = await SshTestServer.StartAsync(authorizedKeyPath: _pubKeyPath);
         using var agent = await SshAgentClient.ConnectAsync(_agentSocket, Timeout());
@@ -97,7 +109,8 @@ public class SshAgentIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task AgentAuth_ExecAfterAuth()
     {
-        if (IsWindows) return;
+        if (IsWindows)
+            return;
 
         await using var server = await SshTestServer.StartAsync(authorizedKeyPath: _pubKeyPath);
         using var agent = await SshAgentClient.ConnectAsync(_agentSocket, Timeout());

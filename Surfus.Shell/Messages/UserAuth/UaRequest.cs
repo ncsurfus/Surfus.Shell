@@ -32,7 +32,13 @@ namespace Surfus.Shell.Messages.UserAuth
         public ReadOnlyMemory<byte> PublicKeyBlob { get; }
         public ReadOnlyMemory<byte> Signature { get; }
 
-        public UaRequest(string username, string serviceName, string publicKeyAlgorithm, ReadOnlyMemory<byte> publicKeyBlob, ReadOnlyMemory<byte> signature)
+        public UaRequest(
+            string username,
+            string serviceName,
+            string publicKeyAlgorithm,
+            ReadOnlyMemory<byte> publicKeyBlob,
+            ReadOnlyMemory<byte> signature
+        )
         {
             Username = username;
             ServiceName = serviceName;

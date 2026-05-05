@@ -16,7 +16,13 @@ namespace Surfus.Shell.KeyExchange
         internal ReadOnlyMemory<byte> ServerCertificate { get; set; }
         internal int ServerCertificateSize { get; set; }
 
-        internal KexContext(SshMessageInbox inbox, string clientVersion, string serverVersion, Func<ReadOnlyMemory<byte>, bool> hostKeyCallback, SshAlgorithms algorithms)
+        internal KexContext(
+            SshMessageInbox inbox,
+            string clientVersion,
+            string serverVersion,
+            Func<ReadOnlyMemory<byte>, bool> hostKeyCallback,
+            SshAlgorithms algorithms
+        )
         {
             Inbox = inbox;
             ClientVersion = clientVersion;

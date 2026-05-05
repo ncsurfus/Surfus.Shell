@@ -1,15 +1,19 @@
-using Surfus.Shell.Cisco.Exceptions;
-using Surfus.Shell.Exceptions;
 using System;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Surfus.Shell.Cisco.Exceptions;
+using Surfus.Shell.Exceptions;
 
 namespace Surfus.Shell.Cisco
 {
     public static class CiscoExtensions
     {
-        public static async Task<CiscoTerminal> CiscoInitializeAndEnable(this SshTerminal terminal, string enablePassword, CancellationToken cancellationToken)
+        public static async Task<CiscoTerminal> CiscoInitializeAndEnable(
+            this SshTerminal terminal,
+            string enablePassword,
+            CancellationToken cancellationToken
+        )
         {
             // Wait for the initial prompt.
             await terminal.ReadAsync(cancellationToken);
@@ -24,7 +28,7 @@ namespace Surfus.Shell.Cisco
                 {
                     Prompt = prompt.Groups["fullPrompt"].Value,
                     Name = prompt.Groups["hostname"].Value,
-                    Mode = TerminalMode.Privileged
+                    Mode = TerminalMode.Privileged,
                 };
             }
 
@@ -35,7 +39,7 @@ namespace Surfus.Shell.Cisco
             {
                 Prompt = prompt.Groups["fullPrompt"].Value,
                 Name = prompt.Groups["hostname"].Value,
-                Mode = TerminalMode.Privileged
+                Mode = TerminalMode.Privileged,
             };
         }
 
@@ -47,7 +51,13 @@ namespace Surfus.Shell.Cisco
                 await terminal.WriteLineAsync("ab cdef", cancellationToken);
                 await terminal.ExpectAsync("ab cdef", cancellationToken);
                 await terminal.WriteAsync("a bcdef", cancellationToken);
-                prompt = await terminal.ExpectRegexMatchAsync(@"^\s?(?<fullPrompt>(?<hostname>[^>\#\s]+)((?<user>>)|(?<privileged>\#)))\s*(?=a bcdef)", RegexOptions.Multiline, cancellationToken).ConfigureAwait(false);
+                prompt = await terminal
+                    .ExpectRegexMatchAsync(
+                        @"^\s?(?<fullPrompt>(?<hostname>[^>\#\s]+)((?<user>>)|(?<privileged>\#)))\s*(?=a bcdef)",
+                        RegexOptions.Multiline,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -72,7 +82,12 @@ namespace Surfus.Shell.Cisco
             // Attempt to get enable prompt
             await terminal.WriteLineAsync("enable", cancellationToken).ConfigureAwait(false);
 
-            var enablePrompt = await terminal.ExpectRegexMatchAsync(@"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>[^#>]*)>)\s*", cancellationToken).ConfigureAwait(false);
+            var enablePrompt = await terminal
+                .ExpectRegexMatchAsync(
+                    @"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>[^#>]*)>)\s*",
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
 
             // Server gave privileged prompt with no password.
             if (enablePrompt.Groups["privileged"].Success)
@@ -96,7 +111,12 @@ namespace Surfus.Shell.Cisco
             await terminal.WriteLineAsync(enablePassword, cancellationToken).ConfigureAwait(false);
 
             // Check result of new prompt
-            var enableResult = await terminal.ExpectRegexMatchAsync(@"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>[^#>]*)>)\s*", cancellationToken).ConfigureAwait(false);
+            var enableResult = await terminal
+                .ExpectRegexMatchAsync(
+                    @"(?<passwordPrompt>(Password|password):?\s*)|((?<privileged>\#)|(?<user>[^#>]*)>)\s*",
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
             if (enableResult.Groups["privileged"].Success)
             {
                 return;
@@ -132,6 +152,6 @@ namespace Surfus.Shell.Cisco
     public enum TerminalMode
     {
         User,
-        Privileged
+        Privileged,
     }
 }
