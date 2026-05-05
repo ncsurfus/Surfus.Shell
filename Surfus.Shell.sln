@@ -9,6 +9,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Surfus.Shell.Cisco", "Surfu
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Surfus.Shell.Tests", "Surfus.Shell.Tests\Surfus.Shell.Tests.csproj", "{4643440E-89FE-4563-AC0A-7ABF8D720D58}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Surfus.Shell.Benchmarks", "Surfus.Shell.Benchmarks\Surfus.Shell.Benchmarks.csproj", "{860A6AA7-B4DE-47FF-A142-0163C08E2E44}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{4643440E-89FE-4563-AC0A-7ABF8D720D58}.Release|x64.Build.0 = Release|Any CPU
 		{4643440E-89FE-4563-AC0A-7ABF8D720D58}.Release|x86.ActiveCfg = Release|Any CPU
 		{4643440E-89FE-4563-AC0A-7ABF8D720D58}.Release|x86.Build.0 = Release|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Debug|x64.Build.0 = Debug|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Debug|x86.Build.0 = Debug|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Release|Any CPU.Build.0 = Release|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Release|x64.ActiveCfg = Release|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Release|x64.Build.0 = Release|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Release|x86.ActiveCfg = Release|Any CPU
+		{860A6AA7-B4DE-47FF-A142-0163C08E2E44}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
