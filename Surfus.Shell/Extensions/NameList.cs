@@ -1,4 +1,5 @@
-﻿using System.Text;
+using System;
+using System.Text;
 
 namespace Surfus.Shell.Extensions
 {
@@ -9,7 +10,7 @@ namespace Surfus.Shell.Extensions
         {
             if (names == null || names.Length == 0)
             {
-                AsBytes = new byte[] { };
+                AsBytes = ReadOnlyMemory<byte>.Empty;
                 Names = new string[] { };
                 AsString = string.Empty;
                 IsEmpty = true;
@@ -22,7 +23,7 @@ namespace Surfus.Shell.Extensions
         }
 
         public string[] Names { get; }
-        public byte[] AsBytes { get; }
+        public ReadOnlyMemory<byte> AsBytes { get; }
         public string AsString { get; }
         public bool IsEmpty { get; }
 

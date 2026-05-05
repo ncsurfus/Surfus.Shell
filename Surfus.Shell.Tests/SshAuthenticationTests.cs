@@ -30,7 +30,7 @@ public class SshAuthenticationTests
     {
         // Build minimal packet: [0..3]=packetSize, [4]=paddingLen, [5]=messageType
         var buffer = new byte[10];
-        ByteWriter.WriteUint(buffer, 0, 5);
+        ByteWriter.WriteUint(buffer.AsSpan(0), 5);
         buffer[4] = 0;
         buffer[5] = (byte)type;
         var packet = new SshPacket(buffer, packetStart: 0, packetLength: 6);

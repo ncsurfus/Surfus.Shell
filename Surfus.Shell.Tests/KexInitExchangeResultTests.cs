@@ -197,7 +197,7 @@ public class KexInitExchangeResultTests
     {
         var str = string.Join(",", names);
         var bytes = System.Text.Encoding.ASCII.GetBytes(str);
-        ByteWriter.WriteUint(buffer, pos, (uint)bytes.Length);
+        ByteWriter.WriteUint(buffer.AsSpan(pos), (uint)bytes.Length);
         pos += 4;
         Array.Copy(bytes, 0, buffer, pos, bytes.Length);
         pos += bytes.Length;

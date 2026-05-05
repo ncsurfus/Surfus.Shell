@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Surfus.Shell.Messages.Channel
@@ -17,7 +18,7 @@ namespace Surfus.Shell.Messages.Channel
             Data = packet.Reader.ReadBinaryString();
         }
 
-        public ChannelExtendedData(uint recipientChannel, uint dataTypeCode, byte[] data)
+        public ChannelExtendedData(uint recipientChannel, uint dataTypeCode, ReadOnlyMemory<byte> data)
         {
             RecipientChannel = recipientChannel;
             DataTypeCode = (DataType)dataTypeCode;
@@ -25,7 +26,7 @@ namespace Surfus.Shell.Messages.Channel
         }
 
         public DataType DataTypeCode { get; }
-        public byte[] Data { get; }
+        public ReadOnlyMemory<byte> Data { get; }
 
         public uint RecipientChannel { get; }
 

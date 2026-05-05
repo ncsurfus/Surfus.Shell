@@ -8,7 +8,7 @@ namespace Surfus.Shell.Signing
 {
     public sealed class SshDss : Signer
     {
-        internal SshDss(byte[] signature)
+        internal SshDss(ReadOnlyMemory<byte> signature)
         {
             var reader = new ByteReader(signature);
             if (Name != reader.ReadString())
@@ -31,12 +31,12 @@ namespace Surfus.Shell.Signing
         public override string Name { get; } = "ssh-dss";
         public override int KeySize { get; }
 
-        public override bool VerifySignature(byte[] data, byte[] signature)
+        public override bool VerifySignature(ReadOnlySpan<byte> data, ReadOnlySpan<byte> signature)
         {
             using (var hashAlgorithm = SHA1.Create())
             {
-                var reader = new ByteReader(signature);
-                var hash = ByteReader.ReadBigInteger(hashAlgorithm.ComputeHash(data));
+                var reader = new ByteReader(signature.ToArray());
+                var hash = ByteReader.ReadBigInteger(hashAlgorithm.ComputeHash(data.ToArray()));
 
                 var header = reader.ReadString();
                 if (Name != header)
@@ -44,8 +44,8 @@ namespace Surfus.Shell.Signing
                     throw new SshException("Invalid DSS Header.");
                 }
                 var blob = reader.ReadBinaryString();
-                var r = ByteReader.ReadBigInteger(blob, 0, 20);
-                var s = ByteReader.ReadBigInteger(blob, 20, 20);
+                var r = ByteReader.ReadBigInteger(blob.AsSpan(0, 20));
+                var s = ByteReader.ReadBigInteger(blob.AsSpan(20, 20));
 
                 if (r <= 0 || r >= Q.BigInteger)
                 {

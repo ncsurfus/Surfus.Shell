@@ -17,7 +17,7 @@ namespace Surfus.Shell.Compression
         /// <returns>
         /// The compressed data.
         /// </returns>
-        internal abstract byte[] Compress(byte[] data);
+        internal abstract byte[] Compress(ReadOnlyMemory<byte> data);
 
         /// <summary>
         /// Decompresses the data.
@@ -28,7 +28,7 @@ namespace Surfus.Shell.Compression
         /// <returns>
         /// The decompressed data.
         /// </returns>
-        internal abstract byte[] Decompress(byte[] data);
+        internal abstract byte[] Decompress(ReadOnlyMemory<byte> data);
 
         /// <summary>
         /// Disposes the compression algorithm.

@@ -15,14 +15,14 @@ namespace Surfus.Shell
     internal class SshKeyExchanger : IMessageHandler
     {
         private readonly SshConnectionInfo _connectionInfo;
-        private readonly Func<byte[], bool> _hostKeyCallback;
+        private readonly Func<ReadOnlyMemory<byte>, bool> _hostKeyCallback;
         private readonly SshAlgorithms _algorithms;
         private readonly SshMessageInbox _inbox = new();
         private readonly TaskCompletionSource _ready = new();
         private readonly TaskCompletionSource _initialKexComplete = new();
         private readonly Channel<Action> _newReadKeys = Channel.CreateUnbounded<Action>();
 
-        internal SshKeyExchanger(SshConnectionInfo connectionInfo, Func<byte[], bool> hostKeyCallback, SshAlgorithms algorithms)
+        internal SshKeyExchanger(SshConnectionInfo connectionInfo, Func<ReadOnlyMemory<byte>, bool> hostKeyCallback, SshAlgorithms algorithms)
         {
             _connectionInfo = connectionInfo;
             _hostKeyCallback = hostKeyCallback;
@@ -82,7 +82,8 @@ namespace Surfus.Shell
                 _connectionInfo.ServerCertificate = kexContext.ServerCertificate;
                 _connectionInfo.ServerCertificateSize = kexContext.ServerCertificateSize;
                 sessionIdentifier = sessionIdentifier.IsEmpty ? h : sessionIdentifier;
-                _connectionInfo.SessionIdentifier ??= sessionIdentifier.ToArray();
+                if (_connectionInfo.SessionIdentifier.IsEmpty)
+                    _connectionInfo.SessionIdentifier = sessionIdentifier.ToArray();
 
                 await _inbox.ReadAsync(MessageType.SSH_MSG_NEWKEYS, cancellationToken).ConfigureAwait(false);
 

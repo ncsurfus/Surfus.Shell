@@ -11,12 +11,12 @@ namespace Surfus.Shell.KeyExchange
         internal SshMessageInbox Inbox { get; }
         internal string ClientVersion { get; }
         internal string ServerVersion { get; }
-        internal Func<byte[], bool> HostKeyCallback { get; }
+        internal Func<ReadOnlyMemory<byte>, bool> HostKeyCallback { get; }
         internal SshAlgorithms Algorithms { get; }
-        internal byte[] ServerCertificate { get; set; }
+        internal ReadOnlyMemory<byte> ServerCertificate { get; set; }
         internal int ServerCertificateSize { get; set; }
 
-        internal KexContext(SshMessageInbox inbox, string clientVersion, string serverVersion, Func<byte[], bool> hostKeyCallback, SshAlgorithms algorithms)
+        internal KexContext(SshMessageInbox inbox, string clientVersion, string serverVersion, Func<ReadOnlyMemory<byte>, bool> hostKeyCallback, SshAlgorithms algorithms)
         {
             Inbox = inbox;
             ClientVersion = clientVersion;

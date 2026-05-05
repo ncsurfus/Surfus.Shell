@@ -20,15 +20,9 @@ namespace Surfus.Shell
         /// </summary>
         public int Position { get; private set; }
 
-        internal ByteReader(byte[] bytes)
+        internal ByteReader(ReadOnlyMemory<byte> bytes)
         {
             Bytes = bytes;
-        }
-
-        internal ByteReader(byte[] bytes, int index)
-        {
-            Bytes = bytes;
-            Position = index;
         }
 
         private ReadOnlySpan<byte> Span => Bytes.Span;
@@ -67,13 +61,13 @@ namespace Surfus.Shell
             return value;
         }
 
-        internal static uint ReadUInt32(ReadOnlySpan<byte> buffer, int index)
+        internal static uint ReadUInt32(ReadOnlySpan<byte> buffer)
         {
             if (BitConverter.IsLittleEndian)
             {
-                return (uint)(buffer[index] << 24 | buffer[index + 1] << 16 | buffer[index + 2] << 8 | buffer[index + 3]);
+                return (uint)(buffer[0] << 24 | buffer[1] << 16 | buffer[2] << 8 | buffer[3]);
             }
-            return (uint)(buffer[index] | buffer[index + 1] << 8 | buffer[index + 2] << 16 | buffer[index + 3] << 24);
+            return (uint)(buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24);
         }
 
         internal NameList ReadNameList()
@@ -97,13 +91,13 @@ namespace Surfus.Shell
             return new BigInt(new BigInteger(bigIntegerBuffer), bigIntegerBuffer, length);
         }
 
-        internal static BigInteger ReadBigInteger(ReadOnlySpan<byte> bytes, int position, int length)
+        internal static BigInteger ReadBigInteger(ReadOnlySpan<byte> bytes)
         {
-            var bigIntegerBuffer = bytes[length + position - 1] <= 127 ? new byte[length] : new byte[length + 1];
+            var bigIntegerBuffer = bytes[bytes.Length - 1] <= 127 ? new byte[bytes.Length] : new byte[bytes.Length + 1];
 
-            for (var i = 0; i != length; i++)
+            for (var i = 0; i != bytes.Length; i++)
             {
-                bigIntegerBuffer[i] = bytes[position + length - i - 1];
+                bigIntegerBuffer[i] = bytes[bytes.Length - i - 1];
             }
 
             return new BigInteger(bigIntegerBuffer);

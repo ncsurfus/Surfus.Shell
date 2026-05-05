@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Surfus.Shell.Messages;
@@ -14,7 +15,7 @@ namespace Surfus.Shell.Authentication
         public Task<IClientMessage> CreateRequestAsync(string username, CancellationToken cancellationToken)
             => Task.FromResult<IClientMessage>(new UaRequest(username, "ssh-connection", "password", _password));
 
-        public Task<IClientMessage> HandleMessage60Async(string username, byte[] sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken)
+        public Task<IClientMessage> HandleMessage60Async(string username, ReadOnlyMemory<byte> sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken)
             => Task.FromResult<IClientMessage>(null);
     }
 }

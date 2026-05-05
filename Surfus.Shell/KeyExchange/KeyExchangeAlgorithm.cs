@@ -69,7 +69,7 @@ namespace Surfus.Shell.KeyExchange
                     var repeatHashWriter = new ByteWriter(k.GetBigIntegerSize() + h.GetByteBlobSize() + keyWriter.Position);
                     repeatHashWriter.WriteBigInteger(k);
                     repeatHashWriter.WriteByteBlob(h);
-                    repeatHashWriter.WriteByteBlob(keyWriter.Bytes, 0, keyWriter.Position);
+                    repeatHashWriter.WriteByteBlob(keyWriter.Bytes.AsMemory(0, keyWriter.Position));
                     keyWriter.WriteByteBlob(hashAlgorithm.ComputeHash(repeatHashWriter.Bytes));
                 }
 

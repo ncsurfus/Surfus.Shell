@@ -5,7 +5,7 @@ namespace Surfus.Shell.Signing
 {
     public abstract class ECDsaBase : Signer
     {
-        internal ECDsaBase(byte[] publicCertificate)
+        internal ECDsaBase(ReadOnlyMemory<byte> publicCertificate)
         {
             var reader = new ByteReader(publicCertificate);
             if (Name != reader.ReadString())
@@ -43,12 +43,12 @@ namespace Surfus.Shell.Signing
 
         public abstract int FieldSizeBytes { get; }
 
-        public override bool VerifySignature(byte[] data, byte[] signature)
+        public override bool VerifySignature(ReadOnlySpan<byte> data, ReadOnlySpan<byte> signature)
         {
             // https://www.rfc-editor.org/rfc/rfc5656#section-3.1.2
             using var ecdsa = ECDsa.Create(Parameters);
 
-            var reader = new ByteReader(signature);
+            var reader = new ByteReader(signature.ToArray());
             if (Name != reader.ReadString())
             {
                 throw new Exception($"Expected {Name} signature type!");

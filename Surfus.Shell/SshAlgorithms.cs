@@ -42,9 +42,9 @@ namespace Surfus.Shell
     public record SignerDescriptor
     {
         public string Name { get; }
-        internal Func<byte[], Signer> Factory { get; }
+        internal Func<ReadOnlyMemory<byte>, Signer> Factory { get; }
 
-        public SignerDescriptor(string name, Func<byte[], Signer> factory)
+        public SignerDescriptor(string name, Func<ReadOnlyMemory<byte>, Signer> factory)
         {
             Name = name;
             Factory = factory;
@@ -91,7 +91,7 @@ namespace Surfus.Shell
         internal CryptoAlgorithm CreateEncryption(string name) => Find(Encryption, name).Create();
         internal MacAlgorithm CreateMac(string name) => Find(Mac, name).Create();
         internal CompressionAlgorithm CreateCompression(string name) => Find(Compression, name).Create();
-        internal Signer CreateSigner(string name, byte[] serverHostKey) => FindDescriptor(HostKey, name).Factory(serverHostKey);
+        internal Signer CreateSigner(string name, ReadOnlyMemory<byte> serverHostKey) => FindDescriptor(HostKey, name).Factory(serverHostKey);
         internal KeyExchangeAlgorithm CreateKeyExchange(string name, KexContext ctx, KexInitExchangeResult kex) => FindDescriptor(KeyExchange, name).Factory(ctx, kex);
 
         private static AlgorithmDescriptor<T> Find<T>(AlgorithmDescriptor<T>[] descriptors, string name)

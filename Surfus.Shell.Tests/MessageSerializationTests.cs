@@ -21,7 +21,7 @@ public class MessageSerializationTests
         var writer = msg.GetByteWriter();
 
         // Read back: skip to after message type byte
-        var reader = new ByteReader(writer.Bytes, SshPacket.DataIndex + 1);
+        var reader = new ByteReader(((ReadOnlyMemory<byte>)writer.Bytes).Slice(SshPacket.DataIndex + 1));
         Assert.Equal("ssh-userauth", reader.ReadString());
     }
 
@@ -76,7 +76,7 @@ public class MessageSerializationTests
         // Build a packet buffer: [0..3]=packetSize, [4]=paddingLen, [5..]=payload
         var buffer = new byte[5 + bytes.Length];
         buffer[4] = 0;
-        Array.Copy(bytes, 0, buffer, 5, bytes.Length);
+        bytes.Span.CopyTo(buffer.AsSpan(5));
 
         var packet = new SshPacket(buffer, packetStart: 0, packetLength: 5 + bytes.Length);
         packet.Reader.ReadByte(); // consume message type

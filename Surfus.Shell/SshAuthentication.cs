@@ -11,7 +11,7 @@ namespace Surfus.Shell
 {
     internal class SshAuthentication : IMessageHandler, IDisposable
     {
-        private readonly Func<byte[]> _getSessionIdentifier;
+        private readonly Func<ReadOnlyMemory<byte>> _getSessionIdentifier;
         private readonly SshMessageInbox _inbox = new();
         private bool _serviceAccepted;
 
@@ -20,7 +20,7 @@ namespace Surfus.Shell
         /// </summary>
         internal Action<string> OnBanner { get; set; }
 
-        internal SshAuthentication(Func<byte[]> getSessionIdentifier)
+        internal SshAuthentication(Func<ReadOnlyMemory<byte>> getSessionIdentifier)
         {
             _getSessionIdentifier = getSessionIdentifier;
         }

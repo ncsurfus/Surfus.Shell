@@ -91,7 +91,7 @@ namespace Surfus.Shell.Crypto
             var expectedPacketSize = 128; // We're going to initialize the buffer to the average expected packet length.
             var buffer = new byte[4 + blockSize + expectedPacketSize + hmacSize]; // Array Length: uint (packetSequenceNumber) + uint (packet size) + expectedPacketSize + hmac size
 
-            ByteWriter.WriteUint(buffer, 0, packetSequenceNumber); // Write first uint, which is the packet sequence number.
+            ByteWriter.WriteUint(buffer.AsSpan(0), packetSequenceNumber); // Write first uint, which is the packet sequence number.
             var packetStart = 4; // This is where we actually start adding packet data, skipping the provided packet sequence number..
             var bufferPosition = 4; // Tracks where we last wrote data into our buffer.
 
@@ -103,7 +103,7 @@ namespace Surfus.Shell.Crypto
 
             _decryptor.TransformBlock(buffer, bufferPosition - blockSize, blockSize, buffer, bufferPosition - blockSize); // Decrypt the first block in the buffer.
 
-            var sshPacketSize = ByteReader.ReadUInt32(buffer, 4); // Get the length of the packet.
+            var sshPacketSize = ByteReader.ReadUInt32(buffer.AsSpan(4)); // Get the length of the packet.
             if (sshPacketSize > 35000)
                 throw new SshException("Invalid message sent, packet was to large!");
             int bufferLength = (int)(4 + 4 + sshPacketSize + hmacSize); // Calculate the full size of what our buffer *should* be. uint (packetSequenceNumber) + uint (packet size) + packet + hmac size

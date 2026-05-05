@@ -37,7 +37,12 @@ namespace Surfus.Shell
             return bytes.Length;
         }
 
-        internal static int GetBinaryStringSize(this byte[] bytes)
+        internal static int GetByteBlobSize(this ReadOnlyMemory<byte> bytes)
+        {
+            return bytes.Length;
+        }
+
+        internal static int GetBinaryStringSize(this ReadOnlyMemory<byte> bytes)
         {
             return 4 + bytes.Length;
         }

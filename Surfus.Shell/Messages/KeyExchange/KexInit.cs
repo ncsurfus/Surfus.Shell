@@ -11,8 +11,9 @@ namespace Surfus.Shell.Messages.KeyExchange
 
         public KexInit(SshAlgorithms algorithms)
         {
-            RandomBytes = new byte[16];
-            RandomGenerator.GetBytes(RandomBytes);
+            var randomBytes = new byte[16];
+            RandomGenerator.GetBytes(randomBytes);
+            RandomBytes = randomBytes;
 
             KexAlgorithms = new NameList(algorithms.KeyExchangeNames);
             ServerHostKeyAlgorithms = new NameList(algorithms.HostKeyNames);
@@ -56,7 +57,7 @@ namespace Surfus.Shell.Messages.KeyExchange
         public NameList LanguagesServerToClient { get; }
         public NameList MacClientToServer { get; }
         public NameList MacServerToClient { get; }
-        public byte[] RandomBytes { get; }
+        public ReadOnlyMemory<byte> RandomBytes { get; }
         public NameList ServerHostKeyAlgorithms { get; }
         public MessageType Type => MessageType.SSH_MSG_KEXINIT;
         public byte MessageId => (byte)Type;
@@ -64,7 +65,7 @@ namespace Surfus.Shell.Messages.KeyExchange
         /// <summary>
         /// The raw bytes of this KexInit message (used for key exchange hash computation).
         /// </summary>
-        public byte[] Bytes { get; }
+        public ReadOnlyMemory<byte> Bytes { get; }
 
         public ByteWriter GetByteWriter()
         {
@@ -88,7 +89,7 @@ namespace Surfus.Shell.Messages.KeyExchange
         public int GetSize()
         {
             return ByteSizer.GetByteSize()
-                + RandomBytes.AsMemory().GetByteBlobSize()
+                + RandomBytes.GetByteBlobSize()
                 + KexAlgorithms.GetNameListSize()
                 + ServerHostKeyAlgorithms.GetNameListSize()
                 + EncryptionClientToServer.GetNameListSize()

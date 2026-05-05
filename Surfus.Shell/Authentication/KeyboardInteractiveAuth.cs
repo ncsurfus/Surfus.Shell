@@ -16,7 +16,7 @@ namespace Surfus.Shell.Authentication
         public Task<IClientMessage> CreateRequestAsync(string username, CancellationToken cancellationToken)
             => Task.FromResult<IClientMessage>(new UaRequest(username, "ssh-connection", "keyboard-interactive", (string)null, (string)null));
 
-        public async Task<IClientMessage> HandleMessage60Async(string username, byte[] sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken)
+        public async Task<IClientMessage> HandleMessage60Async(string username, ReadOnlyMemory<byte> sessionIdentifier, MessageEvent messageEvent, CancellationToken cancellationToken)
         {
             var message = (UaInfoRequest)messageEvent.Message;
             var responses = new string[message.PromptNumber];

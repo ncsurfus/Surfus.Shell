@@ -149,7 +149,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             var h = Hash(byteWriter.Bytes);
 
             // Use the signing algorithm to verify the data sent by the server is correct.
-            if (!signingAlgorithm.VerifySignature(h, reply.HSignature))
+            if (!signingAlgorithm.VerifySignature(h, reply.HSignature.Span))
             {
                 throw new SshException("Invalid Host Signature.");
             }

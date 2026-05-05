@@ -149,7 +149,7 @@ namespace Surfus.Shell
             }
         }
 
-        internal async Task WriteDataAsync(byte[] buffer, CancellationToken cancellationToken)
+        internal async Task WriteDataAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
         {
             var totalBytesLeft = buffer.Length;
             var offset = 0;
@@ -164,12 +164,7 @@ namespace Surfus.Shell
                 }
 
                 var chunkSize = Math.Min(totalBytesLeft, SendWindow);
-                var chunk = buffer;
-                if (chunkSize < buffer.Length)
-                {
-                    chunk = new byte[chunkSize];
-                    Array.Copy(buffer, offset, chunk, 0, chunkSize);
-                }
+                var chunk = buffer.Slice(offset, chunkSize).ToArray();
                 await Inbox.SendAsync(new ChannelData(ServerId, chunk), cancellationToken).ConfigureAwait(false);
                 SendWindow -= chunkSize;
                 totalBytesLeft -= chunkSize;
@@ -266,15 +261,15 @@ namespace Surfus.Shell
             {
                 case ChannelData data:
                     HandleReceiveWindow(data.Data.Length);
-                    Stdout.Push(data.Data);
+                    Stdout.Push(data.Data.Span);
                     break;
 
                 case ChannelExtendedData extData:
                     HandleReceiveWindow(extData.Data.Length);
                     if (CombineStderr)
-                        Stdout.Push(extData.Data);
+                        Stdout.Push(extData.Data.Span);
                     else
-                        Stderr.Push(extData.Data);
+                        Stderr.Push(extData.Data.Span);
                     break;
             }
         }

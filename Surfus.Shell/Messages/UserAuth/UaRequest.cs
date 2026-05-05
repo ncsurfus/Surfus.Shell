@@ -1,3 +1,5 @@
+using System;
+
 namespace Surfus.Shell.Messages.UserAuth
 {
     internal record UaRequest : IClientMessage
@@ -25,15 +27,15 @@ namespace Surfus.Shell.Messages.UserAuth
         public string Submethods { get; }
         public bool HasSignature { get; }
         public string PublicKeyAlgorithm { get; }
-        public byte[] PublicKeyBlob { get; }
-        public byte[] Signature { get; }
+        public ReadOnlyMemory<byte> PublicKeyBlob { get; }
+        public ReadOnlyMemory<byte> Signature { get; }
 
-        public UaRequest(string username, string serviceName, string publicKeyAlgorithm, byte[] publicKeyBlob, byte[] signature)
+        public UaRequest(string username, string serviceName, string publicKeyAlgorithm, ReadOnlyMemory<byte> publicKeyBlob, ReadOnlyMemory<byte> signature)
         {
             Username = username;
             ServiceName = serviceName;
             MethodName = "publickey";
-            HasSignature = signature != null;
+            HasSignature = !signature.IsEmpty;
             PublicKeyAlgorithm = publicKeyAlgorithm;
             PublicKeyBlob = publicKeyBlob;
             Signature = signature;

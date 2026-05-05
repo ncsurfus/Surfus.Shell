@@ -122,21 +122,21 @@ namespace Surfus.Shell
         /// Writes an unsigned integer to the byte array.
         /// </summary>
         /// <param name="value"></param>
-        internal static void WriteUint(Span<byte> bytes, int position, uint value)
+        internal static void WriteUint(Span<byte> bytes, uint value)
         {
             if (BitConverter.IsLittleEndian)
             {
-                bytes[position] = (byte)(value >> 24);
-                bytes[position + 1] = (byte)(value >> 16);
-                bytes[position + 2] = (byte)(value >> 8);
-                bytes[position + 3] = (byte)value;
+                bytes[0] = (byte)(value >> 24);
+                bytes[1] = (byte)(value >> 16);
+                bytes[2] = (byte)(value >> 8);
+                bytes[3] = (byte)value;
             }
             else
             {
-                bytes[position] = (byte)value;
-                bytes[position + 1] = (byte)(value >> 8);
-                bytes[position + 2] = (byte)(value >> 16);
-                bytes[position + 3] = (byte)(value >> 24);
+                bytes[0] = (byte)value;
+                bytes[1] = (byte)(value >> 8);
+                bytes[2] = (byte)(value >> 16);
+                bytes[3] = (byte)(value >> 24);
             }
         }
 
@@ -144,10 +144,17 @@ namespace Surfus.Shell
         /// Writes a binary string to the byte array.
         /// </summary>
         /// <param name="binaryString"></param>
-        internal void WriteBinaryString(byte[] binaryString)
+        internal void WriteBinaryString(ReadOnlySpan<byte> binaryString)
         {
             WriteUint((uint)binaryString.Length);
-            Array.Copy(binaryString, 0, Bytes, Position, binaryString.Length);
+            binaryString.CopyTo(Bytes.AsSpan(Position));
+            Position += binaryString.Length;
+        }
+
+        internal void WriteBinaryString(ReadOnlyMemory<byte> binaryString)
+        {
+            WriteUint((uint)binaryString.Length);
+            binaryString.Span.CopyTo(Bytes.AsSpan(Position));
             Position += binaryString.Length;
         }
 
@@ -165,21 +172,13 @@ namespace Surfus.Shell
         /// Writes a binary blob to the byte array.
         /// </summary>
         /// <param name="byteBlob"></param>
-        internal void WriteByteBlob(byte[] byteBlob, int index, int length)
+        internal void WriteByteBlob(ReadOnlyMemory<byte> byteBlob)
         {
-            Array.Copy(byteBlob, index, Bytes, Position, length);
-            Position += length - index;
+            byteBlob.Span.CopyTo(Bytes.AsSpan(Position));
+            Position += byteBlob.Length;
         }
 
-        /// <summary>
-        /// Writes a binary blob to the byte array.
-        /// </summary>
-        /// <param name="byteBlob"></param>
-        internal void WriteByteBlob(ArraySegment<byte> byteBlob)
-        {
-            Array.Copy(byteBlob.Array, byteBlob.Offset, Bytes, Position, byteBlob.Count);
-            Position += byteBlob.Count;
-        }
+
 
         /// <summary>
         /// Writes a UTF8 string to the byte array.

@@ -37,13 +37,7 @@ namespace Surfus.Shell
             if (_closed) throw new ObjectDisposedException(nameof(ChannelInputStream));
             if (count == 0) return;
 
-            var data = buffer;
-            if (offset != 0 || count != buffer.Length)
-            {
-                data = new byte[count];
-                Array.Copy(buffer, offset, data, 0, count);
-            }
-            await _channel.WriteDataAsync(data, cancellationToken).ConfigureAwait(false);
+            await _channel.WriteDataAsync(new ReadOnlyMemory<byte>(buffer, offset, count), cancellationToken).ConfigureAwait(false);
         }
 
         public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;

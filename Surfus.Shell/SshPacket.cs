@@ -72,7 +72,7 @@ namespace Surfus.Shell
 
             // Write Packet Length into 'Raw'
             var length = (uint)(compressedPayload.DataLength + padding.Length + 1);
-            ByteWriter.WriteUint(Buffer, PacketSizeIndex, length);
+            ByteWriter.WriteUint(Buffer.AsSpan(PacketSizeIndex), length);
 
             // Write Padding Length into 'Raw'
             Buffer[PaddingByteIndex] = (byte)padding.Length;
@@ -80,7 +80,7 @@ namespace Surfus.Shell
             // Write Padding into 'Raw'
             Array.Copy(padding, 0, Buffer, compressedPayload.PaddingIndex, padding.Length);
 
-            Reader = new ByteReader(Buffer, DataIndex);
+            Reader = new ByteReader(((ReadOnlyMemory<byte>)Buffer).Slice(DataIndex));
 
             // The Packet Sequence Identifier isn't part of the actual length.
             Offset = 4;
@@ -106,7 +106,7 @@ namespace Surfus.Shell
 
             // Write Packet Length into 'Raw'
             var length = (uint)(compressedPayload.Length + padding.Length + 1);
-            ByteWriter.WriteUint(Buffer, 4, length);
+            ByteWriter.WriteUint(Buffer.AsSpan(4), length);
 
             // Write Padding Length into 'Raw'
             Buffer[8] = (byte)padding.Length;
@@ -117,7 +117,7 @@ namespace Surfus.Shell
             // Write Padding into 'Raw'
             Array.Copy(padding, 0, Buffer, 9 + compressedPayload.Length, padding.Length);
 
-            Reader = new ByteReader(Buffer, 9);
+            Reader = new ByteReader(((ReadOnlyMemory<byte>)Buffer).Slice(9));
 
             // The Packet Sequence Identifier isn't part of the actual length.
             Offset = 4;
@@ -136,7 +136,7 @@ namespace Surfus.Shell
             // The 6th byte (index 5) is the start of the payload.
             // The total size of the payload is BufferSize - 4 (Packet Length Bytes) - 1 (Padding Size Byte) - Padding Size
             Buffer = buffer;
-            Reader = new ByteReader(Buffer, 5 + packetStart); // Start reading after the first 5 bytes of the packet (skipping the packet length and padding amount)
+            Reader = new ByteReader(((ReadOnlyMemory<byte>)Buffer).Slice(5 + packetStart)); // Start reading after the first 5 bytes of the packet (skipping the packet length and padding amount)
             Offset = packetStart;
             Length = packetLength;
         }

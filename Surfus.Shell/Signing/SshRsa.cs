@@ -5,7 +5,7 @@ namespace Surfus.Shell.Signing
 {
     public sealed class SshRsa : Signer
     {
-        internal SshRsa(byte[] publicCertificate)
+        internal SshRsa(ReadOnlyMemory<byte> publicCertificate)
         {
             var reader = new ByteReader(publicCertificate);
             if (Name != reader.ReadString())
@@ -25,11 +25,11 @@ namespace Surfus.Shell.Signing
         public override string Name { get; } = "ssh-rsa";
         public override int KeySize { get; }
 
-        public override bool VerifySignature(byte[] data, byte[] signature)
+        public override bool VerifySignature(ReadOnlySpan<byte> data, ReadOnlySpan<byte> signature)
         {
             using (var rsaService = RSA.Create())
             {
-                var reader = new ByteReader(signature);
+                var reader = new ByteReader(signature.ToArray());
                 rsaService.ImportParameters(RsaParameters);
                 if (Name != reader.ReadString())
                 {

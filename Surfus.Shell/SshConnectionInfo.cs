@@ -33,7 +33,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The server certificate.
         /// </summary>
-        public byte[] ServerCertificate { get; internal set; }
+        public ReadOnlyMemory<byte> ServerCertificate { get; internal set; }
 
         /// <summary>
         /// The bit count of the certificate.
@@ -46,7 +46,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The session identifier from the first key exchange, used for publickey auth signing.
         /// </summary>
-        internal byte[] SessionIdentifier { get; set; }
+        internal ReadOnlyMemory<byte> SessionIdentifier { get; set; }
 
 
         internal uint InboundPacketSequence { get; set; }

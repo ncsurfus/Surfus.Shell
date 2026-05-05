@@ -24,7 +24,7 @@ public class SshPacketTests
         var packet = new SshPacket(payload, paddingMultiplier: 8);
 
         // Read the packet size from the buffer (at index 4, big-endian)
-        var packetSize = ByteReader.ReadUInt32(packet.Buffer, SshPacket.PacketSizeIndex);
+        var packetSize = ByteReader.ReadUInt32(packet.Buffer.AsSpan(SshPacket.PacketSizeIndex));
 
         // Packet size = payload length + padding length + 1 (padding size byte)
         var paddingLength = packet.Buffer[SshPacket.PaddingByteIndex];
@@ -39,7 +39,7 @@ public class SshPacketTests
 
         // Total encrypted content (packet size field value + 4 for the size field itself)
         // should be a multiple of the padding multiplier
-        var packetSize = ByteReader.ReadUInt32(packet.Buffer, SshPacket.PacketSizeIndex);
+        var packetSize = ByteReader.ReadUInt32(packet.Buffer.AsSpan(SshPacket.PacketSizeIndex));
         Assert.Equal(0u, (packetSize + 4) % 8);
     }
 
@@ -87,7 +87,7 @@ public class SshPacketTests
         // [4] = padding length
         // [5..] = payload
         var buffer = new byte[20];
-        ByteWriter.WriteUint(buffer, 0, 16); // packet size
+        ByteWriter.WriteUint(buffer.AsSpan(0), 16); // packet size
         buffer[4] = 4; // padding length
         buffer[5] = (byte)MessageType.SSH_MSG_IGNORE; // message type
 
@@ -105,7 +105,7 @@ public class SshPacketTests
         foreach (var multiplier in new[] { 8, 16 })
         {
             var packet = new SshPacket(payload, multiplier);
-            var packetSize = ByteReader.ReadUInt32(packet.Buffer, SshPacket.PacketSizeIndex);
+            var packetSize = ByteReader.ReadUInt32(packet.Buffer.AsSpan(SshPacket.PacketSizeIndex));
             // packet size + 4 (for the size field) should be aligned to multiplier
             Assert.Equal(0u, (packetSize + 4) % (uint)multiplier);
         }

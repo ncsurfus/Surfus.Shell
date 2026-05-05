@@ -1,4 +1,6 @@
-﻿namespace Surfus.Shell.Compression
+﻿using System;
+
+namespace Surfus.Shell.Compression
 {
     /// <summary>
     /// This class implements no compression algorithm. The data is simply returned.
@@ -19,9 +21,9 @@
         /// <returns>
         /// The compressed data.
         /// </returns>
-        internal override byte[] Compress(byte[] data)
+        internal override byte[] Compress(ReadOnlyMemory<byte> data)
         {
-            return data;
+            return data.ToArray();
         }
 
         /// <summary>
@@ -33,9 +35,9 @@
         /// <returns>
         /// The decompressed data.
         /// </returns>
-        internal override byte[] Decompress(byte[] data)
+        internal override byte[] Decompress(ReadOnlyMemory<byte> data)
         {
-            return data;
+            return data.ToArray();
         }
     }
 }

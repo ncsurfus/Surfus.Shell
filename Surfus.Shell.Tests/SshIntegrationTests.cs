@@ -168,7 +168,7 @@ public class SshIntegrationTests
     {
         await using var server = await SshTestServer.StartAsync();
         byte[]? receivedKey = null;
-        await using var client = new SshClient("127.0.0.1", (ushort)server.Port) { HostKeyCallback = key => { receivedKey = key; return true; } };
+        await using var client = new SshClient("127.0.0.1", (ushort)server.Port) { HostKeyCallback = key => { receivedKey = key.ToArray(); return true; } };
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());
         Assert.NotNull(receivedKey);

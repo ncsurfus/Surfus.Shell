@@ -132,7 +132,7 @@ namespace Surfus.Shell
         /// <summary>
         /// When set, calls this callback function to determine if the host key is valid and if the connection should continue.
         /// </summary>
-        public Func<byte[], bool> HostKeyCallback { get; init; }
+        public Func<ReadOnlyMemory<byte>, bool> HostKeyCallback { get; init; }
 
         /// <summary>
         /// Configures which algorithms are offered during key exchange. Defaults to all supported algorithms.
@@ -571,7 +571,7 @@ namespace Surfus.Shell
             try
             {
                 var sshPacket = new SshPacket(message.GetByteWriter(), Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8));
-                ByteWriter.WriteUint(sshPacket.Buffer, SshPacket.SequenceIndex, ConnectionInfo.OutboundPacketSequence);
+                ByteWriter.WriteUint(sshPacket.Buffer.AsSpan(SshPacket.SequenceIndex), ConnectionInfo.OutboundPacketSequence);
                 byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
 
                 ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);

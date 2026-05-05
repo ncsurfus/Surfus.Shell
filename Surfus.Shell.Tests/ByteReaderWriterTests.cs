@@ -10,7 +10,7 @@ public class ByteReaderTests
     [Fact]
     public void ReadByte_ReturnsByteAndAdvances()
     {
-        var reader = new ByteReader([0xAB, 0xCD]);
+        var reader = new ByteReader((byte[])[0xAB, 0xCD]);
         Assert.Equal(0xAB, reader.ReadByte());
         Assert.Equal(1, reader.Position);
         Assert.Equal(0xCD, reader.ReadByte());
@@ -21,7 +21,7 @@ public class ByteReaderTests
     [InlineData(false, 0)]
     public void ReadBoolean_ReturnsCorrectValue(bool expected, byte input)
     {
-        var reader = new ByteReader([input]);
+        var reader = new ByteReader((byte[])[input]);
         Assert.Equal(expected, reader.ReadBoolean());
     }
 
@@ -29,7 +29,7 @@ public class ByteReaderTests
     public void ReadUInt32_BigEndian()
     {
         // 0x01020304 = 16909060
-        var reader = new ByteReader([0x01, 0x02, 0x03, 0x04]);
+        var reader = new ByteReader((byte[])[0x01, 0x02, 0x03, 0x04]);
         Assert.Equal(0x01020304u, reader.ReadUInt32());
         Assert.Equal(4, reader.Position);
     }
@@ -37,14 +37,14 @@ public class ByteReaderTests
     [Fact]
     public void ReadUInt32_Zero()
     {
-        var reader = new ByteReader([0, 0, 0, 0]);
+        var reader = new ByteReader((byte[])[0, 0, 0, 0]);
         Assert.Equal(0u, reader.ReadUInt32());
     }
 
     [Fact]
     public void ReadUInt32_MaxValue()
     {
-        var reader = new ByteReader([0xFF, 0xFF, 0xFF, 0xFF]);
+        var reader = new ByteReader((byte[])[0xFF, 0xFF, 0xFF, 0xFF]);
         Assert.Equal(uint.MaxValue, reader.ReadUInt32());
     }
 
@@ -52,7 +52,7 @@ public class ByteReaderTests
     public void ReadUInt32_Static_ReadsAtIndex()
     {
         byte[] buffer = [0x00, 0x00, 0x01, 0x02, 0x03, 0x04];
-        Assert.Equal(0x01020304u, ByteReader.ReadUInt32(buffer, 2));
+        Assert.Equal(0x01020304u, ByteReader.ReadUInt32(buffer.AsSpan(2)));
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public class ByteReaderTests
     public void Constructor_WithIndex_StartsAtCorrectPosition()
     {
         byte[] data = [0x00, 0x00, 0xAB];
-        var reader = new ByteReader(data, 2);
+        var reader = new ByteReader(((ReadOnlyMemory<byte>)data).Slice(2));
         Assert.Equal(0xAB, reader.ReadByte());
     }
 
@@ -185,7 +185,7 @@ public class ByteWriterTests
     public void WriteUint_Static_WritesAtPosition()
     {
         var buffer = new byte[6];
-        ByteWriter.WriteUint(buffer, 2, 0x01020304);
+        ByteWriter.WriteUint(buffer.AsSpan(2), 0x01020304);
         Assert.Equal(new byte[] { 0, 0, 0x01, 0x02, 0x03, 0x04 }, buffer);
     }
 
@@ -206,7 +206,7 @@ public class ByteWriterTests
         var writer = new ByteWriter(4);
         writer.WriteString(null);
         Assert.Equal(4, writer.Position);
-        Assert.Equal(0u, ByteReader.ReadUInt32(writer.Bytes, 0));
+        Assert.Equal(0u, ByteReader.ReadUInt32(writer.Bytes.AsSpan(0)));
     }
 
     [Fact]
@@ -223,7 +223,7 @@ public class ByteWriterTests
     {
         byte[] data = [0xDE, 0xAD];
         var writer = new ByteWriter(10);
-        writer.WriteBinaryString(data);
+        writer.WriteBinaryString((ReadOnlyMemory<byte>)data);
         var reader = new ByteReader(writer.Bytes);
         Assert.Equal(data, reader.ReadBinaryString());
     }
@@ -246,7 +246,7 @@ public class ByteWriterTests
         var writer = new ByteWriter(4);
         writer.WriteNameList(nameList);
         Assert.Equal(4, writer.Position);
-        Assert.Equal(0u, ByteReader.ReadUInt32(writer.Bytes, 0));
+        Assert.Equal(0u, ByteReader.ReadUInt32(writer.Bytes.AsSpan(0)));
     }
 
     [Fact]
@@ -311,7 +311,7 @@ public class ByteSizerTests
     public void GetBinaryStringSize_ReturnsLengthPlus4()
     {
         byte[] data = [1, 2, 3];
-        Assert.Equal(7, data.GetBinaryStringSize());
+        Assert.Equal(7, ((ReadOnlyMemory<byte>)data).GetBinaryStringSize());
     }
 
     [Fact]

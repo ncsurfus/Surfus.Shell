@@ -12,11 +12,11 @@ namespace Surfus.Shell
     /// </summary>
     public record SshAgentKey
     {
-        public byte[] KeyBlob { get; }
+        public ReadOnlyMemory<byte> KeyBlob { get; }
         public string Comment { get; }
         public string KeyType { get; }
 
-        internal SshAgentKey(byte[] keyBlob, string comment)
+        internal SshAgentKey(ReadOnlyMemory<byte> keyBlob, string comment)
         {
             KeyBlob = keyBlob;
             Comment = comment;
@@ -87,7 +87,7 @@ namespace Surfus.Shell
         /// <summary>
         /// Asks the agent to sign data with the specified key.
         /// </summary>
-        public async Task<byte[]> SignAsync(byte[] keyBlob, byte[] data, CancellationToken cancellationToken = default)
+        public async Task<byte[]> SignAsync(ReadOnlyMemory<byte> keyBlob, ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
         {
             // Build: byte type + string key_blob + string data + uint32 flags
             var size = 1 + 4 + keyBlob.Length + 4 + data.Length + 4;
@@ -95,10 +95,10 @@ namespace Surfus.Shell
             var pos = 0;
             buf[pos++] = SSH_AGENTC_SIGN_REQUEST;
             WriteUInt32(buf, ref pos, (uint)keyBlob.Length);
-            Array.Copy(keyBlob, 0, buf, pos, keyBlob.Length);
+            keyBlob.Span.CopyTo(buf.AsSpan(pos));
             pos += keyBlob.Length;
             WriteUInt32(buf, ref pos, (uint)data.Length);
-            Array.Copy(data, 0, buf, pos, data.Length);
+            data.Span.CopyTo(buf.AsSpan(pos));
             pos += data.Length;
             WriteUInt32(buf, ref pos, 0); // flags
 
@@ -128,7 +128,7 @@ namespace Surfus.Shell
         {
             var lengthBuf = new byte[4];
             await ReadExactAsync(lengthBuf, cancellationToken).ConfigureAwait(false);
-            var length = (int)ByteReader.ReadUInt32(lengthBuf, 0);
+            var length = (int)ByteReader.ReadUInt32(lengthBuf.AsSpan(0));
             if (length > 256 * 1024)
                 throw new Exceptions.SshException("Agent response too large.");
             var payload = new byte[length];
