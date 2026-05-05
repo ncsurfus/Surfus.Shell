@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,9 +14,9 @@ namespace Surfus.Shell
     {
         private readonly SemaphoreSlim _dataAvailable = new(0);
         private readonly object _lock = new();
-        private byte[] _buffer = Array.Empty<byte>();
-        private int _offset;
-        private int _count;
+        private readonly Queue<ReadOnlyMemory<byte>> _segments = new();
+        private int _totalBytes;
+        private int _segmentOffset;
         private bool _completed;
         private bool _disposed;
 
@@ -38,28 +39,21 @@ namespace Surfus.Shell
         /// <summary>
         /// Returns the number of bytes currently buffered and available for reading without blocking.
         /// </summary>
-        internal int Available { get { lock (_lock) { return _count; } } }
+        internal int Available { get { lock (_lock) { return _totalBytes; } } }
 
         /// <summary>
         /// Pushes data into the stream for consumers to read.
-        /// The semaphore may accumulate counts if multiple pushes occur before ReadAsync wakes,
-        /// causing spurious wakeups. This is harmless — ReadAsync checks _count > 0 under the lock first.
         /// </summary>
-        // TODO: Every Push allocates a new byte[]. Consider using ArrayPool<byte> or a ring buffer
-        // to reduce GC pressure for high-throughput scenarios.
         internal void Push(ReadOnlySpan<byte> data)
         {
             if (data.Length == 0) return;
 
             lock (_lock)
             {
-                var newBuffer = new byte[_count + data.Length];
-                if (_count > 0)
-                    Array.Copy(_buffer, _offset, newBuffer, 0, _count);
-                data.CopyTo(newBuffer.AsSpan(_count));
-                _buffer = newBuffer;
-                _offset = 0;
-                _count += data.Length;
+                var copy = new byte[data.Length];
+                data.CopyTo(copy);
+                _segments.Enqueue(copy);
+                _totalBytes += data.Length;
             }
 
             _dataAvailable.Release();
@@ -88,12 +82,28 @@ namespace Surfus.Shell
             {
                 lock (_lock)
                 {
-                    if (_count > 0)
+                    if (_totalBytes > 0)
                     {
-                        var bytesToRead = Math.Min(count, _count);
-                        Array.Copy(_buffer, _offset, buffer, offset, bytesToRead);
-                        _offset += bytesToRead;
-                        _count -= bytesToRead;
+                        var bytesToRead = Math.Min(count, _totalBytes);
+                        var totalCopied = 0;
+
+                        while (totalCopied < bytesToRead)
+                        {
+                            var segment = _segments.Peek().Span;
+                            var available = segment.Length - _segmentOffset;
+                            var toCopy = Math.Min(available, bytesToRead - totalCopied);
+                            segment.Slice(_segmentOffset, toCopy).CopyTo(buffer.AsSpan(offset + totalCopied));
+                            totalCopied += toCopy;
+                            _segmentOffset += toCopy;
+
+                            if (_segmentOffset == segment.Length)
+                            {
+                                _segments.Dequeue();
+                                _segmentOffset = 0;
+                            }
+                        }
+
+                        _totalBytes -= bytesToRead;
                         OnConsumed?.Invoke(bytesToRead);
                         return bytesToRead;
                     }

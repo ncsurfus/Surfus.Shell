@@ -1,6 +1,7 @@
 // Credit to hanswolff https://gist.github.com/hanswolff/8809275
 
 using System;
+using System.Numerics;
 using System.Security.Cryptography;
 
 namespace Surfus.Shell.Crypto.AesCtr
@@ -10,7 +11,7 @@ namespace Surfus.Shell.Crypto.AesCtr
         private readonly byte[] _counter;
         private readonly ICryptoTransform _counterEncryptor;
         private readonly SymmetricAlgorithm _symmetricAlgorithm;
-        private readonly byte[] _xorMask;
+        private byte[] _xorMask;
         private int _xorMaskIndex;
 
         internal CounterModeCryptoTransform(SymmetricAlgorithm symmetricAlgorithm, byte[] key, byte[] counter)
@@ -40,8 +41,8 @@ namespace Surfus.Shell.Crypto.AesCtr
 
             _symmetricAlgorithm = symmetricAlgorithm;
             _counter = counter;
-            _xorMask = new byte[symmetricAlgorithm.BlockSize / 8];
-            _xorMaskIndex = _xorMask.Length; // Force generation on first use
+            _xorMask = Array.Empty<byte>();
+            _xorMaskIndex = 0;
 
             var zeroIv = new byte[_symmetricAlgorithm.BlockSize / 8];
             _counterEncryptor = symmetricAlgorithm.CreateEncryptor(key, zeroIv);
@@ -56,22 +57,39 @@ namespace Surfus.Shell.Crypto.AesCtr
 
         public int TransformBlock(byte[] inputBuffer, int inputOffset, int inputCount, byte[] outputBuffer, int outputOffset)
         {
-            for (var i = 0; i < inputCount; i++)
-            {
-                if (_xorMaskIndex >= _xorMask.Length)
-                    EncryptCounterThenIncrement();
+            EnsureXorMask(inputCount);
 
-                outputBuffer[outputOffset + i] = (byte)(inputBuffer[inputOffset + i] ^ _xorMask[_xorMaskIndex++]);
+            var i = 0;
+            var vectorSize = Vector<byte>.Count;
+            for (; i + vectorSize <= inputCount; i += vectorSize)
+            {
+                var inputVec = new Vector<byte>(inputBuffer, inputOffset + i);
+                var maskVec = new Vector<byte>(_xorMask, _xorMaskIndex + i);
+                (inputVec ^ maskVec).CopyTo(outputBuffer, outputOffset + i);
+            }
+            for (; i < inputCount; i++)
+            {
+                outputBuffer[outputOffset + i] = (byte)(inputBuffer[inputOffset + i] ^ _xorMask[_xorMaskIndex + i]);
             }
 
+            _xorMaskIndex += inputCount;
             return inputCount;
         }
 
-        private void EncryptCounterThenIncrement()
+        private void EnsureXorMask(int needed)
         {
-            _counterEncryptor.TransformBlock(_counter, 0, _counter.Length, _xorMask, 0);
+            var available = _xorMask.Length - _xorMaskIndex;
+            if (available >= needed) return;
+
+            var blocksNeeded = (needed + InputBlockSize - 1) / InputBlockSize;
+            var newMask = new byte[blocksNeeded * InputBlockSize];
+            for (var b = 0; b < blocksNeeded; b++)
+            {
+                _counterEncryptor.TransformBlock(_counter, 0, _counter.Length, newMask, b * InputBlockSize);
+                IncrementCounter();
+            }
+            _xorMask = newMask;
             _xorMaskIndex = 0;
-            IncrementCounter();
         }
 
         private void IncrementCounter()
