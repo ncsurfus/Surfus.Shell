@@ -211,6 +211,9 @@ public class SshIntegrationTests
     [InlineData("diffie-hellman-group1-sha1")]
     [InlineData("diffie-hellman-group-exchange-sha256")]
     [InlineData("diffie-hellman-group-exchange-sha1")]
+    [InlineData("ecdh-sha2-nistp256")]
+    [InlineData("ecdh-sha2-nistp384")]
+    [InlineData("ecdh-sha2-nistp521")]
     public async Task KexAlgorithm(string kex)
     {
         await using var server = await SshTestServer.StartAsync(kex: kex);

@@ -165,6 +165,9 @@ namespace Surfus.Shell
 
         public static readonly KeyExchangeDescriptor[] DefaultKeyExchange = new[]
         {
+            new KeyExchangeDescriptor("ecdh-sha2-nistp256", (ctx, kex) => new KeyExchange.Ecdh.EcdhKeyExchange(ctx, kex, ECCurve.NamedCurves.nistP256, HashAlgorithmName.SHA256)),
+            new KeyExchangeDescriptor("ecdh-sha2-nistp384", (ctx, kex) => new KeyExchange.Ecdh.EcdhKeyExchange(ctx, kex, ECCurve.NamedCurves.nistP384, HashAlgorithmName.SHA384)),
+            new KeyExchangeDescriptor("ecdh-sha2-nistp521", (ctx, kex) => new KeyExchange.Ecdh.EcdhKeyExchange(ctx, kex, ECCurve.NamedCurves.nistP521, HashAlgorithmName.SHA512)),
             new KeyExchangeDescriptor(
                 "diffie-hellman-group-exchange-sha256",
                 (ctx, kex) => new DiffieHellmanGroupKeyExchange(ctx, kex, "SHA256")
