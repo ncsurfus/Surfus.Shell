@@ -3,6 +3,7 @@ using Surfus.Shell.Authentication;
 
 namespace Surfus.Shell.Tests;
 
+[Collection("Integration")]
 public class PrivateKeyAuthTests
 {
     private const string User = "testuser";

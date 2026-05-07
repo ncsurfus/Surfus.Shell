@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace Surfus.Shell.Tests;
 
+[Collection("Integration")]
 public class SshAgentIntegrationTests : IAsyncLifetime
 {
     private static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);

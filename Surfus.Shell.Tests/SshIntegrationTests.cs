@@ -4,6 +4,7 @@ using System.Text;
 
 namespace Surfus.Shell.Tests;
 
+[Collection("Integration")]
 public class SshIntegrationTests
 {
     private const string User = "testuser";

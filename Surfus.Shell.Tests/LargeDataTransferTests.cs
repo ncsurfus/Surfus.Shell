@@ -3,6 +3,7 @@ using System.Text;
 
 namespace Surfus.Shell.Tests;
 
+[Collection("Integration")]
 public class LargeDataTransferTests
 {
     private const string User = "testuser";
