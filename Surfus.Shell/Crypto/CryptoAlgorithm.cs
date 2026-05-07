@@ -28,6 +28,11 @@ namespace Surfus.Shell.Crypto
         internal abstract int KeySize { get; }
 
         /// <summary>
+        /// Indicates whether this cipher is an AEAD cipher that handles its own authentication.
+        /// </summary>
+        internal virtual bool IsAead => false;
+
+        /// <summary>
         /// Disposes the crypto algorithm.
         /// </summary>
         public abstract void Dispose();

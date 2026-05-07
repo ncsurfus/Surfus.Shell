@@ -1,4 +1,5 @@
 using System;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -135,17 +136,29 @@ namespace Surfus.Shell
 
             _connectionInfo.WriteCompressionAlgorithm = _algorithms.CreateCompression(result.CompressionClientToServer);
             _connectionInfo.WriteCryptoAlgorithm = _algorithms.CreateEncryption(result.EncryptionClientToServer);
-            _connectionInfo.WriteMacAlgorithm = _algorithms.CreateMac(result.MessageAuthenticationClientToServer);
+
+            if (_connectionInfo.WriteCryptoAlgorithm.IsAead)
+            {
+                _connectionInfo.WriteMacAlgorithm = new NoMessageAuthentication();
+            }
+            else
+            {
+                _connectionInfo.WriteMacAlgorithm = _algorithms.CreateMac(result.MessageAuthenticationClientToServer);
+            }
 
             oldCompression?.Dispose();
             oldCrypto?.Dispose();
 
             var iv = kex.GenerateKey(h, k, 'A', sessionId, _connectionInfo.WriteCryptoAlgorithm.InitializationVectorSize);
             var key = kex.GenerateKey(h, k, 'C', sessionId, _connectionInfo.WriteCryptoAlgorithm.KeySize);
-            var intKey = kex.GenerateKey(h, k, 'E', sessionId, _connectionInfo.WriteMacAlgorithm.KeySize);
 
             _connectionInfo.WriteCryptoAlgorithm.Initialize(iv, key);
-            _connectionInfo.WriteMacAlgorithm.Initialize(intKey);
+
+            if (!_connectionInfo.WriteCryptoAlgorithm.IsAead)
+            {
+                var intKey = kex.GenerateKey(h, k, 'E', sessionId, _connectionInfo.WriteMacAlgorithm.KeySize);
+                _connectionInfo.WriteMacAlgorithm.Initialize(intKey);
+            }
         }
 
         private Action CreateReadCrypto(
@@ -158,18 +171,27 @@ namespace Surfus.Shell
         {
             var readCompression = _algorithms.CreateCompression(result.CompressionServerToClient);
             var readCrypto = _algorithms.CreateEncryption(result.EncryptionServerToClient);
-            var readMac = _algorithms.CreateMac(result.MessageAuthenticationServerToClient);
+            MacAlgorithm readMac;
 
             var iv = kex.GenerateKey(h, k, 'B', sessionId, readCrypto.InitializationVectorSize);
             var key = kex.GenerateKey(h, k, 'D', sessionId, readCrypto.KeySize);
-            var intKey = kex.GenerateKey(h, k, 'F', sessionId, readMac.KeySize);
 
             readCrypto.Initialize(iv, key);
-            readMac.Initialize(intKey);
 
-            System.Security.Cryptography.CryptographicOperations.ZeroMemory(iv);
-            System.Security.Cryptography.CryptographicOperations.ZeroMemory(key);
-            System.Security.Cryptography.CryptographicOperations.ZeroMemory(intKey);
+            if (readCrypto.IsAead)
+            {
+                readMac = new NoMessageAuthentication();
+            }
+            else
+            {
+                readMac = _algorithms.CreateMac(result.MessageAuthenticationServerToClient);
+                var intKey = kex.GenerateKey(h, k, 'F', sessionId, readMac.KeySize);
+                readMac.Initialize(intKey);
+                CryptographicOperations.ZeroMemory(intKey);
+            }
+
+            CryptographicOperations.ZeroMemory(iv);
+            CryptographicOperations.ZeroMemory(key);
 
             return () =>
             {

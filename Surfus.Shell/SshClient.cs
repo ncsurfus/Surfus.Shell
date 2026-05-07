@@ -616,8 +616,13 @@ namespace Surfus.Shell
                 byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
 
                 ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
+
+                var writeLength = ConnectionInfo.WriteCryptoAlgorithm.IsAead
+                    ? sshPacket.Length + 16 // AEAD tag appended by Encrypt
+                    : sshPacket.Length;
+
                 await _tcpStream
-                    .WriteAsync(sshPacket.Buffer.AsMemory(sshPacket.Offset, sshPacket.Length), cancellationToken)
+                    .WriteAsync(sshPacket.Buffer.AsMemory(sshPacket.Offset, writeLength), cancellationToken)
                     .ConfigureAwait(false);
 
                 if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)

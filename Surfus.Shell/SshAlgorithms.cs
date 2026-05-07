@@ -129,6 +129,8 @@ namespace Surfus.Shell
 
         public static readonly AlgorithmDescriptor<CryptoAlgorithm>[] DefaultEncryption = new[]
         {
+            new AlgorithmDescriptor<CryptoAlgorithm>("aes256-gcm@openssh.com", () => new AesGcmCryptoAlgorithm(256)),
+            new AlgorithmDescriptor<CryptoAlgorithm>("aes128-gcm@openssh.com", () => new AesGcmCryptoAlgorithm(128)),
             new AlgorithmDescriptor<CryptoAlgorithm>("aes256-ctr", () => new AesCtrCryptoAlgorithm(256)),
             new AlgorithmDescriptor<CryptoAlgorithm>("aes192-ctr", () => new AesCtrCryptoAlgorithm(192)),
             new AlgorithmDescriptor<CryptoAlgorithm>("aes128-ctr", () => new AesCtrCryptoAlgorithm(128)),
