@@ -149,7 +149,7 @@ namespace Surfus.Shell
         /// <summary>
         /// When set, calls this callback function to determine if the host key is valid and if the connection should continue.
         /// </summary>
-        public Func<ReadOnlyMemory<byte>, bool> HostKeyCallback { get; init; }
+        public Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>> HostKeyCallback { get; init; }
 
         /// <summary>
         /// Configures which algorithms are offered during key exchange. Defaults to all supported algorithms.

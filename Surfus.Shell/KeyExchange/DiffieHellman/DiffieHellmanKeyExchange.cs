@@ -130,7 +130,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             _context.ServerCertificate = reply.ServerPublicHostKeyAndCertificates;
             _context.ServerCertificateSize = signingAlgorithm.KeySize;
 
-            if (_context.HostKeyCallback != null && !_context.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates))
+            if (_context.HostKeyCallback != null && !await _context.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates, cancellationToken).ConfigureAwait(false))
             {
                 throw new SshException("Rejected Host Key.");
             }
