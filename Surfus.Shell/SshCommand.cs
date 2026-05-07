@@ -38,6 +38,11 @@ namespace Surfus.Shell
         /// </summary>
         public Stream StandardError => _channel.Stderr;
 
+        /// <summary>
+        /// The exit code returned by the remote process, or null if not yet received.
+        /// </summary>
+        public int? ExitCode => _channel.ExitCode;
+
         internal SshCommand(SshChannel channel)
         {
             _channel = channel;
@@ -51,6 +56,32 @@ namespace Surfus.Shell
             _commandState = State.Errored;
             await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
             _commandState = State.Opened;
+        }
+
+        /// <summary>
+        /// Optionally requests a pseudo-terminal before starting the command.
+        /// Must be called after OpenAsync and before StartAsync.
+        /// </summary>
+        public async Task RequestPseudoTerminalAsync(CancellationToken cancellationToken, TerminalOptions options = null)
+        {
+            if (_commandState != State.Opened)
+                throw new Exception("Command is not opened.");
+
+            var opts = options ?? new TerminalOptions();
+            await _channel
+                .RequestAsync(
+                    new ChannelRequestPseudoTerminal(
+                        _channel.ServerId,
+                        true,
+                        opts.TerminalType,
+                        opts.Columns,
+                        opts.Rows,
+                        opts.WidthPixels,
+                        opts.HeightPixels
+                    ),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
         }
 
         /// <summary>

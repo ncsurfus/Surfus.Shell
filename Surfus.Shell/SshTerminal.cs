@@ -13,6 +13,7 @@ namespace Surfus.Shell
     public class SshTerminal : IAsyncDisposable
     {
         private readonly SshChannel _channel;
+        private readonly TerminalOptions _options;
         private State _terminalState = State.Initial;
 
         /// <summary>
@@ -37,9 +38,15 @@ namespace Surfus.Shell
         /// </summary>
         public bool IsOpen => _channel.IsOpen;
 
-        internal SshTerminal(SshChannel channel)
+        /// <summary>
+        /// The exit code returned by the remote process, or null if not yet received.
+        /// </summary>
+        public int? ExitCode => _channel.ExitCode;
+
+        internal SshTerminal(SshChannel channel, TerminalOptions options = null)
         {
             _channel = channel;
+            _options = options ?? new TerminalOptions();
         }
 
         internal async Task OpenAsync(CancellationToken cancellationToken)
@@ -51,7 +58,18 @@ namespace Surfus.Shell
 
             await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
             await _channel
-                .RequestAsync(new ChannelRequestPseudoTerminal(_channel.ServerId, true, "vt100", 80, 24), cancellationToken)
+                .RequestAsync(
+                    new ChannelRequestPseudoTerminal(
+                        _channel.ServerId,
+                        true,
+                        _options.TerminalType,
+                        _options.Columns,
+                        _options.Rows,
+                        _options.WidthPixels,
+                        _options.HeightPixels
+                    ),
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
             await _channel.RequestAsync(new ChannelRequestShell(_channel.ServerId, true), cancellationToken).ConfigureAwait(false);
 

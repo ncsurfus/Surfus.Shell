@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
+using Surfus.Shell.Messages.Channel.Requests;
 
 namespace Surfus.Shell
 {
@@ -34,6 +35,11 @@ namespace Surfus.Shell
         /// Whether the channel is still open.
         /// </summary>
         public bool IsOpen { get; private set; }
+
+        /// <summary>
+        /// The exit code returned by the remote process, or null if not yet received.
+        /// </summary>
+        public int? ExitCode { get; private set; }
 
         /// <summary>
         /// When true, stderr data is interleaved into StandardOutput.
@@ -255,6 +261,10 @@ namespace Surfus.Shell
 
                 case ChannelFailure:
                     DequeueRequest(false);
+                    break;
+
+                case ChannelRequestExitStatus exitStatus:
+                    ExitCode = (int)exitStatus.ExitStatus;
                     break;
 
                 case ChannelEof:

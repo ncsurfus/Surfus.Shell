@@ -365,8 +365,9 @@ namespace Surfus.Shell
         /// Requests a terminal from the SSH server.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token used to cancel the terminal request</param>
+        /// <param name="options">Optional terminal configuration (type, size). Defaults to xterm 80x24.</param>
         /// <returns>A task representing the state of the terminal request</returns>
-        public async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken)
+        public async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken, TerminalOptions options = null)
         {
             // Validate current state of SshClient
             if (!IsConnected)
@@ -376,7 +377,7 @@ namespace Surfus.Shell
 
             var channel = new SshChannel((uint)Interlocked.Increment(ref _channelCounter));
             channel.Registration = RegisterMessageHandler(channel);
-            var terminal = new SshTerminal(channel);
+            var terminal = new SshTerminal(channel, options);
 
             _disposables.Add(terminal);
 

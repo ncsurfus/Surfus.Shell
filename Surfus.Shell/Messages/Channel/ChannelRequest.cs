@@ -44,6 +44,8 @@ namespace Surfus.Shell.Messages.Channel
                     return new ChannelRequestShell(packet, recipientChannel);
                 case "subsystem":
                     return new ChannelRequestSubsystem(packet, recipientChannel);
+                case "exit-status":
+                    return new ChannelRequestExitStatus(packet, recipientChannel);
                 default:
                     return new ChannelRequest(packet, requestType, recipientChannel);
             }

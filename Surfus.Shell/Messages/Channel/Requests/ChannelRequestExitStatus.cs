@@ -3,13 +3,13 @@ namespace Surfus.Shell.Messages.Channel.Requests
     internal record ChannelRequestExitStatus : ChannelRequest
     {
         public ChannelRequestExitStatus(SshPacket packet, uint recipientChannel)
-            : base(packet, "exec", recipientChannel)
+            : base(packet, "exit-status", recipientChannel)
         {
             ExitStatus = packet.Reader.ReadUInt32();
         }
 
         public ChannelRequestExitStatus(uint recipientChannel, bool wantReply, uint exitStatus)
-            : base(recipientChannel, "exec", wantReply)
+            : base(recipientChannel, "exit-status", wantReply)
         {
             ExitStatus = exitStatus;
         }

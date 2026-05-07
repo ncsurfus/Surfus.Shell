@@ -29,6 +29,24 @@ namespace Surfus.Shell.Messages.Channel.Requests
             TerminalHeightRows = terminalRows;
         }
 
+        public ChannelRequestPseudoTerminal(
+            uint recipientChannel,
+            bool wantReply,
+            string terminalEnvironment,
+            uint terminalCharacters,
+            uint terminalRows,
+            uint terminalWidthPixels,
+            uint terminalHeightPixels
+        )
+            : base(recipientChannel, "pty-req", wantReply)
+        {
+            TermEnvironment = terminalEnvironment;
+            TerminalWidthCharacters = terminalCharacters;
+            TerminalHeightRows = terminalRows;
+            TerminalWidthPixels = terminalWidthPixels;
+            TerminalHeightPixels = terminalHeightPixels;
+        }
+
         public string TermEnvironment { get; }
         public uint TerminalWidthCharacters { get; }
         public uint TerminalHeightRows { get; }
