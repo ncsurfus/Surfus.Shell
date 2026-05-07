@@ -90,7 +90,9 @@ namespace Surfus.Shell
                 _connectionInfo.ServerCertificateSize = kexContext.ServerCertificateSize;
                 sessionIdentifier = sessionIdentifier.IsEmpty ? h : sessionIdentifier;
                 if (_connectionInfo.SessionIdentifier.IsEmpty)
+                {
                     _connectionInfo.SessionIdentifier = sessionIdentifier.ToArray();
+                }
 
                 await _inbox.ReadAsync(MessageType.SSH_MSG_NEWKEYS, cancellationToken).ConfigureAwait(false);
 
@@ -192,7 +194,9 @@ namespace Surfus.Shell
         {
             var id = (int)messageEvent.Type;
             if (id >= 20 && id <= 49)
+            {
                 await _inbox.DeliverAsync(messageEvent).ConfigureAwait(false);
+            }
         }
 
         public void OnError(Exception error) => _inbox.OnError(error);

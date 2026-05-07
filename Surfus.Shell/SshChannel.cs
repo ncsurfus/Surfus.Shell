@@ -101,13 +101,17 @@ namespace Surfus.Shell
             await Inbox.SendAsync(requestMessage, cancellationToken).ConfigureAwait(false);
 
             if (tcs == null)
+            {
                 return;
+            }
 
             using var reg = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
             var success = await tcs.Task.ConfigureAwait(false);
 
             if (!success)
+            {
                 throw new SshException("Server had channel request failure.");
+            }
         }
 
         public async Task SendMessageAsync(IClientMessage message, CancellationToken cancellationToken)
@@ -177,7 +181,9 @@ namespace Surfus.Shell
                 while (SendWindow == 0)
                 {
                     if (!IsOpen)
+                    {
                         throw new SshException("Channel closed.");
+                    }
                     await _sendWindowAvailable.WaitAsync(cancellationToken).ConfigureAwait(false);
                 }
 
@@ -212,7 +218,9 @@ namespace Surfus.Shell
                 {
                     // Always drain all available control messages first (non-blocking).
                     while (_controlInbox.Reader.TryRead(out var controlMsg))
+                    {
                         ProcessControlMessage(controlMsg);
+                    }
 
                     // Try to read a data message (non-blocking).
                     if (_dataInbox.Reader.TryRead(out var dataMsg))
@@ -240,7 +248,9 @@ namespace Surfus.Shell
                 lock (_pendingRequests)
                 {
                     while (_pendingRequests.Count > 0)
+                    {
                         _pendingRequests.Dequeue().TrySetException(new SshException("Channel closed."));
+                    }
                 }
                 _sendWindowAvailable.Release();
             }
@@ -292,9 +302,13 @@ namespace Surfus.Shell
                 case ChannelExtendedData extData:
                     HandleReceiveWindow(extData.Data.Length);
                     if (CombineStderr)
+                    {
                         Stdout.Push(extData.Data.Span);
+                    }
                     else
+                    {
                         Stderr.Push(extData.Data.Span);
+                    }
                     break;
             }
         }
@@ -310,7 +324,9 @@ namespace Surfus.Shell
             lock (_pendingRequests)
             {
                 if (_pendingRequests.Count == 0)
+                {
                     return;
+                }
                 tcs = _pendingRequests.Dequeue();
             }
             tcs.TrySetResult(success);
@@ -351,7 +367,9 @@ namespace Surfus.Shell
         async ValueTask IMessageHandler.ProcessMessageAsync(MessageEvent messageEvent)
         {
             if (messageEvent.Message is not IChannelRecipient r || r.RecipientChannel != ClientId)
+            {
                 return;
+            }
 
             if (!_pumpRunning)
             {

@@ -77,9 +77,13 @@ namespace Surfus.Shell
 
             var type = reader.ReadByte();
             if (type == SSH_AGENT_FAILURE)
+            {
                 throw new Exceptions.SshException("SSH agent returned failure for identity request.");
+            }
             if (type != SSH_AGENT_IDENTITIES_ANSWER)
+            {
                 throw new Exceptions.SshException($"Unexpected agent response type: {type}");
+            }
 
             var count = (int)reader.ReadUInt32();
             var keys = new List<SshAgentKey>(count);
@@ -123,9 +127,13 @@ namespace Surfus.Shell
 
             var type = reader.ReadByte();
             if (type == SSH_AGENT_FAILURE)
+            {
                 throw new Exceptions.SshException("SSH agent refused to sign.");
+            }
             if (type != SSH_AGENT_SIGN_RESPONSE)
+            {
                 throw new Exceptions.SshException($"Unexpected agent response type: {type}");
+            }
 
             return reader.ReadBinaryString();
         }
@@ -145,7 +153,9 @@ namespace Surfus.Shell
             await ReadExactAsync(lengthBuf, cancellationToken).ConfigureAwait(false);
             var length = (int)ByteReader.ReadUInt32(lengthBuf.AsSpan(0));
             if (length > 256 * 1024)
+            {
                 throw new Exceptions.SshException("Agent response too large.");
+            }
             var payload = new byte[length];
             await ReadExactAsync(payload, cancellationToken).ConfigureAwait(false);
             return payload;
@@ -158,7 +168,9 @@ namespace Surfus.Shell
             {
                 var read = await _stream.ReadAsync(buffer.AsMemory(offset), cancellationToken).ConfigureAwait(false);
                 if (read == 0)
+                {
                     throw new Exceptions.SshException("SSH agent connection closed.");
+                }
                 offset += read;
             }
         }

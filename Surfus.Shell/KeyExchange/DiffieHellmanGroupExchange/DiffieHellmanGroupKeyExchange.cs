@@ -116,11 +116,17 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
 
             // Validate server-provided DH group parameters
             if (dhgGroup.P.BigInteger.GetBitLength() < 2048)
+            {
                 throw new SshException("Server DH group P is too small (must be at least 2048 bits).");
+            }
             if (dhgGroup.P.BigInteger % 2 == 0)
+            {
                 throw new SshException("Server DH group P must be odd.");
+            }
             if (dhgGroup.G.BigInteger <= 1 || dhgGroup.G.BigInteger >= dhgGroup.P.BigInteger - 1)
+            {
                 throw new SshException("Server DH group G is out of valid range.");
+            }
 
             // Generate random number 'x'.
             var x = GenerateRandomBigInteger(1, (dhgGroup.P.BigInteger - 1) / 2);

@@ -56,7 +56,9 @@ namespace Surfus.Shell
         internal void Push(ReadOnlySpan<byte> data)
         {
             if (data.Length == 0)
+            {
                 return;
+            }
 
             lock (_lock)
             {
@@ -84,13 +86,21 @@ namespace Surfus.Shell
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             if (buffer == null)
+            {
                 throw new ArgumentNullException(nameof(buffer));
+            }
             if (offset < 0)
+            {
                 throw new ArgumentOutOfRangeException(nameof(offset));
+            }
             if (count < 0)
+            {
                 throw new ArgumentOutOfRangeException(nameof(count));
+            }
             if (offset + count > buffer.Length)
+            {
                 throw new ArgumentException("Offset and count exceed buffer length.");
+            }
 
             while (true)
             {
@@ -123,7 +133,9 @@ namespace Surfus.Shell
                     }
 
                     if (_completed)
+                    {
                         return 0;
+                    }
                 }
 
                 await _dataAvailable.WaitAsync(cancellationToken).ConfigureAwait(false);

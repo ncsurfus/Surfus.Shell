@@ -43,7 +43,9 @@ namespace Surfus.Shell
         {
             var msg = await ReadAsync(cancellationToken).ConfigureAwait(false);
             if (msg.Type != expected)
+            {
                 throw new SshException($"Expected {expected} but received {msg.Type}.");
+            }
             return msg;
         }
 
@@ -52,14 +54,18 @@ namespace Surfus.Shell
         {
             var msg = await ReadAsync(cancellationToken).ConfigureAwait(false);
             if (msg.Message is T typed)
+            {
                 return typed;
+            }
             throw new SshException($"Expected {typeof(T).Name} but received {msg.Type}.");
         }
 
         internal Task SendAsync(IClientMessage message, CancellationToken cancellationToken)
         {
             if (OnSend == null)
+            {
                 throw new InvalidOperationException("No send handler registered on this inbox.");
+            }
             return OnSend(message, cancellationToken);
         }
 

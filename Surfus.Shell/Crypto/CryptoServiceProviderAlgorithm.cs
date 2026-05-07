@@ -102,7 +102,9 @@ namespace Surfus.Shell.Crypto
                     cancellationToken
                 );
                 if (bytesRead == 0)
+                {
                     throw new SshException("Connection closed.");
+                }
                 bufferPosition += bytesRead;
             }
 
@@ -110,7 +112,9 @@ namespace Surfus.Shell.Crypto
 
             var sshPacketSize = ByteReader.ReadUInt32(buffer.AsSpan(4)); // Get the length of the packet.
             if (sshPacketSize > 35000)
+            {
                 throw new SshException("Invalid message sent, packet was to large!");
+            }
             int bufferLength = (int)(4 + 4 + sshPacketSize + hmacSize); // Calculate the full size of what our buffer *should* be. uint (packetSequenceNumber) + uint (packet size) + packet + hmac size
 
             if (buffer.Length < bufferLength) // Check to see if we need a bigger buffer and should allocate additional data.
@@ -125,7 +129,9 @@ namespace Surfus.Shell.Crypto
                     cancellationToken
                 );
                 if (bytesRead == 0)
+                {
                     throw new SshException("Connection closed.");
+                }
                 bufferPosition += bytesRead;
             }
 

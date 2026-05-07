@@ -103,8 +103,12 @@ namespace Surfus.Shell
         private static AlgorithmDescriptor<T> Find<T>(AlgorithmDescriptor<T>[] descriptors, string name)
         {
             foreach (var d in descriptors)
+            {
                 if (d.Name == name)
+                {
                     return d;
+                }
+            }
             throw new Exceptions.SshException($"Algorithm '{name}' is not configured.");
         }
 
@@ -112,8 +116,12 @@ namespace Surfus.Shell
             where T : class
         {
             foreach (var d in descriptors)
+            {
                 if (d.ToString() == name)
+                {
                     return d;
+                }
+            }
             throw new Exceptions.SshException($"Algorithm '{name}' is not configured.");
         }
 

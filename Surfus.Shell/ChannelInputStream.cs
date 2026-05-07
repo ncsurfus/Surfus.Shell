@@ -34,9 +34,13 @@ namespace Surfus.Shell
         public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             if (_closed)
+            {
                 throw new ObjectDisposedException(nameof(ChannelInputStream));
+            }
             if (count == 0)
+            {
                 return;
+            }
 
             await _channel.WriteDataAsync(new ReadOnlyMemory<byte>(buffer, offset, count), cancellationToken).ConfigureAwait(false);
         }
@@ -44,9 +48,13 @@ namespace Surfus.Shell
         public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
             if (_closed)
+            {
                 throw new ObjectDisposedException(nameof(ChannelInputStream));
+            }
             if (buffer.Length == 0)
+            {
                 return;
+            }
 
             await _channel.WriteDataAsync(buffer, cancellationToken).ConfigureAwait(false);
         }

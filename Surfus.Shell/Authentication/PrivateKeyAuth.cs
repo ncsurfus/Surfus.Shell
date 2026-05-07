@@ -132,11 +132,17 @@ namespace Surfus.Shell.Authentication
             var buf = new byte[4 + rTotal + 4 + sTotal];
             var pos = 0;
             WriteUInt32(buf, ref pos, (uint)rTotal);
-            if (rPad == 1) buf[pos++] = 0;
+            if (rPad == 1)
+            {
+                buf[pos++] = 0;
+            }
             Array.Copy(ieee, rStart, buf, pos, rLen);
             pos += rLen;
             WriteUInt32(buf, ref pos, (uint)sTotal);
-            if (sPad == 1) buf[pos++] = 0;
+            if (sPad == 1)
+            {
+                buf[pos++] = 0;
+            }
             Array.Copy(ieee, sStart, buf, pos, sLen);
             return buf;
         }
@@ -145,7 +151,9 @@ namespace Surfus.Shell.Authentication
         {
             var end = start + length;
             while (start < end - 1 && data[start] == 0)
+            {
                 start++;
+            }
             return start;
         }
 
@@ -164,9 +172,13 @@ namespace Surfus.Shell.Authentication
             {
                 var rsa = RSA.Create();
                 if (passphrase != null)
+                {
                     rsa.ImportFromEncryptedPem(pem, passphrase);
+                }
                 else
+                {
                     rsa.ImportFromPem(pem);
+                }
                 var (kt, blob) = DeriveKeyInfo(rsa);
                 return (rsa, kt, blob);
             }
@@ -177,9 +189,13 @@ namespace Surfus.Shell.Authentication
             {
                 var ecdsa = ECDsa.Create();
                 if (passphrase != null)
+                {
                     ecdsa.ImportFromEncryptedPem(pem, passphrase);
+                }
                 else
+                {
                     ecdsa.ImportFromPem(pem);
+                }
                 var (kt, blob) = DeriveKeyInfo(ecdsa);
                 return (ecdsa, kt, blob);
             }
@@ -232,11 +248,17 @@ namespace Surfus.Shell.Authentication
         private static string GetCurveName(ECCurve curve)
         {
             if (curve.Oid?.Value == "1.2.840.10045.3.1.7" || curve.Oid?.FriendlyName is "NIST P-256" or "nistP256")
+            {
                 return "nistp256";
+            }
             if (curve.Oid?.Value == "1.3.132.0.34" || curve.Oid?.FriendlyName is "NIST P-384" or "nistP384")
+            {
                 return "nistp384";
+            }
             if (curve.Oid?.Value == "1.3.132.0.35" || curve.Oid?.FriendlyName is "NIST P-521" or "nistP521")
+            {
                 return "nistp521";
+            }
             throw new NotSupportedException($"Unsupported EC curve: {curve.Oid?.FriendlyName ?? curve.Oid?.Value}");
         }
 

@@ -37,10 +37,14 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             var maxValue = (BigInteger.One << exponentBits) - 1; // 2^bits - 1
             // Clamp to [2, P-2]
             if (minValue < 2)
+            {
                 minValue = 2;
+            }
             var pMinus2 = P.BigInteger - 2;
             if (maxValue > pMinus2)
+            {
                 maxValue = pMinus2;
+            }
 
             var x = GenerateRandomBigInteger(minValue, maxValue);
             var e = BigInteger.ModPow(G.BigInteger, x, P.BigInteger);

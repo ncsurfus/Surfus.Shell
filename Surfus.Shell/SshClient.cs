@@ -92,7 +92,9 @@ namespace Surfus.Shell
         {
             var handlers = _messageHandlers;
             foreach (var handler in handlers)
+            {
                 handler.OnError(error);
+            }
         }
 
         private sealed class HandlerRegistration : IDisposable, IAsyncDisposable
@@ -260,7 +262,9 @@ namespace Surfus.Shell
         public async Task AuthenticateAsync(string username, IAuthMethod authMethod, CancellationToken cancellationToken)
         {
             if (!IsConnected)
+            {
                 ThrowOnInvalidState();
+            }
             var auth = EnsureAuthentication();
             using var _ = RegisterMessageHandler(auth);
             await auth.LoginAsync(username, authMethod, cancellationToken).ConfigureAwait(false);
@@ -309,10 +313,14 @@ namespace Surfus.Shell
             using var _ = RegisterMessageHandler(auth);
             var keys = await agent.ListKeysAsync(cancellationToken).ConfigureAwait(false);
             if (keys.Count == 0)
+            {
                 throw new Exceptions.SshAuthenticationException("The SSH agent has no keys.");
+            }
             var methods = new List<IAuthMethod>();
             foreach (var key in keys)
+            {
                 methods.Add(new AgentAuth(agent, key));
+            }
             await auth.LoginAsync(username, methods, cancellationToken).ConfigureAwait(false);
             _sshClientState = State.Authenticated;
         }
@@ -573,7 +581,9 @@ namespace Surfus.Shell
             // Deliver to registered message handlers
             var handlers = _messageHandlers;
             foreach (var handler in handlers)
+            {
                 await handler.ProcessMessageAsync(messageEvent).ConfigureAwait(false);
+            }
 
             // After delivering SSH_MSG_NEWKEYS, wait for the key exchanger
             // to provide the new read-side crypto before reading the next packet.

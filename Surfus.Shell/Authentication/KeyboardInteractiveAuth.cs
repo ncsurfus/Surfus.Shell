@@ -26,7 +26,9 @@ namespace Surfus.Shell.Authentication
             var message = (UaInfoRequest)messageEvent.Message;
             var responses = new string[message.PromptNumber];
             for (var i = 0; i < responses.Length; i++)
+            {
                 responses[i] = await _responseCallback(message.Prompt[i], cancellationToken).ConfigureAwait(false);
+            }
             return new UaInfoResponse((uint)responses.Length, responses);
         }
     }

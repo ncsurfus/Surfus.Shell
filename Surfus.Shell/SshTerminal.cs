@@ -52,7 +52,9 @@ namespace Surfus.Shell
         internal async Task OpenAsync(CancellationToken cancellationToken)
         {
             if (_terminalState != State.Initial)
+            {
                 throw new Exception("Terminal request was already attempted.");
+            }
 
             _terminalState = State.Errored;
 
@@ -82,7 +84,9 @@ namespace Surfus.Shell
         public async Task SendWindowChangeAsync(uint columns, uint rows, CancellationToken cancellationToken)
         {
             if (_terminalState != State.Opened)
+            {
                 throw new Exception("Terminal not opened.");
+            }
 
             await _channel
                 .SendMessageAsync(new ChannelRequestWindowChange(_channel.ServerId, columns, rows), cancellationToken)

@@ -34,7 +34,9 @@ namespace Surfus.Shell
         internal async Task LoginAsync(string username, IReadOnlyList<IAuthMethod> methods, CancellationToken cancellationToken)
         {
             if (methods == null || methods.Count == 0)
+            {
                 throw new ArgumentException("At least one authentication method must be provided.", nameof(methods));
+            }
 
             await EnsureServiceAcceptedAsync(cancellationToken).ConfigureAwait(false);
 
@@ -53,13 +55,17 @@ namespace Surfus.Shell
         private async Task EnsureServiceAcceptedAsync(CancellationToken cancellationToken)
         {
             if (_serviceAccepted)
+            {
                 return;
+            }
 
             await _inbox.SendAsync(new Messages.ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
             var msg = await ReadAuthMessageAsync(cancellationToken).ConfigureAwait(false);
 
             if (msg.Type != MessageType.SSH_MSG_SERVICE_ACCEPT)
+            {
                 throw new SshAuthenticationException("The server does not support authentication.");
+            }
 
             _serviceAccepted = true;
         }
@@ -86,7 +92,9 @@ namespace Surfus.Shell
                             .HandleMessage60Async(username, _getSessionIdentifier(), msg, cancellationToken)
                             .ConfigureAwait(false);
                         if (response != null)
+                        {
                             await _inbox.SendAsync(response, cancellationToken).ConfigureAwait(false);
+                        }
                         continue;
 
                     default:
@@ -131,7 +139,9 @@ namespace Surfus.Shell
             var id = (int)messageEvent.Type;
             // Only deliver service accept (6), disconnect (1), and auth-range messages (50-79)
             if (id == 6 || id == 1 || (id >= 50 && id <= 79))
+            {
                 return _inbox.DeliverAsync(messageEvent);
+            }
             return ValueTask.CompletedTask;
         }
 

@@ -51,7 +51,9 @@ namespace Surfus.Shell
         internal async Task OpenAsync(CancellationToken cancellationToken)
         {
             if (_commandState != State.Initial)
+            {
                 throw new Exception("Command request was already attempted.");
+            }
 
             _commandState = State.Errored;
             await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
@@ -65,7 +67,9 @@ namespace Surfus.Shell
         public async Task RequestPseudoTerminalAsync(CancellationToken cancellationToken, TerminalOptions options = null)
         {
             if (_commandState != State.Opened)
+            {
                 throw new Exception("Command is not opened.");
+            }
 
             var opts = options ?? new TerminalOptions();
             await _channel
@@ -90,7 +94,9 @@ namespace Surfus.Shell
         public async Task StartAsync(string command, CancellationToken cancellationToken)
         {
             if (_commandState != State.Opened)
+            {
                 throw new Exception("Command is not opened.");
+            }
 
             await _channel.RequestAsync(new ChannelRequestExec(_channel.ServerId, true, command), cancellationToken).ConfigureAwait(false);
 

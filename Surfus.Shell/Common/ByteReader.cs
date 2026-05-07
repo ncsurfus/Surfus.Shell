@@ -31,7 +31,9 @@ namespace Surfus.Shell
         private void EnsureAvailable(int bytes)
         {
             if (Position + bytes > Bytes.Length)
+            {
                 throw new SshException("Malformed packet: unexpected end of data");
+            }
         }
 
         internal byte[] Read(int amount)
@@ -109,7 +111,9 @@ namespace Surfus.Shell
         {
             var length = (int)ReadUInt32();
             if (length < 0)
+            {
                 throw new SshException("Invalid string length in SSH message.");
+            }
             EnsureAvailable(length);
             var str = length != 0 ? Encoding.UTF8.GetString(Span.Slice(Position, length)) : null;
             Position += length;
@@ -120,7 +124,9 @@ namespace Surfus.Shell
         {
             var length = (int)ReadUInt32();
             if (length < 0)
+            {
                 throw new SshException("Invalid string length in SSH message.");
+            }
             EnsureAvailable(length);
             var str = length != 0 ? Encoding.ASCII.GetString(Span.Slice(Position, length)) : null;
             Position += length;
@@ -131,7 +137,9 @@ namespace Surfus.Shell
         {
             var length = (int)ReadUInt32();
             if (length < 0)
+            {
                 throw new SshException("Invalid string length in SSH message.");
+            }
             EnsureAvailable(length);
             var binaryString = Span.Slice(Position, length).ToArray();
             Position += length;

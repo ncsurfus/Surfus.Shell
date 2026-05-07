@@ -80,7 +80,9 @@ namespace Surfus.Shell.Crypto.AesCtr
         {
             var available = _xorMask.Length - _xorMaskIndex;
             if (available >= needed)
+            {
                 return;
+            }
 
             var blocksNeeded = (needed + InputBlockSize - 1) / InputBlockSize;
             var newMask = new byte[blocksNeeded * InputBlockSize];
@@ -98,7 +100,9 @@ namespace Surfus.Shell.Crypto.AesCtr
             for (var i = _counter.Length - 1; i >= 0; i--)
             {
                 if (++_counter[i] != 0)
+                {
                     break;
+                }
             }
         }
 

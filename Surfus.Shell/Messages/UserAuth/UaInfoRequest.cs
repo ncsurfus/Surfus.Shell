@@ -9,7 +9,9 @@ namespace Surfus.Shell.Messages.UserAuth
             Language = packet.Reader.ReadString();
             PromptNumber = packet.Reader.ReadUInt32();
             if (PromptNumber > 100)
+            {
                 throw new Exceptions.SshException("Too many prompts");
+            }
             Prompt = new string[PromptNumber];
             Echo = new bool[PromptNumber];
             for (var i = 0; i != PromptNumber; i++)
