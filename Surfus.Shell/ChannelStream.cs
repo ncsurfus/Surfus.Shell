@@ -1,30 +1,38 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
+using Surfus.Shell.Exceptions;
 
 namespace Surfus.Shell
 {
     /// <summary>
-    /// A readable stream backed by a producer/consumer buffer.
-    /// The channel writes data via <see cref="Push"/>; consumers read via standard Stream methods.
+    /// A readable stream backed by a Channel&lt;byte[]&gt;.
+    /// The channel pushes data via <see cref="Push"/>; consumers read via standard Stream methods.
+    /// Thread-safe: single producer (read loop), single consumer (user code).
     /// </summary>
-    internal class ChannelStream : Stream
+    internal sealed class ChannelStream : Stream
     {
-        private readonly SemaphoreSlim _dataAvailable = new(0);
-        private readonly object _lock = new();
-        private readonly Queue<ReadOnlyMemory<byte>> _segments = new();
-        private int _totalBytes;
-        private int _segmentOffset;
-        private bool _completed;
+        /// <summary>
+        /// Maximum bytes that may be buffered before the connection is terminated.
+        /// Matches OpenSSH's CHAN_RBUF (16MB).
+        /// </summary>
+        internal int MaxBufferSize { get; init; } = 16 * 1024 * 1024;
+
+        private readonly Channel<byte[]> _channel = Channel.CreateUnbounded<byte[]>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = true }
+        );
+
+        private ReadOnlyMemory<byte> _current;
         private bool _disposed;
+        private long _bufferedBytes;
 
         /// <summary>
-        /// Called when data is consumed by a reader, with the number of bytes consumed.
-        /// Used by the channel to replenish the receive window.
+        /// Called after data is consumed by a reader, with the number of bytes consumed.
+        /// Used by the channel to replenish the SSH receive window. May be null.
         /// </summary>
-        internal Action<int> OnConsumed;
+        internal Func<int, ValueTask> OnConsumed { get; init; }
 
         public override bool CanRead => true;
         public override bool CanSeek => false;
@@ -37,21 +45,8 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Returns the number of bytes currently buffered and available for reading without blocking.
-        /// </summary>
-        internal int Available
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    return _totalBytes;
-                }
-            }
-        }
-
-        /// <summary>
         /// Pushes data into the stream for consumers to read.
+        /// Called from the read loop (single producer).
         /// </summary>
         internal void Push(ReadOnlySpan<byte> data)
         {
@@ -60,15 +55,12 @@ namespace Surfus.Shell
                 return;
             }
 
-            lock (_lock)
+            if (Interlocked.Add(ref _bufferedBytes, data.Length) > MaxBufferSize)
             {
-                var copy = new byte[data.Length];
-                data.CopyTo(copy);
-                _segments.Enqueue(copy);
-                _totalBytes += data.Length;
+                throw new SshException("Channel received too much data.");
             }
 
-            _dataAvailable.Release();
+            _channel.Writer.TryWrite(data.ToArray());
         }
 
         /// <summary>
@@ -76,11 +68,7 @@ namespace Surfus.Shell
         /// </summary>
         internal void Complete()
         {
-            lock (_lock)
-            {
-                _completed = true;
-            }
-            _dataAvailable.Release();
+            _channel.Writer.TryComplete();
         }
 
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
@@ -102,54 +90,100 @@ namespace Surfus.Shell
                 throw new ArgumentException("Offset and count exceed buffer length.");
             }
 
-            while (true)
+            if (count == 0)
             {
-                lock (_lock)
+                return 0;
+            }
+
+            var totalCopied = CopyFromCurrent(buffer.AsSpan(offset, count));
+
+            if (totalCopied == 0)
+            {
+                if (!await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    if (_totalBytes > 0)
-                    {
-                        var bytesToRead = Math.Min(count, _totalBytes);
-                        var totalCopied = 0;
-
-                        while (totalCopied < bytesToRead)
-                        {
-                            var segment = _segments.Peek().Span;
-                            var available = segment.Length - _segmentOffset;
-                            var toCopy = Math.Min(available, bytesToRead - totalCopied);
-                            segment.Slice(_segmentOffset, toCopy).CopyTo(buffer.AsSpan(offset + totalCopied));
-                            totalCopied += toCopy;
-                            _segmentOffset += toCopy;
-
-                            if (_segmentOffset == segment.Length)
-                            {
-                                _segments.Dequeue();
-                                _segmentOffset = 0;
-                            }
-                        }
-
-                        _totalBytes -= bytesToRead;
-                        OnConsumed?.Invoke(bytesToRead);
-                        return bytesToRead;
-                    }
-
-                    if (_completed)
-                    {
-                        return 0;
-                    }
+                    return 0;
                 }
 
-                await _dataAvailable.WaitAsync(cancellationToken).ConfigureAwait(false);
+                if (!_channel.Reader.TryRead(out var segment))
+                {
+                    return 0; // Channel completed between WaitToRead and TryRead.
+                }
+
+                _current = segment;
+                totalCopied = CopyFromCurrent(buffer.AsSpan(offset, count));
             }
+
+            if (totalCopied > 0)
+            {
+                Interlocked.Add(ref _bufferedBytes, -totalCopied);
+                var handler = OnConsumed;
+                if (handler != null)
+                {
+                    await handler(totalCopied).ConfigureAwait(false);
+                }
+            }
+
+            return totalCopied;
         }
 
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (buffer.Length == 0)
+            {
+                return 0;
+            }
+
+            var totalCopied = CopyFromCurrent(buffer.Span);
+
+            if (totalCopied == 0)
+            {
+                if (!await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    return 0;
+                }
+
+                if (!_channel.Reader.TryRead(out var segment))
+                {
+                    return 0; // Channel completed between WaitToRead and TryRead.
+                }
+
+                _current = segment;
+                totalCopied = CopyFromCurrent(buffer.Span);
+            }
+
+            if (totalCopied > 0)
+            {
+                Interlocked.Add(ref _bufferedBytes, -totalCopied);
+                var handler = OnConsumed;
+                if (handler != null)
+                {
+                    await handler(totalCopied).ConfigureAwait(false);
+                }
+            }
+
+            return totalCopied;
+        }
+
+        /// <summary>Copies bytes from the current buffered segment into <paramref name="dest"/> and advances the segment position.</summary>
+        private int CopyFromCurrent(Span<byte> dest)
+        {
+            if (_current.Length == 0 || dest.Length == 0)
+            {
+                return 0;
+            }
+
+            var toCopy = Math.Min(_current.Length, dest.Length);
+            _current.Span.Slice(0, toCopy).CopyTo(dest);
+            _current = _current.Slice(toCopy);
+            return toCopy;
+        }
+
+        /// <inheritdoc/>
+        /// <remarks>Synchronous reads are not supported. Use ReadAsync.</remarks>
         public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException("Use ReadAsync instead.");
-
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-
         public override void Flush() { }
-
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-
         public override void SetLength(long value) => throw new NotSupportedException();
 
         protected override void Dispose(bool disposing)
@@ -158,7 +192,6 @@ namespace Surfus.Shell
             {
                 _disposed = true;
                 Complete();
-                _dataAvailable.Dispose();
             }
             base.Dispose(disposing);
         }

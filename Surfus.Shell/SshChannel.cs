@@ -13,28 +13,43 @@ namespace Surfus.Shell
 {
     /// <summary>
     /// Represents an SSH channel with stdin/stdout/stderr streams.
-    /// Obtain via <see cref="SshClient.CreateChannelAsync"/>.
+    /// Messages are processed inline from the read loop — no background pump.
     /// </summary>
     public class SshChannel : IMessageHandler, IAsyncDisposable
     {
+        private const int MaxPacketData = 32768;
+
         internal readonly SshMessageInbox Inbox = new();
         internal IDisposable Registration { get; set; }
 
+        // Remaining bytes the server allows us to send. Claimed atomically via CompareExchange in WriteDataAsync,
+        // incremented via Interlocked.Add from the read loop (WindowAdjust).
+        // Uses long to safely hold the full uint32 SSH window range.
+        private long _sendWindow;
+
+        // Bytes consumed by the reader since the last window adjust. Accumulated via Interlocked.Add;
+        // flushed in FlushWindowAdjustAsync using a CompareExchange loop to avoid losing concurrent additions.
+        private int _consumedBytes;
+
+        private readonly Channel<bool> _sendWindowSignal = Channel.CreateBounded<bool>(1);
+
+        // Queued TCSs for channel requests with WantReply=true. Completed in FIFO order matching SSH protocol guarantee.
+        private readonly Queue<TaskCompletionSource<bool>> _pendingRequests = new();
+        private volatile bool _opened;
+        private int _closed; // 0 = open, 1 = closed. Used with Interlocked for atomic close.
+
+        /// <summary>
+        /// Number of consumed bytes that triggers sending a window adjust to the server.
+        /// </summary>
         internal int WindowRefill { get; set; } = 50000;
-        private int _sendWindow;
-        internal int SendWindow
-        {
-            get => Interlocked.CompareExchange(ref _sendWindow, 0, 0);
-            set => Interlocked.Exchange(ref _sendWindow, value);
-        }
-        internal int ReceiveWindow { get; set; }
+
         internal uint ServerId { get; set; }
         internal uint ClientId { get; }
 
         /// <summary>
         /// Whether the channel is still open.
         /// </summary>
-        public bool IsOpen { get; private set; }
+        public bool IsOpen => _closed == 0 && _opened;
 
         /// <summary>
         /// The exit code returned by the remote process, or null if not yet received.
@@ -43,50 +58,34 @@ namespace Surfus.Shell
 
         /// <summary>
         /// When true, stderr data is interleaved into StandardOutput.
-        /// Must be set before data starts flowing.
         /// </summary>
         public bool CombineStderr { get; init; }
 
+        /// <summary>Gets the writable stream for sending data to the remote process.</summary>
         public Stream StandardInput => Stdin;
+
+        /// <summary>Gets the readable stream for the remote process's standard output.</summary>
         public Stream StandardOutput => Stdout;
+
+        /// <summary>Gets the readable stream for the remote process's standard error.</summary>
         public Stream StandardError => Stderr;
 
-        internal readonly ChannelStream Stdout = new();
-        internal readonly ChannelStream Stderr = new();
+        internal readonly ChannelStream Stdout;
+        internal readonly ChannelStream Stderr;
         internal ChannelInputStream Stdin { get; private set; }
-
-        private int _consumedBytes;
-        private readonly CancellationTokenSource _pumpCts = new();
-        private Task _pumpTask;
-
-        private readonly Queue<TaskCompletionSource<bool>> _pendingRequests = new();
-        private readonly SemaphoreSlim _sendWindowAvailable = new(0);
-        private volatile bool _pumpRunning;
-
-        /// <summary>
-        /// Bounded channel for data messages (ChannelData, ChannelExtendedData).
-        /// Back-pressure here is by design: the SSH receive window (50KB) limits in-flight data to 2-3 packets, so 64 slots is generous. If the consumer stalls, blocking the read loop is correct — it prevents unbounded memory growth and signals the server to stop sending.
-        /// </summary>
-        private readonly Channel<MessageEvent> _dataInbox = Channel.CreateBounded<MessageEvent>(
-            new BoundedChannelOptions(64) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true }
-        );
-
-        /// <summary>
-        /// Unbounded channel for control messages (WindowAdjust, Success, Failure, EOF, Close, etc.).
-        /// These must never block the read loop.
-        /// </summary>
-        private readonly Channel<MessageEvent> _controlInbox = Channel.CreateUnbounded<MessageEvent>(
-            new UnboundedChannelOptions { SingleReader = true }
-        );
 
         internal SshChannel(uint channelId)
         {
             ClientId = channelId;
+            Stdout = new ChannelStream { OnConsumed = OnBytesConsumedAsync };
+            Stderr = new ChannelStream { OnConsumed = OnBytesConsumedAsync };
             Stdin = new ChannelInputStream(this);
-            Stdout.OnConsumed = OnBytesConsumed;
-            Stderr.OnConsumed = OnBytesConsumed;
         }
 
+        /// <summary>
+        /// Sends a channel request and optionally waits for the server's reply.
+        /// </summary>
+        /// <exception cref="SshException">Thrown if the server rejects the request.</exception>
         public async Task RequestAsync(ChannelRequest requestMessage, CancellationToken cancellationToken)
         {
             TaskCompletionSource<bool> tcs = null;
@@ -98,6 +97,7 @@ namespace Surfus.Shell
                     _pendingRequests.Enqueue(tcs);
                 }
             }
+
             await Inbox.SendAsync(requestMessage, cancellationToken).ConfigureAwait(false);
 
             if (tcs == null)
@@ -107,54 +107,55 @@ namespace Surfus.Shell
 
             using var reg = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
             var success = await tcs.Task.ConfigureAwait(false);
-
             if (!success)
             {
                 throw new SshException("Server had channel request failure.");
             }
         }
 
+        /// <summary>
+        /// Sends a raw message on this channel.
+        /// </summary>
         public async Task SendMessageAsync(IClientMessage message, CancellationToken cancellationToken)
         {
             await Inbox.SendAsync(message, cancellationToken).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Sends a channel close message to the server. Idempotent — only the first call sends.
+        /// </summary>
         public async Task CloseAsync(CancellationToken cancellationToken)
         {
-            if (IsOpen)
+            if (Interlocked.CompareExchange(ref _closed, 1, 0) == 0)
             {
+                _sendWindowSignal.Writer.TryComplete();
                 await Inbox.SendAsync(new ChannelClose(ServerId), cancellationToken).ConfigureAwait(false);
-                IsOpen = false;
             }
         }
 
-        public async ValueTask DisposeAsync()
+        /// <inheritdoc/>
+        public ValueTask DisposeAsync()
         {
-            _pumpCts.Cancel();
-            _dataInbox.Writer.TryComplete();
-            _controlInbox.Writer.TryComplete();
-            if (_pumpTask != null)
-            {
-                try
-                {
-                    await _pumpTask.ConfigureAwait(false);
-                }
-                catch { }
-            }
+            Interlocked.Exchange(ref _closed, 1);
             Stdout.Complete();
             Stderr.Complete();
+            _sendWindowSignal.Writer.TryComplete();
+            lock (_pendingRequests)
+            {
+                while (_pendingRequests.Count > 0)
+                {
+                    _pendingRequests.Dequeue().TrySetException(new SshException("Channel closed."));
+                }
+            }
             Registration?.Dispose();
             Inbox.Dispose();
-            _pumpCts.Dispose();
-            _sendWindowAvailable.Dispose();
+            return ValueTask.CompletedTask;
         }
 
         internal async Task OpenAsync(ChannelOpen openMessage, CancellationToken cancellationToken)
         {
-            ReceiveWindow = (int)openMessage.InitialWindowSize;
             await Inbox.SendAsync(openMessage, cancellationToken).ConfigureAwait(false);
 
-            // Before pump starts, read from the legacy inbox for the open handshake.
             while (true)
             {
                 var msg = await Inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
@@ -162,9 +163,8 @@ namespace Surfus.Shell
                 {
                     case ChannelOpenConfirmation confirm:
                         ServerId = confirm.SenderChannel;
-                        SendWindow = (int)confirm.InitialWindowSize;
-                        IsOpen = true;
-                        StartMessagePump();
+                        Interlocked.Exchange(ref _sendWindow, confirm.InitialWindowSize);
+                        _opened = true;
                         return;
                     case ChannelOpenFailure:
                         throw new SshException("Server refused to open channel.");
@@ -174,95 +174,99 @@ namespace Surfus.Shell
 
         internal async Task WriteDataAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
         {
-            var totalBytesLeft = buffer.Length;
             var offset = 0;
-            while (totalBytesLeft > 0)
+            while (offset < buffer.Length)
             {
-                while (SendWindow == 0)
+                int claimed;
+                while (true)
                 {
                     if (!IsOpen)
                     {
                         throw new SshException("Channel closed.");
                     }
-                    await _sendWindowAvailable.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+                    var current = Interlocked.Read(ref _sendWindow);
+                    if (current == 0)
+                    {
+                        try
+                        {
+                            await _sendWindowSignal.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                        catch (ChannelClosedException)
+                        {
+                            throw new SshException("Channel closed.");
+                        }
+                        continue;
+                    }
+
+                    claimed = (int)Math.Min(Math.Min(buffer.Length - offset, current), MaxPacketData);
+                    if (Interlocked.CompareExchange(ref _sendWindow, current - claimed, current) == current)
+                    {
+                        break;
+                    }
                 }
 
-                var chunkSize = Math.Min(totalBytesLeft, SendWindow);
-                var chunk = buffer.Slice(offset, chunkSize).ToArray();
-                await Inbox.SendAsync(new ChannelData(ServerId, chunk), cancellationToken).ConfigureAwait(false);
-                Interlocked.Add(ref _sendWindow, -chunkSize);
-                totalBytesLeft -= chunkSize;
-                offset += chunkSize;
+                // Re-check after claiming — if closed between claim and send, don't send.
+                if (!IsOpen)
+                {
+                    throw new SshException("Channel closed.");
+                }
+
+                await Inbox.SendAsync(new ChannelData(ServerId, buffer.Slice(offset, claimed).ToArray()), cancellationToken).ConfigureAwait(false);
+                offset += claimed;
             }
         }
 
+        /// <summary>Sends EOF to the server, signaling no more data will be written.</summary>
         internal async Task SendEofAsync(CancellationToken cancellationToken)
         {
             await Inbox.SendAsync(new ChannelEof(ServerId), cancellationToken).ConfigureAwait(false);
         }
 
-        // --- Message pump ---
+        // IMessageHandler methods below are always called from the single-threaded SshClient read loop.
 
-        private void StartMessagePump()
+        Func<IClientMessage, CancellationToken, Task> IMessageHandler.OnSend
         {
-            _pumpRunning = true;
-            _pumpTask = Task.Run(RunPumpAsync);
+            set => Inbox.OnSend = value;
         }
 
-        private async Task RunPumpAsync()
+        async ValueTask IMessageHandler.ProcessMessageAsync(MessageEvent messageEvent)
         {
-            var ct = _pumpCts.Token;
-            try
+            if (messageEvent.Message is not IChannelRecipient r || r.RecipientChannel != ClientId)
             {
-                while (IsOpen)
-                {
-                    // Always drain all available control messages first (non-blocking).
-                    while (_controlInbox.Reader.TryRead(out var controlMsg))
-                    {
-                        ProcessControlMessage(controlMsg);
-                    }
-
-                    // Try to read a data message (non-blocking).
-                    if (_dataInbox.Reader.TryRead(out var dataMsg))
-                    {
-                        ProcessDataMessage(dataMsg);
-                        continue;
-                    }
-
-                    // Nothing available — wait for either channel to have data.
-                    // TODO: Task.WhenAny allocates a Task per iteration causing GC pressure.
-                    // A future optimization could use a custom awaiter or ValueTask-based approach.
-                    var controlReady = _controlInbox.Reader.WaitToReadAsync(ct).AsTask();
-                    var dataReady = _dataInbox.Reader.WaitToReadAsync(ct).AsTask();
-                    await Task.WhenAny(controlReady, dataReady).ConfigureAwait(false);
-                }
+                return;
             }
-            catch (OperationCanceledException) { }
-            catch (SshException) { }
-            catch (ChannelClosedException) { }
-            catch (Exception) { }
-            finally
-            {
-                Stdout.Complete();
-                Stderr.Complete();
-                lock (_pendingRequests)
-                {
-                    while (_pendingRequests.Count > 0)
-                    {
-                        _pendingRequests.Dequeue().TrySetException(new SshException("Channel closed."));
-                    }
-                }
-                _sendWindowAvailable.Release();
-            }
-        }
 
-        private void ProcessControlMessage(MessageEvent msg)
-        {
-            switch (msg.Message)
+            if (!_opened)
             {
+                await Inbox.DeliverAsync(messageEvent).ConfigureAwait(false);
+                return;
+            }
+
+            switch (messageEvent.Message)
+            {
+                case ChannelData data:
+                    Stdout.Push(data.Data.Span);
+                    break;
+
+                case ChannelExtendedData extData:
+                    if (CombineStderr)
+                    {
+                        Stdout.Push(extData.Data.Span);
+                    }
+                    else
+                    {
+                        Stderr.Push(extData.Data.Span);
+                    }
+                    break;
+
                 case ChannelWindowAdjust adjust:
-                    Interlocked.Add(ref _sendWindow, (int)adjust.BytesToAdd);
-                    _sendWindowAvailable.Release();
+                    var newWindow = Interlocked.Add(ref _sendWindow, adjust.BytesToAdd);
+                    if (newWindow > uint.MaxValue)
+                    {
+                        Interlocked.Exchange(ref _sendWindow, uint.MaxValue);
+                    }
+                    _sendWindowSignal.Writer.TryWrite(true);
                     break;
 
                 case ChannelSuccess:
@@ -283,39 +287,28 @@ namespace Surfus.Shell
                     break;
 
                 case ChannelClose:
-                    IsOpen = false;
+                    Interlocked.Exchange(ref _closed, 1);
                     Stdout.Complete();
                     Stderr.Complete();
+                    _sendWindowSignal.Writer.TryComplete();
                     break;
             }
         }
 
-        private void ProcessDataMessage(MessageEvent msg)
+        void IMessageHandler.OnError(Exception error)
         {
-            switch (msg.Message)
+            Inbox.OnError(error);
+            Interlocked.Exchange(ref _closed, 1);
+            Stdout.Complete();
+            Stderr.Complete();
+            _sendWindowSignal.Writer.TryComplete();
+            lock (_pendingRequests)
             {
-                case ChannelData data:
-                    HandleReceiveWindow(data.Data.Length);
-                    Stdout.Push(data.Data.Span);
-                    break;
-
-                case ChannelExtendedData extData:
-                    HandleReceiveWindow(extData.Data.Length);
-                    if (CombineStderr)
-                    {
-                        Stdout.Push(extData.Data.Span);
-                    }
-                    else
-                    {
-                        Stderr.Push(extData.Data.Span);
-                    }
-                    break;
+                while (_pendingRequests.Count > 0)
+                {
+                    _pendingRequests.Dequeue().TrySetException(error);
+                }
             }
-        }
-
-        private void HandleReceiveWindow(int dataLength)
-        {
-            ReceiveWindow -= Math.Min(dataLength, ReceiveWindow);
         }
 
         private void DequeueRequest(bool success)
@@ -332,71 +325,44 @@ namespace Surfus.Shell
             tcs.TrySetResult(success);
         }
 
-        private void OnBytesConsumed(int count)
+        /// <summary>Accumulates consumed bytes and triggers a window adjust when the threshold is reached.</summary>
+        private ValueTask OnBytesConsumedAsync(int count)
         {
-            var newValue = Interlocked.Add(ref _consumedBytes, count);
-            if (newValue >= WindowRefill)
+            if (Interlocked.Add(ref _consumedBytes, count) >= WindowRefill)
             {
-                var toRefill = Interlocked.Exchange(ref _consumedBytes, 0);
-                if (toRefill > 0)
-                {
-                    _ = SendWindowAdjustAsync(toRefill);
-                }
+                return FlushWindowAdjustAsync();
             }
+            return ValueTask.CompletedTask;
         }
 
-        private async Task SendWindowAdjustAsync(int toRefill)
+        private async ValueTask FlushWindowAdjustAsync()
         {
+            // Use CompareExchange loop to subtract only what we're claiming, so concurrent
+            // additions from the other stream's OnConsumed are not lost.
+            int toRefill;
+            while (true)
+            {
+                var current = Volatile.Read(ref _consumedBytes);
+                if (current < WindowRefill)
+                {
+                    return; // Another thread already flushed.
+                }
+                toRefill = current;
+                if (Interlocked.CompareExchange(ref _consumedBytes, 0, current) == current)
+                {
+                    break;
+                }
+            }
+
             try
             {
                 await Inbox.SendAsync(new ChannelWindowAdjust(ServerId, (uint)toRefill), CancellationToken.None).ConfigureAwait(false);
             }
             catch
             {
-                // Best-effort: if sending fails, the channel will stall but not crash.
+                // Restore so the next flush retries sending the adjust.
+                Interlocked.Add(ref _consumedBytes, toRefill);
             }
-        }
-
-        // --- IMessageHandler (called from SshClient read loop) ---
-
-        Func<IClientMessage, CancellationToken, Task> IMessageHandler.OnSend
-        {
-            set => Inbox.OnSend = value;
-        }
-
-        async ValueTask IMessageHandler.ProcessMessageAsync(MessageEvent messageEvent)
-        {
-            if (messageEvent.Message is not IChannelRecipient r || r.RecipientChannel != ClientId)
-            {
-                return;
-            }
-
-            if (!_pumpRunning)
-            {
-                // During open handshake, route to the legacy inbox.
-                await Inbox.DeliverAsync(messageEvent).ConfigureAwait(false);
-                return;
-            }
-
-            // Route data messages to bounded data inbox, everything else to unbounded control inbox.
-            switch (messageEvent.Message)
-            {
-                case ChannelData:
-                case ChannelExtendedData:
-                    await _dataInbox.Writer.WriteAsync(messageEvent).ConfigureAwait(false);
-                    break;
-
-                default:
-                    _controlInbox.Writer.TryWrite(messageEvent);
-                    break;
-            }
-        }
-
-        void IMessageHandler.OnError(Exception error)
-        {
-            Inbox.OnError(error);
-            _dataInbox.Writer.TryComplete(error);
-            _controlInbox.Writer.TryComplete(error);
         }
     }
 }
