@@ -63,7 +63,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         /// <summary>
         /// Gets the generator for the subgroup.
         /// </summary>
-        protected virtual BigInt G { get; } = new BigInt(new byte[] { 2 });
+        protected virtual BigInt G { get; } = new BigInt(new BigInteger(2));
 
         /// <summary>
         /// A large predefined safe prime number.

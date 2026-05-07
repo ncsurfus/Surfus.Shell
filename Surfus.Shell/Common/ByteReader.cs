@@ -88,41 +88,21 @@ namespace Surfus.Shell
 
         internal BigInt ReadBigInteger()
         {
-            var span = Span;
             var length = (int)ReadUInt32();
             EnsureAvailable(length);
-
-            var bigIntegerBuffer = span[length + Position - 1] <= 127 ? new byte[length] : new byte[length + 1];
-
-            for (var i = 0; i != length; i++)
-            {
-                bigIntegerBuffer[i] = span[Position + length - i - 1];
-            }
-
+            var value = new BigInteger(Span.Slice(Position, length), isUnsigned: false, isBigEndian: true);
             Position += length;
-            return new BigInt(new BigInteger(bigIntegerBuffer), bigIntegerBuffer, length);
+            return new BigInt(value, length);
         }
 
         internal static BigInteger ReadBigInteger(ReadOnlySpan<byte> bytes)
         {
-            var bigIntegerBuffer = bytes[bytes.Length - 1] <= 127 ? new byte[bytes.Length] : new byte[bytes.Length + 1];
-
-            for (var i = 0; i != bytes.Length; i++)
-            {
-                bigIntegerBuffer[i] = bytes[bytes.Length - i - 1];
-            }
-
-            return new BigInteger(bigIntegerBuffer);
+            return new BigInteger(bytes, isUnsigned: true, isBigEndian: true);
         }
 
         internal static BigInteger ReadBigInteger(byte[] buffer)
         {
-            Array.Reverse(buffer);
-            if (buffer[buffer.Length - 1] > 127)
-            {
-                Array.Resize(ref buffer, buffer.Length + 1);
-            }
-            return new BigInteger(buffer);
+            return new BigInteger(buffer, isUnsigned: true, isBigEndian: true);
         }
 
         internal string ReadString()

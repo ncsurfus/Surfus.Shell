@@ -232,13 +232,7 @@ namespace Surfus.Shell
         internal void WriteBigInteger(BigInt bigInt)
         {
             WriteUint((uint)bigInt.Length);
-
-            // Write to buffer backwards
-            for (var i = 0; i != bigInt.Length; i++)
-            {
-                Bytes[Position + i] = bigInt.Buffer[bigInt.Length - i - 1];
-            }
-
+            bigInt.BigInteger.TryWriteBytes(Bytes.AsSpan(Position, bigInt.Length), out _, isUnsigned: false, isBigEndian: true);
             Position += bigInt.Length;
         }
 

@@ -3,44 +3,30 @@
 namespace Surfus.Shell
 {
     /// <summary>
-    /// Represents a BigInteger and any associated buffers.
+    /// Represents a BigInteger and its SSH wire-format length.
     /// </summary>
     public record BigInt
     {
         /// <summary>
-        /// This should be the only type accessed directly outside of ByteReader/ByteWriter
+        /// The BigInteger value.
         /// </summary>
         internal BigInteger BigInteger { get; }
 
         /// <summary>
-        /// The Little Endian buffer of this device.
-        /// </summary>
-        internal byte[] Buffer { get; }
-
-        /// <summary>
-        /// Represents the length of the buffer.
+        /// The signed big-endian byte count (SSH wire length).
         /// </summary>
         internal int Length { get; }
 
-        internal BigInt(BigInteger bigInteger, byte[] buffer, int length)
+        internal BigInt(BigInteger bigInteger, int wireLength)
         {
             BigInteger = bigInteger;
-            Buffer = buffer;
-            Length = length;
-        }
-
-        internal BigInt(byte[] buffer)
-        {
-            BigInteger = new BigInteger(buffer);
-            Buffer = buffer;
-            Length = Buffer.Length;
+            Length = wireLength;
         }
 
         internal BigInt(BigInteger bigInteger)
         {
             BigInteger = bigInteger;
-            Buffer = bigInteger.ToByteArray();
-            Length = Buffer.Length;
+            Length = bigInteger.GetByteCount(isUnsigned: false);
         }
     }
 }

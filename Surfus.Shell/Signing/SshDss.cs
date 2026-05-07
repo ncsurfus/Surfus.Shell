@@ -19,7 +19,7 @@ namespace Surfus.Shell.Signing
             Q = reader.ReadBigInteger();
             G = reader.ReadBigInteger();
             Y = reader.ReadBigInteger();
-            KeySize = Y.Buffer.Length * 8;
+            KeySize = Y.Length * 8;
         }
 
         public BigInt P { get; }
