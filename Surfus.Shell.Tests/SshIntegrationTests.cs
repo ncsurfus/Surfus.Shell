@@ -247,7 +247,9 @@ public class SshIntegrationTests
     [InlineData("3des-cbc")]
     public async Task Cipher(string cipher)
     {
-        await using var server = await SshTestServer.StartAsync(ciphers: cipher);
+        // Go's x/crypto/ssh has a bug with ETM+CBC, so force non-ETM MAC for CBC ciphers.
+        var mac = cipher.Contains("cbc") ? "hmac-sha2-256" : null;
+        await using var server = await SshTestServer.StartAsync(ciphers: cipher, macs: mac);
         await using var client = new SshClient("127.0.0.1", (ushort)server.Port);
         await client.ConnectAsync(Timeout());
         await client.AuthenticateAsync(User, Pass, Timeout());
@@ -259,6 +261,8 @@ public class SshIntegrationTests
     [Theory]
     [InlineData("hmac-sha2-256")]
     [InlineData("hmac-sha2-512")]
+    [InlineData("hmac-sha2-256-etm@openssh.com")]
+    [InlineData("hmac-sha2-512-etm@openssh.com")]
     [InlineData("hmac-sha1")]
     [InlineData("hmac-sha1-96")]
     public async Task Mac(string mac)

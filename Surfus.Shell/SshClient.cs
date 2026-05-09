@@ -551,6 +551,7 @@ namespace Surfus.Shell
                 _tcpStream,
                 ConnectionInfo.InboundPacketSequence,
                 ConnectionInfo.ReadMacAlgorithm.OutputSize,
+                ConnectionInfo.ReadMacAlgorithm.IsEtm,
                 cancellationToken
             );
 
@@ -561,6 +562,12 @@ namespace Surfus.Shell
                 if (!ConnectionInfo.ReadMacAlgorithm.VerifyMac(ConnectionInfo.InboundPacketSequence, sshPacket))
                 {
                     throw new SshException("The server sent a malformed message.");
+                }
+
+                if (ConnectionInfo.ReadMacAlgorithm.IsEtm)
+                {
+                    // ETM: MAC verified over ciphertext, now decrypt the body (skip the 4-byte packet length).
+                    ConnectionInfo.ReadCryptoAlgorithm.Decrypt(sshPacket.Buffer, sshPacket.Offset + 4, sshPacket.Length - 4);
                 }
             }
 
@@ -611,11 +618,21 @@ namespace Surfus.Shell
             await _writeSemaphore.WaitAsync(cancellationToken);
             try
             {
-                var sshPacket = new SshPacket(message.GetByteWriter(), Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8));
+                var sshPacket = new SshPacket(message.GetByteWriter(), Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8), ConnectionInfo.WriteMacAlgorithm.IsEtm);
                 ByteWriter.WriteUint(sshPacket.Buffer.AsSpan(SshPacket.SequenceIndex), ConnectionInfo.OutboundPacketSequence);
-                byte[] macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
 
-                ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
+                byte[] macOutput;
+                if (ConnectionInfo.WriteMacAlgorithm.IsEtm)
+                {
+                    // ETM: encrypt body (not packet length), then MAC over seq + length + ciphertext
+                    ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset + 4, sshPacket.Length - 4);
+                    macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
+                }
+                else
+                {
+                    macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
+                    ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
+                }
 
                 var writeLength = ConnectionInfo.WriteCryptoAlgorithm.IsAead
                     ? sshPacket.Length + 16 // AEAD tag appended by Encrypt

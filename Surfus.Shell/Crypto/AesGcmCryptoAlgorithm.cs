@@ -50,10 +50,17 @@ namespace Surfus.Shell.Crypto
             IncrementNonce();
         }
 
+        internal override void Decrypt(byte[] cipherText, int offset, int length)
+        {
+            // GCM decryption is handled in ReadPacketAsync. This should not be called.
+            throw new NotSupportedException("GCM decryption is handled internally.");
+        }
+
         internal override async Task<SshPacket> ReadPacketAsync(
             NetworkStream networkStream,
             uint packetSequenceNumber,
             int hmacSize,
+            bool isEtm,
             CancellationToken cancellationToken
         )
         {

@@ -6,6 +6,7 @@ namespace Surfus.Shell.MessageAuthentication
     {
         public abstract int KeySize { get; }
         public abstract int OutputSize { get; }
+        public virtual bool IsEtm => false;
         public abstract void Initialize(byte[] key);
 
         public abstract byte[] ComputeHash(uint sequenceNumber, SshPacket sshPacket);

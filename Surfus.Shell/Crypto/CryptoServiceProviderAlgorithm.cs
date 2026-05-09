@@ -56,6 +56,11 @@ namespace Surfus.Shell.Crypto
             _encryptor.TransformBlock(byteArray, offset, length, byteArray, offset);
         }
 
+        internal override void Decrypt(byte[] byteArray, int offset, int length)
+        {
+            _decryptor.TransformBlock(byteArray, offset, length, byteArray, offset);
+        }
+
         /// <summary>
         /// Initializes the cipher. You must initialize the cipher before caling Encrypt or ReadPacket.
         /// </summary>
@@ -83,12 +88,18 @@ namespace Surfus.Shell.Crypto
             NetworkStream networkStream,
             uint packetSequenceNumber,
             int hmacSize,
+            bool isEtm,
             CancellationToken cancellationToken
         )
         {
-            var blockSize = _decryptor.InputBlockSize; // This code was made assuming the decryption and encryption block sizes are the same!
-            var expectedPacketSize = 128; // We're going to initialize the buffer to the average expected packet length.
-            var buffer = new byte[4 + blockSize + expectedPacketSize + hmacSize]; // Array Length: uint (packetSequenceNumber) + uint (packet size) + expectedPacketSize + hmac size
+            if (isEtm)
+            {
+                return await ReadPacketEtmAsync(networkStream, packetSequenceNumber, hmacSize, cancellationToken).ConfigureAwait(false);
+            }
+
+            var blockSize = _decryptor.InputBlockSize;
+            var expectedPacketSize = 128;
+            var buffer = new byte[4 + blockSize + expectedPacketSize + hmacSize];
 
             ByteWriter.WriteUint(buffer.AsSpan(0), packetSequenceNumber); // Write first uint, which is the packet sequence number.
             var packetStart = 4; // This is where we actually start adding packet data, skipping the provided packet sequence number..
@@ -142,6 +153,58 @@ namespace Surfus.Shell.Crypto
             }
 
             return new SshPacket(buffer, 4, bufferLength - 4 - hmacSize);
+        }
+
+        private async Task<SshPacket> ReadPacketEtmAsync(
+            NetworkStream networkStream,
+            uint packetSequenceNumber,
+            int hmacSize,
+            CancellationToken cancellationToken
+        )
+        {
+            // ETM: packet length is plaintext, body is encrypted, MAC covers seq + length + ciphertext.
+            var buffer = new byte[4 + 4 + 128 + hmacSize]; // seq(4) + length(4) + estimated body + hmac
+
+            ByteWriter.WriteUint(buffer.AsSpan(0), packetSequenceNumber);
+            var bufferPosition = 4;
+
+            // Read the 4-byte plaintext packet length.
+            while (bufferPosition < 8)
+            {
+                var bytesRead = await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, 8 - bufferPosition), cancellationToken).ConfigureAwait(false);
+                if (bytesRead == 0)
+                {
+                    throw new SshException("Connection closed.");
+                }
+                bufferPosition += bytesRead;
+            }
+
+            var sshPacketSize = ByteReader.ReadUInt32(buffer.AsSpan(4));
+            if (sshPacketSize > 35000)
+            {
+                throw new SshException("Invalid message sent, packet was too large!");
+            }
+
+            int bufferLength = (int)(4 + 4 + sshPacketSize + hmacSize);
+            if (buffer.Length < bufferLength)
+            {
+                Array.Resize(ref buffer, bufferLength);
+            }
+
+            // Read encrypted body + MAC.
+            while (bufferPosition < bufferLength)
+            {
+                var bytesRead = await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, bufferLength - bufferPosition), cancellationToken).ConfigureAwait(false);
+                if (bytesRead == 0)
+                {
+                    throw new SshException("Connection closed.");
+                }
+                bufferPosition += bytesRead;
+            }
+
+            // Return packet with ciphertext intact — MAC verification happens in SshClient before decryption.
+            // SshPacket.Length = 4 (packet_length) + sshPacketSize, so MAC is at offset Length+4.
+            return new SshPacket(buffer, 4, (int)(4 + sshPacketSize));
         }
     }
 }

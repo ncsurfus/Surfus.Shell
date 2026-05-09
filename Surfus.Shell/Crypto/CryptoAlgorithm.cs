@@ -47,6 +47,11 @@ namespace Surfus.Shell.Crypto
         internal abstract void Encrypt(byte[] plainText, int offset, int length);
 
         /// <summary>
+        /// Decrypts the data in-place.
+        /// </summary>
+        internal abstract void Decrypt(byte[] cipherText, int offset, int length);
+
+        /// <summary>
         /// Initializes the cipher. You must initialize the cipher before caling Encrypt or ReadPacket.
         /// </summary>
         /// <param name="initializationVector">The initialization vector for the cipher.</param>
@@ -69,6 +74,7 @@ namespace Surfus.Shell.Crypto
             NetworkStream networkStream,
             uint packetSequenceNumber,
             int hmacSize,
+            bool isEtm,
             CancellationToken cancellationToken
         );
     }

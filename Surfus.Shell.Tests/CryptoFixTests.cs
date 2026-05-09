@@ -35,7 +35,7 @@ public class CryptoFixTests
 
         var crypto = new NoCrypto();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var ex = await Assert.ThrowsAsync<SshException>(() => crypto.ReadPacketAsync(ns, 0, 0, cts.Token));
+        var ex = await Assert.ThrowsAsync<SshException>(() => crypto.ReadPacketAsync(ns, 0, 0, false, cts.Token));
         Assert.Contains("closed", ex.Message, StringComparison.OrdinalIgnoreCase);
 
         client.Dispose();

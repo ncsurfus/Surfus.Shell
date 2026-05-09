@@ -142,6 +142,8 @@ namespace Surfus.Shell
 
         public static readonly AlgorithmDescriptor<MacAlgorithm>[] DefaultMac = new[]
         {
+            new AlgorithmDescriptor<MacAlgorithm>("hmac-sha2-512-etm@openssh.com", () => new HmacSha512EtmMacAlgorithm()),
+            new AlgorithmDescriptor<MacAlgorithm>("hmac-sha2-256-etm@openssh.com", () => new HmacSha256EtmMacAlgorithm()),
             new AlgorithmDescriptor<MacAlgorithm>("hmac-sha2-512", () => new HmacSha512MacAlgorithm()),
             new AlgorithmDescriptor<MacAlgorithm>("hmac-sha2-256", () => new HmacSha256MacAlgorithm()),
             new AlgorithmDescriptor<MacAlgorithm>("hmac-sha1-96", () => new HmacSha1B96MacAlgorithm()),

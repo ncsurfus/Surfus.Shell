@@ -38,6 +38,7 @@ namespace Surfus.Shell.Crypto
             NetworkStream networkStream,
             uint packetSequenceNumber,
             int hmacSize,
+            bool isEtm,
             CancellationToken cancellationToken
         )
         {
@@ -97,6 +98,11 @@ namespace Surfus.Shell.Crypto
         /// <param name="plainText">The plaintext data.</param>
         /// <returns></returns>
         internal override void Encrypt(byte[] plainText, int offset, int length)
+        {
+            return;
+        }
+
+        internal override void Decrypt(byte[] cipherText, int offset, int length)
         {
             return;
         }

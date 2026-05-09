@@ -58,10 +58,13 @@ namespace Surfus.Shell
         /// </summary>
         /// <param name="compressedPayload">The compressed payload.</param>
         /// <param name="paddingMultiplier">The padding multipler.</param>
-        internal SshPacket(ByteWriter compressedPayload, int paddingMultiplier)
+        internal SshPacket(ByteWriter compressedPayload, int paddingMultiplier, bool isEtm = false)
         {
-            // Generate padding
-            var paddingLength = -((5 + compressedPayload.DataLength) % paddingMultiplier) + paddingMultiplier * 2;
+            // Generate padding.
+            // For ETM, the encrypted portion excludes the 4-byte packet length, so alignment is on (1 + data + padding).
+            // For non-ETM, alignment is on (4 + 1 + data + padding).
+            var alignBase = isEtm ? (1 + compressedPayload.DataLength) : (5 + compressedPayload.DataLength);
+            var paddingLength = -(alignBase % paddingMultiplier) + paddingMultiplier * 2;
             paddingLength = paddingLength <= 255 ? paddingLength : paddingLength - paddingMultiplier;
             var padding = new byte[paddingLength];
             RandomGenerator.GetBytes(padding);
