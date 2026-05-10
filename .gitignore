@@ -3,7 +3,7 @@ bin/
 obj/
 packages/
 *.DS_Store
-*.userprefs
+*.user
 *.log
 PublishProfiles
 Surfus.Shell/Properties/
@@ -16,3 +16,6 @@ mise.toml
 Surfus.Shell.Tests/testserver/testserver
 Surfus.Shell.Tests/testserver/testserver.exe
 Surfus.Shell.Tests/testserver/server_*.txt
+/testserver.exe
+/reviews
+results/

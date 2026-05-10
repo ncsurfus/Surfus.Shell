@@ -1,6 +1,6 @@
 using System;
 using System.Buffers.Binary;
-using System.Net.Sockets;
+using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -57,7 +57,7 @@ namespace Surfus.Shell.Crypto
         }
 
         internal override async Task<SshPacket> ReadPacketAsync(
-            NetworkStream networkStream,
+            Stream stream,
             uint packetSequenceNumber,
             int hmacSize,
             bool isEtm,
@@ -65,7 +65,7 @@ namespace Surfus.Shell.Crypto
         )
         {
             var lengthBuf = new byte[4];
-            await ReadExactAsync(networkStream, lengthBuf, cancellationToken).ConfigureAwait(false);
+            await ReadExactAsync(stream, lengthBuf, cancellationToken).ConfigureAwait(false);
 
             var packetSize = (int)ByteReader.ReadUInt32(lengthBuf);
             if (packetSize > 35000)
@@ -74,7 +74,7 @@ namespace Surfus.Shell.Crypto
             }
 
             var ciphertextAndTag = new byte[packetSize + TagSize];
-            await ReadExactAsync(networkStream, ciphertextAndTag, cancellationToken).ConfigureAwait(false);
+            await ReadExactAsync(stream, ciphertextAndTag, cancellationToken).ConfigureAwait(false);
 
             var body = ciphertextAndTag.AsSpan(0, packetSize);
             var tag = ciphertextAndTag.AsSpan(packetSize, TagSize);
@@ -99,7 +99,7 @@ namespace Surfus.Shell.Crypto
             return new SshPacket(buffer, 4, 4 + packetSize);
         }
 
-        private static async Task ReadExactAsync(NetworkStream stream, byte[] buffer, CancellationToken ct)
+        private static async Task ReadExactAsync(Stream stream, byte[] buffer, CancellationToken ct)
         {
             var pos = 0;
             while (pos < buffer.Length)

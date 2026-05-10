@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Net.Sockets;
+using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -85,7 +85,7 @@ namespace Surfus.Shell.Crypto
         }
 
         internal override async Task<SshPacket> ReadPacketAsync(
-            NetworkStream networkStream,
+            Stream stream,
             uint packetSequenceNumber,
             int hmacSize,
             bool isEtm,
@@ -94,7 +94,7 @@ namespace Surfus.Shell.Crypto
         {
             if (isEtm)
             {
-                return await ReadPacketEtmAsync(networkStream, packetSequenceNumber, hmacSize, cancellationToken).ConfigureAwait(false);
+                return await ReadPacketEtmAsync(stream, packetSequenceNumber, hmacSize, cancellationToken).ConfigureAwait(false);
             }
 
             var blockSize = _decryptor.InputBlockSize;
@@ -108,7 +108,7 @@ namespace Surfus.Shell.Crypto
             // Read enough data until we have at least 1 block.
             while (bufferPosition != blockSize + packetStart)
             {
-                var bytesRead = await networkStream.ReadAsync(
+                var bytesRead = await stream.ReadAsync(
                     buffer.AsMemory(bufferPosition, blockSize + packetStart - bufferPosition),
                     cancellationToken
                 );
@@ -135,7 +135,7 @@ namespace Surfus.Shell.Crypto
 
             while (bufferPosition != bufferLength) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
             {
-                var bytesRead = await networkStream.ReadAsync(
+                var bytesRead = await stream.ReadAsync(
                     buffer.AsMemory(bufferPosition, bufferLength - bufferPosition),
                     cancellationToken
                 );
@@ -156,7 +156,7 @@ namespace Surfus.Shell.Crypto
         }
 
         private async Task<SshPacket> ReadPacketEtmAsync(
-            NetworkStream networkStream,
+            Stream stream,
             uint packetSequenceNumber,
             int hmacSize,
             CancellationToken cancellationToken
@@ -171,7 +171,7 @@ namespace Surfus.Shell.Crypto
             // Read the 4-byte plaintext packet length.
             while (bufferPosition < 8)
             {
-                var bytesRead = await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, 8 - bufferPosition), cancellationToken).ConfigureAwait(false);
+                var bytesRead = await stream.ReadAsync(buffer.AsMemory(bufferPosition, 8 - bufferPosition), cancellationToken).ConfigureAwait(false);
                 if (bytesRead == 0)
                 {
                     throw new SshException("Connection closed.");
@@ -194,7 +194,7 @@ namespace Surfus.Shell.Crypto
             // Read encrypted body + MAC.
             while (bufferPosition < bufferLength)
             {
-                var bytesRead = await networkStream.ReadAsync(buffer.AsMemory(bufferPosition, bufferLength - bufferPosition), cancellationToken).ConfigureAwait(false);
+                var bytesRead = await stream.ReadAsync(buffer.AsMemory(bufferPosition, bufferLength - bufferPosition), cancellationToken).ConfigureAwait(false);
                 if (bytesRead == 0)
                 {
                     throw new SshException("Connection closed.");

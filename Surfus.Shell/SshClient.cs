@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.IO;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -49,19 +50,25 @@ namespace Surfus.Shell
         private bool _disconnectReceived;
 
         /// <summary>
-        /// _tcpConnection holds the underlying TCP Connection of the SshClient.
-        /// </summary>
-        private readonly TcpClient _tcpConnection = new TcpClient();
-
-        /// <summary>
         /// Cancellation Token Source that is cancelled when the client is closing.
         /// </summary>
         private readonly CancellationTokenSource _closeCts = new();
 
         /// <summary>
-        /// _tcpStream holds the underlying NetworkStream of the TCP Connection.
+        /// _stream holds the underlying stream for the SSH connection.
         /// </summary>
-        private NetworkStream _tcpStream;
+        private Stream _stream;
+
+        /// <summary>
+        /// Optional factory that provides the transport stream and an optional close callback.
+        /// </summary>
+        private readonly Func<CancellationToken, Task<(Stream Stream, Func<ValueTask> OnCloseAsync)>> _streamFactory;
+
+        /// <summary>
+        /// Callback invoked once when the client is closed, to clean up the transport.
+        /// </summary>
+        private Func<ValueTask> _onCloseAsync;
+        private int _onCloseCalled;
 
         private readonly object _handlersLock = new();
         private ImmutableList<IMessageHandler> _messageHandlers = ImmutableList.Create<IMessageHandler>();
@@ -133,8 +140,7 @@ namespace Surfus.Shell
         /// The connection may drop immediately after this returns true.
         /// </summary>
         public bool IsConnected =>
-            _tcpConnection?.Connected == true
-            && !_disconnectReceived
+            !_disconnectReceived
             && _isDisposed == 0
             && (_sshClientState == State.Connected || _sshClientState == State.Authenticated);
 
@@ -159,13 +165,57 @@ namespace Surfus.Shell
         public SshAlgorithms Algorithms { get; init; } = new();
 
         /// <summary>
-        /// An SshClient that can connect designated hostname and port.
+        /// An SshClient that connects to the designated hostname and port.
         /// </summary>
-        /// <param name="hostname">The remote SSH Server.</param>
-        /// <param name="port">The remote SSH port.</param>
         public SshClient(string hostname, ushort port = 22)
         {
-            ConnectionInfo = new SshConnectionInfo { Hostname = hostname, Port = port };
+            _streamFactory = async ct =>
+            {
+                var tcp = new TcpClient();
+                try
+                {
+                    var timeout = new TaskCompletionSource<bool>();
+                    using (ct.Register(() => timeout.SetResult(true)))
+                    {
+                        var connectTask = tcp.ConnectAsync(hostname, port);
+                        var result = await Task.WhenAny(timeout.Task, connectTask).ConfigureAwait(false);
+                        if (result == timeout.Task)
+                        {
+                            throw new OperationCanceledException("The operation was cancelled during the TCP connect.", ct);
+                        }
+                        await connectTask.ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                    tcp.Dispose();
+                    throw;
+                }
+                return (tcp.GetStream(), () => { tcp.Dispose(); return ValueTask.CompletedTask; });
+            };
+            ConnectionInfo = new SshConnectionInfo();
+        }
+
+        /// <summary>
+        /// An SshClient that uses a custom stream factory for the transport.
+        /// The factory returns a stream and an optional callback invoked when the client is closed.
+        /// </summary>
+        public SshClient(Func<CancellationToken, Task<(Stream Stream, Func<ValueTask> OnCloseAsync)>> streamFactory)
+        {
+            ArgumentNullException.ThrowIfNull(streamFactory);
+            _streamFactory = streamFactory;
+            ConnectionInfo = new SshConnectionInfo();
+        }
+
+        /// <summary>
+        /// An SshClient that uses an existing stream for the transport.
+        /// The caller must not dispose the stream while the client is in use; the client takes ownership.
+        /// </summary>
+        public SshClient(Stream stream)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            _streamFactory = _ => Task.FromResult<(Stream, Func<ValueTask>)>((stream, null));
+            ConnectionInfo = new SshConnectionInfo();
         }
 
         /// <summary>
@@ -187,8 +237,10 @@ namespace Surfus.Shell
             try
             {
                 // Set SshClient defaults
-                ConnectionInfo.KeyExchanger = new SshKeyExchanger(ConnectionInfo, HostKeyCallback, Algorithms);
-                ConnectionInfo.KeyExchanger.OnSend = WriteMessageAsync;
+                ConnectionInfo.KeyExchanger = new SshKeyExchanger(ConnectionInfo, HostKeyCallback, Algorithms)
+                {
+                    OnSend = WriteMessageAsync
+                };
 
                 // Perform version exchange and key exchange
                 ConnectionInfo.ServerVersion = await ExchangeVersionAsync(cancellationToken).ConfigureAwait(false);
@@ -228,8 +280,10 @@ namespace Surfus.Shell
             catch
             {
                 _sshClientState = State.Error;
-                _tcpStream?.Dispose();
-                _tcpConnection?.Dispose();
+                if (_onCloseAsync != null && Interlocked.Exchange(ref _onCloseCalled, 1) == 0)
+                {
+                    await _onCloseAsync().ConfigureAwait(false);
+                }
                 throw;
             }
         }
@@ -423,121 +477,106 @@ namespace Surfus.Shell
         /// <returns>A task representing the state of the version exchange</returns>
         private async Task<string> ExchangeVersionAsync(CancellationToken cancellationToken)
         {
-            // A cancellation token cannot be pased to the TcpClient.ConnectAsync, you *must* rely on the timeout. This is a work-around.
-            var timeout = new TaskCompletionSource<bool>();
-            using (cancellationToken.Register(() => timeout.SetResult(true)))
-            {
-                var connectTask = _tcpConnection.ConnectAsync(ConnectionInfo.Hostname, ConnectionInfo.Port);
-                var connectResult = await Task.WhenAny(timeout.Task, connectTask).ConfigureAwait(false);
+            var (stream, onCloseAsync) = await _streamFactory(cancellationToken).ConfigureAwait(false);
+            _stream = stream;
+            _onCloseAsync = onCloseAsync;
 
-                if (connectResult == timeout.Task)
+            // Buffer to receive their version.
+            var buffer = new byte[255];
+            var bufferPosition = 0;
+            var ignoreText = false;
+            var readingVersion = false;
+
+            // Some stream implementations (e.g. NetworkStream) may not respond to the
+            // cancellation token passed to ReadAsync. Use Task.WhenAny as a workaround.
+            var cancelled = new TaskCompletionSource<bool>();
+            using var ctReg = cancellationToken.Register(() => cancelled.SetResult(true));
+
+            while (bufferPosition == 0 || buffer[bufferPosition - 1] != '\n')
+            {
+                if (bufferPosition == buffer.Length)
                 {
-                    throw new OperationCanceledException("The operation was cancelled during the TCP connect.", cancellationToken);
+                    throw new SshException($"Failed to exchange SSH version. Version size is greater than {buffer.Length}.");
                 }
 
-                await connectTask.ConfigureAwait(false);
+                var readTask = _stream
+                    .ReadAsync(buffer.AsMemory(bufferPosition, buffer.Length - bufferPosition), cancellationToken)
+                    .AsTask();
+                var result = await Task.WhenAny(cancelled.Task, readTask).ConfigureAwait(false);
 
-                // Attempt to get version..
-                _tcpStream = _tcpConnection.GetStream();
-
-                // Buffer to receive their version.
-                var buffer = new byte[255];
-                var bufferPosition = 0;
-                var ignoreText = false;
-                var readingVersion = false;
-
-                while (bufferPosition == 0 || buffer[bufferPosition - 1] != '\n')
+                if (result == cancelled.Task)
                 {
-                    if (bufferPosition == buffer.Length)
+                    throw new OperationCanceledException(
+                        "The operation was cancelled when reading the server version.",
+                        cancellationToken
+                    );
+                }
+
+                var readAmount = await readTask.ConfigureAwait(false);
+
+                if (readAmount <= 0)
+                {
+                    if (bufferPosition == 0)
                     {
-                        throw new SshException($"Failed to exchange SSH version. Version size is greater than {buffer.Length}.");
+                        throw new SshException("Failed to exchange SSH version. No data was sent.");
                     }
+                    throw new SshException("Failed to exchange SSH version. Connection was closed.");
+                }
 
-                    // It appears in some cases ReadAsync can get hung and not properly respond to the CancellationToken.
-                    var readTask = _tcpStream
-                        .ReadAsync(buffer.AsMemory(bufferPosition, buffer.Length - bufferPosition), cancellationToken)
-                        .AsTask();
-                    var readResult = await Task.WhenAny(timeout.Task, readTask).ConfigureAwait(false);
-
-                    if (readResult == timeout.Task)
+                if (readingVersion || bufferPosition + readAmount < 4)
+                {
+                    bufferPosition += readAmount;
+                }
+                else if (!ignoreText && buffer[0] == 'S' && buffer[1] == 'S' && buffer[2] == 'H' && buffer[3] == '-')
+                {
+                    bufferPosition += readAmount;
+                    readingVersion = true;
+                }
+                else
+                {
+                    ignoreText = true;
+                    for (var i = 0; i != bufferPosition + readAmount; i++)
                     {
-                        throw new OperationCanceledException(
-                            "The operation was cancelled when reading the server version.",
-                            cancellationToken
-                        );
-                    }
-
-                    var readAmount = await readTask.ConfigureAwait(false);
-
-                    if (readAmount <= 0)
-                    {
-                        if (bufferPosition == 0)
+                        if (buffer[i] == '\n')
                         {
-                            throw new SshException("Failed to exchange SSH version. No data was sent.");
-                        }
-                        throw new SshException("Failed to exchange SSH version. Connection was closed.");
-                    }
-
-                    if (readingVersion || bufferPosition + readAmount < 4)
-                    {
-                        // We either already found the version or we don't have enough data to do any processing. Either way read the data and loop.
-                        bufferPosition += readAmount;
-                    }
-                    else if (!ignoreText && buffer[0] == 'S' && buffer[1] == 'S' && buffer[2] == 'H' && buffer[3] == '-')
-                    {
-                        // We found the SSH version! Hooray.
-                        bufferPosition += readAmount;
-                        readingVersion = true;
-                    }
-                    else
-                    {
-                        ignoreText = true;
-                        for (var i = 0; i != bufferPosition + readAmount; i++)
-                        {
-                            if (buffer[i] == '\n')
+                            for (var j = 0; j != bufferPosition + readAmount - i - 1; j++)
                             {
-                                // Realign the buffer
-                                for (var j = 0; j != bufferPosition + readAmount - i - 1; j++)
-                                {
-                                    buffer[j] = buffer[i + j + 1];
-                                }
-                                bufferPosition = bufferPosition - i + readAmount - 1;
-                                readAmount = 0;
+                                buffer[j] = buffer[i + j + 1];
+                            }
+                            bufferPosition = bufferPosition - i + readAmount - 1;
+                            readAmount = 0;
 
-                                // Check for version
-                                if (bufferPosition > 4 && buffer[0] == 'S' && buffer[1] == 'S' && buffer[2] == 'H' && buffer[3] == '-')
-                                {
-                                    readingVersion = true;
-                                    i = bufferPosition + readAmount - 1;
-                                }
-                                else
-                                {
-                                    i = -1;
-                                }
+                            if (bufferPosition > 4 && buffer[0] == 'S' && buffer[1] == 'S' && buffer[2] == 'H' && buffer[3] == '-')
+                            {
+                                readingVersion = true;
+                                i = bufferPosition + readAmount - 1;
+                            }
+                            else
+                            {
+                                i = -1;
                             }
                         }
+                    }
 
-                        // We never matched on any data. Reset buffer.
-                        if (!readingVersion)
-                        {
-                            bufferPosition = 0;
-                        }
+                    if (!readingVersion)
+                    {
+                        bufferPosition = 0;
                     }
                 }
-
-                var version =
-                    buffer[bufferPosition - 2] == '\r'
-                        ? Encoding.ASCII.GetString(buffer, 0, bufferPosition - 2)
-                        : Encoding.ASCII.GetString(buffer, 0, bufferPosition - 1);
-                if (!version.StartsWith("SSH-1.99-") && !version.StartsWith("SSH-2.0-"))
-                {
-                    throw new SshException("Server version is not supported.");
-                }
-                var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
-                await _tcpStream.WriteAsync(clientVersionBytes.AsMemory(), cancellationToken).ConfigureAwait(false);
-                await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
-                return version;
             }
+
+            var version =
+                buffer[bufferPosition - 2] == '\r'
+                    ? Encoding.ASCII.GetString(buffer, 0, bufferPosition - 2)
+                    : Encoding.ASCII.GetString(buffer, 0, bufferPosition - 1);
+            if (!version.StartsWith("SSH-1.99-") && !version.StartsWith("SSH-2.0-"))
+            {
+                throw new SshException("Server version is not supported.");
+            }
+            var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
+            await _stream.WriteAsync(clientVersionBytes.AsMemory(), cancellationToken).ConfigureAwait(false);
+            await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            return version;
         }
 
         /// <summary>
@@ -548,7 +587,7 @@ namespace Surfus.Shell
         private async Task ReadMessageAsync(CancellationToken cancellationToken)
         {
             var sshPacketTask = ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(
-                _tcpStream,
+                _stream,
                 ConnectionInfo.InboundPacketSequence,
                 ConnectionInfo.ReadMacAlgorithm.OutputSize,
                 ConnectionInfo.ReadMacAlgorithm.IsEtm,
@@ -581,8 +620,6 @@ namespace Surfus.Shell
                 case MessageType.SSH_MSG_DISCONNECT:
                     _disconnectReceived = true;
                     break;
-                // Auth and other messages are delivered to registered handlers below.
-                // Channel messages are delivered to registered handlers below.
             }
 
             // Deliver to registered message handlers
@@ -638,18 +675,18 @@ namespace Surfus.Shell
                     ? sshPacket.Length + 16 // AEAD tag appended by Encrypt
                     : sshPacket.Length;
 
-                await _tcpStream
+                await _stream
                     .WriteAsync(sshPacket.Buffer.AsMemory(sshPacket.Offset, writeLength), cancellationToken)
                     .ConfigureAwait(false);
 
                 if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
                 {
-                    await _tcpStream
+                    await _stream
                         .WriteAsync(macOutput.AsMemory(0, ConnectionInfo.WriteMacAlgorithm.OutputSize), cancellationToken)
                         .ConfigureAwait(false);
                 }
 
-                await _tcpStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
                 ConnectionInfo.OutboundPacketSequence =
                     ConnectionInfo.OutboundPacketSequence != uint.MaxValue ? ConnectionInfo.OutboundPacketSequence + 1 : 0;
             }
@@ -671,8 +708,7 @@ namespace Surfus.Shell
             {
                 _sshClientState = State.Closed;
                 ConnectionInfo.Dispose();
-                _tcpStream?.Dispose();
-                _tcpConnection?.Dispose();
+                _stream?.Dispose();
                 _writeSemaphore.Dispose();
             }
         }
@@ -742,6 +778,10 @@ namespace Surfus.Shell
             }
 
             Close();
+            if (_onCloseAsync != null && Interlocked.Exchange(ref _onCloseCalled, 1) == 0)
+            {
+                await _onCloseAsync().ConfigureAwait(false);
+            }
             if (_readLoop != null)
             {
                 try

@@ -363,11 +363,16 @@ func handleExec(ch ssh.Channel, payload []byte) {
 
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
+	stdin, _ := cmd.StdinPipe()
 	if err := cmd.Start(); err != nil {
 		ch.Write([]byte(err.Error() + "\n"))
 		ch.SendRequest("exit-status", false, ssh.Marshal(struct{ S uint32 }{1}))
 		return
 	}
+
+	// Copy stdin from channel in background; it will terminate when the channel
+	// sends EOF or when we close stdin after the command exits.
+	go func() { io.Copy(stdin, ch); stdin.Close() }()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -375,6 +380,7 @@ func handleExec(ch ssh.Channel, payload []byte) {
 	go func() { defer wg.Done(); io.Copy(ch.Stderr(), stderr) }()
 	wg.Wait()
 	cmd.Wait()
+	stdin.Close() // Ensure stdin goroutine terminates if channel hasn't sent EOF
 
 	exitCode := uint32(0)
 	if cmd.ProcessState != nil && !cmd.ProcessState.Success() {

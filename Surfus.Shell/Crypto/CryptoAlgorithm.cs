@@ -1,5 +1,5 @@
 using System;
-using System.Net.Sockets;
+using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -59,10 +59,10 @@ namespace Surfus.Shell.Crypto
         internal abstract void Initialize(byte[] initializationVector, byte[] key);
 
         /// <summary>
-        /// Decrypts the next packet in the network stream.
+        /// Decrypts the next packet in the transport stream.
         /// </summary>
-        /// <param name="networkStream">
-        /// The network stream to decrypt the packet from.
+        /// <param name="stream">
+        /// The transport stream to read the packet from.
         /// </param>
         /// <param name="cancellationToken">
         /// The cancellation token associated with the async method.
@@ -71,7 +71,7 @@ namespace Surfus.Shell.Crypto
         /// The SSH Packet.
         /// </returns>
         internal abstract Task<SshPacket> ReadPacketAsync(
-            NetworkStream networkStream,
+            Stream stream,
             uint packetSequenceNumber,
             int hmacSize,
             bool isEtm,
