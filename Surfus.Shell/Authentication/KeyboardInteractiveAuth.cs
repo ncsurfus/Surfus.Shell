@@ -14,16 +14,16 @@ namespace Surfus.Shell.Authentication
             _responseCallback = responseCallback;
 
         public Task<IClientMessage> CreateRequestAsync(string username, CancellationToken cancellationToken) =>
-            Task.FromResult<IClientMessage>(new UaRequest(username, "ssh-connection", "keyboard-interactive", (string)null, (string)null));
+            Task.FromResult<IClientMessage>(new UaRequest(username, "ssh-connection", "keyboard-interactive", (string?)null, (string?)null));
 
-        public async Task<IClientMessage> HandleMessage60Async(
+        public async Task<IClientMessage?> HandleMessage60Async(
             string username,
             ReadOnlyMemory<byte> sessionIdentifier,
             MessageEvent messageEvent,
             CancellationToken cancellationToken
         )
         {
-            var message = (UaInfoRequest)messageEvent.Message;
+            var message = (UaInfoRequest)messageEvent.Message!;
             var responses = new string[message.PromptNumber];
             for (var i = 0; i < responses.Length; i++)
             {

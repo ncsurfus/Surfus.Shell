@@ -18,7 +18,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The SSH version sent by the server.
         /// </summary>
-        public string ServerVersion { get; internal set; }
+        public string ServerVersion { get; internal set; } = "";
 
         /// <summary>
         /// The server certificate.
@@ -48,7 +48,7 @@ namespace Surfus.Shell
         /// <summary>
         /// The Key Exchanger that sets up a secure connection.
         /// </summary>
-        internal SshKeyExchanger KeyExchanger { get; set; }
+        internal SshKeyExchanger? KeyExchanger { get; set; }
 
         /// <summary>
         /// The algorithm used to compress data from the server.

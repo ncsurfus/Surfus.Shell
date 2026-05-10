@@ -115,7 +115,7 @@ namespace Surfus.Shell
                 throw new SshException("Invalid string length in SSH message.");
             }
             EnsureAvailable(length);
-            var str = length != 0 ? Encoding.UTF8.GetString(Span.Slice(Position, length)) : null;
+            var str = length != 0 ? Encoding.UTF8.GetString(Span.Slice(Position, length)) : string.Empty;
             Position += length;
             return str;
         }
@@ -128,7 +128,7 @@ namespace Surfus.Shell
                 throw new SshException("Invalid string length in SSH message.");
             }
             EnsureAvailable(length);
-            var str = length != 0 ? Encoding.ASCII.GetString(Span.Slice(Position, length)) : null;
+            var str = length != 0 ? Encoding.ASCII.GetString(Span.Slice(Position, length)) : string.Empty;
             Position += length;
             return str;
         }

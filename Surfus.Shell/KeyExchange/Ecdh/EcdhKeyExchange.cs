@@ -45,7 +45,7 @@ namespace Surfus.Shell.KeyExchange.Ecdh
 
             // Export the uncompressed EC point (0x04 || X || Y)
             var ecParams = ecdh.ExportParameters(false);
-            var pointSize = 1 + ecParams.Q.X.Length + ecParams.Q.Y.Length;
+            var pointSize = 1 + ecParams.Q.X!.Length + ecParams.Q.Y!.Length;
             var qC = new byte[pointSize];
             qC[0] = 0x04;
             ecParams.Q.X.CopyTo(qC.AsSpan(1));

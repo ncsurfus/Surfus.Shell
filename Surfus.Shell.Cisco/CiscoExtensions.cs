@@ -144,8 +144,8 @@ namespace Surfus.Shell.Cisco
 
     public class CiscoTerminal
     {
-        public string Prompt { get; init; }
-        public string Name { get; init; }
+        public required string Prompt { get; init; }
+        public required string Name { get; init; }
         public TerminalMode Mode { get; init; }
     }
 

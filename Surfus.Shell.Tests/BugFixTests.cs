@@ -200,7 +200,7 @@ public class BugFixTests
     public async Task ChannelStream_ReadAsync_NullBuffer_Throws()
     {
         using var stream = new ChannelStream();
-        await Assert.ThrowsAsync<ArgumentNullException>(() => stream.ReadAsync(null, 0, 1, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => stream.ReadAsync(null!, 0, 1, CancellationToken.None));
     }
 
     [Fact]
@@ -237,7 +237,7 @@ public class BugFixTests
     {
         var auth = new SshAuthentication(() => ReadOnlyMemory<byte>.Empty);
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            auth.LoginAsync("user", (IReadOnlyList<IAuthMethod>)null, CancellationToken.None)
+            auth.LoginAsync("user", (IReadOnlyList<IAuthMethod>)null!, CancellationToken.None)
         );
     }
 

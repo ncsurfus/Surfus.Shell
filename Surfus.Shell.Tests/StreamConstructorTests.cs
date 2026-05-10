@@ -61,7 +61,7 @@ public class StreamConstructorTests
             // Return a stream that will immediately close (no SSH server on the other end)
             var pair = ConnectedStreamPair();
             pair.ServerTcp.Dispose(); // close immediately to trigger failure
-            return Task.FromResult<(Stream, Func<ValueTask>)>((pair.ClientSide, () =>
+            return Task.FromResult<(Stream, Func<ValueTask>?)>((pair.ClientSide, () =>
             {
                 Interlocked.Increment(ref closeCalled);
                 pair.ClientTcp.Dispose();
@@ -110,7 +110,7 @@ public class StreamConstructorTests
     public void NullStreamFactory_ThrowsArgumentNullException()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new SshClient((Func<CancellationToken, Task<(Stream, Func<ValueTask>)>>)null!));
+            new SshClient((Func<CancellationToken, Task<(Stream, Func<ValueTask>?)>>)null!));
     }
 
     [Fact]
@@ -139,7 +139,7 @@ public class StreamConstructorTests
         var client = new SshClient(ct =>
         {
             var pair = ConnectedStreamPair();
-            return Task.FromResult<(Stream, Func<ValueTask>)>((pair.ClientSide, () =>
+            return Task.FromResult<(Stream, Func<ValueTask>?)>((pair.ClientSide, () =>
             {
                 pair.ClientTcp.Dispose();
                 pair.ServerTcp.Dispose();

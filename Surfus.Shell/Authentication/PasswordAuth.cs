@@ -15,11 +15,11 @@ namespace Surfus.Shell.Authentication
         public Task<IClientMessage> CreateRequestAsync(string username, CancellationToken cancellationToken) =>
             Task.FromResult<IClientMessage>(new UaRequest(username, "ssh-connection", "password", _password));
 
-        public Task<IClientMessage> HandleMessage60Async(
+        public Task<IClientMessage?> HandleMessage60Async(
             string username,
             ReadOnlyMemory<byte> sessionIdentifier,
             MessageEvent messageEvent,
             CancellationToken cancellationToken
-        ) => Task.FromResult<IClientMessage>(null);
+        ) => Task.FromResult<IClientMessage?>(null);
     }
 }

@@ -30,7 +30,7 @@ namespace Surfus.Shell.Messages
             LanguageTag = packet.Reader.ReadString();
         }
 
-        internal Disconnect(DisconnectReason disconnectReason, string description, string languageTag = null)
+        internal Disconnect(DisconnectReason disconnectReason, string description, string? languageTag = null)
         {
             Reason = disconnectReason;
             Description = description;
@@ -40,7 +40,7 @@ namespace Surfus.Shell.Messages
         internal uint ReasonId => (uint)Reason;
         internal DisconnectReason Reason { get; }
         internal string Description { get; }
-        internal string LanguageTag { get; }
+        internal string? LanguageTag { get; }
 
         /// <summary>
         /// The type of SSH message this class represents.

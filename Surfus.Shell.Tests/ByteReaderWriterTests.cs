@@ -69,11 +69,11 @@ public class ByteReaderTests
     }
 
     [Fact]
-    public void ReadString_ZeroLength_ReturnsNull()
+    public void ReadString_ZeroLength_ReturnsEmpty()
     {
         var buffer = new byte[4]; // all zeros
         var reader = new ByteReader(buffer);
-        Assert.Null(reader.ReadString());
+        Assert.Equal(string.Empty, reader.ReadString());
     }
 
     [Fact]

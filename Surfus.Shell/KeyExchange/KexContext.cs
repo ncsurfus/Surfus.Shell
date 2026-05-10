@@ -13,7 +13,7 @@ namespace Surfus.Shell.KeyExchange
         internal SshMessageInbox Inbox { get; }
         internal string ClientVersion { get; }
         internal string ServerVersion { get; }
-        internal Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>> HostKeyCallback { get; }
+        internal Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>>? HostKeyCallback { get; }
         internal SshAlgorithms Algorithms { get; }
         internal ReadOnlyMemory<byte> ServerCertificate { get; set; }
         internal int ServerCertificateSize { get; set; }
@@ -22,7 +22,7 @@ namespace Surfus.Shell.KeyExchange
             SshMessageInbox inbox,
             string clientVersion,
             string serverVersion,
-            Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>> hostKeyCallback,
+            Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>>? hostKeyCallback,
             SshAlgorithms algorithms
         )
         {

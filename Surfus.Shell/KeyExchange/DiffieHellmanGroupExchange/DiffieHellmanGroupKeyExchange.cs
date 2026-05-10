@@ -48,7 +48,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// <summary>
         /// The signing algorithm.
         /// </summary>
-        private Signer _signingAlgorithm;
+        private Signer? _signingAlgorithm;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DiffieHellmanGroupKeyExchange"/> class.

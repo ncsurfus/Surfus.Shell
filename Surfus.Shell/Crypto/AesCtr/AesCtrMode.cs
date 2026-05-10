@@ -17,7 +17,7 @@ namespace Surfus.Shell.Crypto.AesCtr
             _aes.Padding = PaddingMode.None;
         }
 
-        public override ICryptoTransform CreateEncryptor(byte[] rgbKey, byte[] counter)
+        public override ICryptoTransform CreateEncryptor(byte[] rgbKey, byte[]? counter)
         {
             if (counter == null)
             {
@@ -33,7 +33,7 @@ namespace Surfus.Shell.Crypto.AesCtr
             return new CounterModeCryptoTransform(_aes, rgbKey, counter);
         }
 
-        public override ICryptoTransform CreateDecryptor(byte[] rgbKey, byte[] counter)
+        public override ICryptoTransform CreateDecryptor(byte[] rgbKey, byte[]? counter)
         {
             if (counter == null)
             {

@@ -222,7 +222,7 @@ public class SshAuthenticationTests
         var task = auth.LoginAsync("user", new PasswordAuth("pass"), CancellationToken.None);
 
         await auth.ProcessMessageAsync(FakeMessage(MessageType.SSH_MSG_SERVICE_ACCEPT));
-        auth.OnError(null);
+        auth.OnError(null!);
 
         await Assert.ThrowsAsync<Exceptions.SshException>(() => task);
     }

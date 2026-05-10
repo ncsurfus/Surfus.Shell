@@ -186,7 +186,7 @@ namespace Surfus.Shell
         /// Writes a UTF8 string to the byte array.
         /// </summary>
         /// <param name="utf8String"></param>
-        internal void WriteString(string utf8String)
+        internal void WriteString(string? utf8String)
         {
             if (utf8String == null)
             {
@@ -202,7 +202,7 @@ namespace Surfus.Shell
         /// Writes an ASCII string to the byte array.
         /// </summary>
         /// <param name="asciiString"></param>
-        internal void WriteAsciiString(string asciiString)
+        internal void WriteAsciiString(string? asciiString)
         {
             if (asciiString == null)
             {

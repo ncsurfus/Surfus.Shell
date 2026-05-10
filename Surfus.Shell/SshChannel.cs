@@ -20,7 +20,7 @@ namespace Surfus.Shell
         private const int MaxPacketData = 32768;
 
         internal readonly SshMessageInbox Inbox = new();
-        internal IDisposable Registration { get; set; }
+        internal IDisposable? Registration { get; set; }
 
         // Remaining bytes the server allows us to send. Claimed atomically via CompareExchange in WriteDataAsync,
         // incremented via Interlocked.Add from the read loop (WindowAdjust).
@@ -88,7 +88,7 @@ namespace Surfus.Shell
         /// <exception cref="SshException">Thrown if the server rejects the request.</exception>
         public async Task RequestAsync(ChannelRequest requestMessage, CancellationToken cancellationToken)
         {
-            TaskCompletionSource<bool> tcs = null;
+            TaskCompletionSource<bool>? tcs = null;
             if (requestMessage.WantReply)
             {
                 tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);

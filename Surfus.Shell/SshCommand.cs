@@ -64,7 +64,7 @@ namespace Surfus.Shell
         /// Optionally requests a pseudo-terminal before starting the command.
         /// Must be called after OpenAsync and before StartAsync.
         /// </summary>
-        public async Task RequestPseudoTerminalAsync(CancellationToken cancellationToken, TerminalOptions options = null)
+        public async Task RequestPseudoTerminalAsync(CancellationToken cancellationToken, TerminalOptions? options = null)
         {
             if (_commandState != State.Opened)
             {

@@ -19,8 +19,8 @@ namespace Surfus.Shell.Crypto
         private const int NonceSize = 12;
 
         private readonly int _keyBits;
-        private AesGcm _aesGcm;
-        private byte[] _nonce;
+        private AesGcm? _aesGcm;
+        private byte[]? _nonce;
 
         internal AesGcmCryptoAlgorithm(int keyBits)
         {
@@ -46,7 +46,7 @@ namespace Surfus.Shell.Crypto
             var plaintext = buffer.AsSpan(offset + 4, length - 4);
             var tag = buffer.AsSpan(offset + length, TagSize);
 
-            _aesGcm.Encrypt(_nonce, plaintext, plaintext, tag, aad);
+            _aesGcm!.Encrypt(_nonce, plaintext, plaintext, tag, aad);
             IncrementNonce();
         }
 
@@ -81,7 +81,7 @@ namespace Surfus.Shell.Crypto
 
             try
             {
-                _aesGcm.Decrypt(_nonce, body, tag, body, lengthBuf);
+                _aesGcm!.Decrypt(_nonce, body, tag, body, lengthBuf);
             }
             catch (CryptographicException)
             {
@@ -116,7 +116,7 @@ namespace Surfus.Shell.Crypto
         private void IncrementNonce()
         {
             // Increment the 12-byte nonce as a big-endian integer (last 8 bytes as counter)
-            var counter = BinaryPrimitives.ReadUInt64BigEndian(_nonce.AsSpan(4));
+            var counter = BinaryPrimitives.ReadUInt64BigEndian(_nonce!.AsSpan(4));
             BinaryPrimitives.WriteUInt64BigEndian(_nonce.AsSpan(4), counter + 1);
         }
 

@@ -59,7 +59,7 @@ public class MessageSerializationTests
         var packet = MakeReadPacket(writer);
         var parsed = new Disconnect(packet);
         Assert.Equal("error", parsed.Description);
-        Assert.Null(parsed.LanguageTag);
+        Assert.Equal(string.Empty, parsed.LanguageTag);
     }
 
     [Fact]

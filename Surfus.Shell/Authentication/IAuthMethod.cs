@@ -23,7 +23,7 @@ namespace Surfus.Shell.Authentication
         /// <summary>
         /// Handles message type 60 and returns a response message to send, or null if no response.
         /// </summary>
-        Task<IClientMessage> HandleMessage60Async(
+        Task<IClientMessage?> HandleMessage60Async(
             string username,
             ReadOnlyMemory<byte> sessionIdentifier,
             MessageEvent messageEvent,

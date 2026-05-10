@@ -52,7 +52,7 @@ namespace Surfus.Shell
             return 4 + bigInt.Length;
         }
 
-        internal static int GetAsciiStringSize(this string asciiString)
+        internal static int GetAsciiStringSize(this string? asciiString)
         {
             if (asciiString == null)
             {
@@ -61,7 +61,7 @@ namespace Surfus.Shell
             return 4 + Encoding.ASCII.GetByteCount(asciiString);
         }
 
-        internal static int GetStringSize(this string utf8String)
+        internal static int GetStringSize(this string? utf8String)
         {
             if (utf8String == null)
             {

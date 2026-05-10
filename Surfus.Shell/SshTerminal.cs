@@ -43,7 +43,7 @@ namespace Surfus.Shell
         /// </summary>
         public int? ExitCode => _channel.ExitCode;
 
-        internal SshTerminal(SshChannel channel, TerminalOptions options = null)
+        internal SshTerminal(SshChannel channel, TerminalOptions? options = null)
         {
             _channel = channel;
             _options = options ?? new TerminalOptions();

@@ -8,11 +8,11 @@ namespace Surfus.Shell.Benchmarks;
 [MemoryDiagnoser]
 public class AesCtrBenchmarks
 {
-    private AesCtrCryptoAlgorithm _crypto;
-    private byte[] _1KB;
-    private byte[] _32KB;
-    private byte[] _64KB;
-    private byte[] _16Bytes;
+    private AesCtrCryptoAlgorithm _crypto = null!;
+    private byte[] _1KB = null!;
+    private byte[] _32KB = null!;
+    private byte[] _64KB = null!;
+    private byte[] _16Bytes = null!;
 
     [GlobalSetup]
     public void Setup()

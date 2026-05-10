@@ -20,12 +20,12 @@ namespace Surfus.Shell.Crypto
         /// <summary>
         /// The ICryptoTransform to decrypt the data.
         /// </summary>
-        private ICryptoTransform _decryptor;
+        private ICryptoTransform? _decryptor;
 
         /// <summary>
         /// The ICryptoTransform to encrypt the data.
         /// </summary>
-        private ICryptoTransform _encryptor;
+        private ICryptoTransform? _encryptor;
 
         /// <summary>
         /// Constructs the CryptoServiceProviderAlgorithm class.
@@ -53,12 +53,12 @@ namespace Surfus.Shell.Crypto
         /// <returns></returns>
         internal override void Encrypt(byte[] byteArray, int offset, int length)
         {
-            _encryptor.TransformBlock(byteArray, offset, length, byteArray, offset);
+            _encryptor!.TransformBlock(byteArray, offset, length, byteArray, offset);
         }
 
         internal override void Decrypt(byte[] byteArray, int offset, int length)
         {
-            _decryptor.TransformBlock(byteArray, offset, length, byteArray, offset);
+            _decryptor!.TransformBlock(byteArray, offset, length, byteArray, offset);
         }
 
         /// <summary>
@@ -97,7 +97,7 @@ namespace Surfus.Shell.Crypto
                 return await ReadPacketEtmAsync(stream, packetSequenceNumber, hmacSize, cancellationToken).ConfigureAwait(false);
             }
 
-            var blockSize = _decryptor.InputBlockSize;
+            var blockSize = _decryptor!.InputBlockSize;
             var expectedPacketSize = 128;
             var buffer = new byte[4 + blockSize + expectedPacketSize + hmacSize];
 

@@ -47,7 +47,7 @@ namespace Surfus.Shell.Authentication
                 new UaRequest(username, "ssh-connection", _keyType, (ReadOnlyMemory<byte>)_publicKeyBlob, ReadOnlyMemory<byte>.Empty)
             );
 
-        public Task<IClientMessage> HandleMessage60Async(
+        public Task<IClientMessage?> HandleMessage60Async(
             string username,
             ReadOnlyMemory<byte> sessionIdentifier,
             MessageEvent messageEvent,
@@ -76,7 +76,7 @@ namespace Surfus.Shell.Authentication
             w.WriteBinaryString(blobMem);
 
             var signature = Sign(w.Bytes);
-            return Task.FromResult<IClientMessage>(
+            return Task.FromResult<IClientMessage?>(
                 new UaRequest(username, "ssh-connection", _keyType, blobMem, (ReadOnlyMemory<byte>)signature)
             );
         }
@@ -165,7 +165,7 @@ namespace Surfus.Shell.Authentication
             buf[pos++] = (byte)value;
         }
 
-        private static (AsymmetricAlgorithm key, string keyType, byte[] publicBlob) LoadKey(string pem, string passphrase = null)
+        private static (AsymmetricAlgorithm key, string keyType, byte[] publicBlob) LoadKey(string pem, string? passphrase = null)
         {
             // Try RSA
             try
@@ -212,8 +212,8 @@ namespace Surfus.Shell.Authentication
                 {
                     var p = rsa.ExportParameters(false);
                     var keyType = "ssh-rsa";
-                    var e = ToMpint(p.Exponent);
-                    var n = ToMpint(p.Modulus);
+                    var e = ToMpint(p.Exponent!);
+                    var n = ToMpint(p.Modulus!);
                     var eMem = (ReadOnlyMemory<byte>)e;
                     var nMem = (ReadOnlyMemory<byte>)n;
                     var size = keyType.GetAsciiStringSize() + eMem.GetBinaryStringSize() + nMem.GetBinaryStringSize();
@@ -228,7 +228,7 @@ namespace Surfus.Shell.Authentication
                     var p = ecdsa.ExportParameters(false);
                     var curveName = GetCurveName(p.Curve);
                     var keyType = $"ecdsa-sha2-{curveName}";
-                    var q = new byte[1 + p.Q.X.Length + p.Q.Y.Length];
+                    var q = new byte[1 + p.Q.X!.Length + p.Q.Y!.Length];
                     q[0] = 0x04;
                     p.Q.X.CopyTo(q, 1);
                     p.Q.Y.CopyTo(q, 1 + p.Q.X.Length);

@@ -32,7 +32,7 @@ namespace Surfus.Shell
         /// Called after data is consumed by a reader, with the number of bytes consumed.
         /// Used by the channel to replenish the SSH receive window. May be null.
         /// </summary>
-        internal Func<int, ValueTask> OnConsumed { get; init; }
+        internal Func<int, ValueTask>? OnConsumed { get; init; }
 
         public override bool CanRead => true;
         public override bool CanSeek => false;

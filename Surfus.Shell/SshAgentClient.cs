@@ -48,7 +48,7 @@ namespace Surfus.Shell
         /// <summary>
         /// Connects to the SSH agent at the given socket path, or SSH_AUTH_SOCK if not specified.
         /// </summary>
-        public static async Task<SshAgentClient> ConnectAsync(string socketPath = null, CancellationToken cancellationToken = default)
+        public static async Task<SshAgentClient> ConnectAsync(string? socketPath = null, CancellationToken cancellationToken = default)
         {
             socketPath ??=
                 Environment.GetEnvironmentVariable("SSH_AUTH_SOCK") ?? throw new InvalidOperationException("SSH_AUTH_SOCK is not set.");

@@ -18,7 +18,7 @@ namespace Surfus.Shell
         /// <summary>
         /// Called when the server sends a banner during authentication.
         /// </summary>
-        internal Action<string> OnBanner { get; set; }
+        internal Action<string?>? OnBanner { get; set; }
 
         internal SshAuthentication(Func<ReadOnlyMemory<byte>> getSessionIdentifier)
         {
@@ -121,7 +121,7 @@ namespace Surfus.Shell
 
                 if (msg.Type == MessageType.SSH_MSG_DISCONNECT)
                 {
-                    var disconnect = (Disconnect)msg.Message;
+                    var disconnect = (Disconnect)msg.Message!;
                     throw new SshDisconnectException(disconnect.Reason);
                 }
 

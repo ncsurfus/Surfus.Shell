@@ -57,17 +57,17 @@ namespace Surfus.Shell
         /// <summary>
         /// _stream holds the underlying stream for the SSH connection.
         /// </summary>
-        private Stream _stream;
+        private Stream? _stream;
 
         /// <summary>
         /// Optional factory that provides the transport stream and an optional close callback.
         /// </summary>
-        private readonly Func<CancellationToken, Task<(Stream Stream, Func<ValueTask> OnCloseAsync)>> _streamFactory;
+        private readonly Func<CancellationToken, Task<(Stream Stream, Func<ValueTask>? OnCloseAsync)>> _streamFactory;
 
         /// <summary>
         /// Callback invoked once when the client is closed, to clean up the transport.
         /// </summary>
-        private Func<ValueTask> _onCloseAsync;
+        private Func<ValueTask>? _onCloseAsync;
         private int _onCloseCalled;
 
         private readonly object _handlersLock = new();
@@ -95,12 +95,12 @@ namespace Surfus.Shell
             }
         }
 
-        private void NotifyHandlersOfError(Exception error)
+        private void NotifyHandlersOfError(Exception? error)
         {
             var handlers = _messageHandlers;
             foreach (var handler in handlers)
             {
-                handler.OnError(error);
+                handler.OnError(error ?? new Exceptions.SshException("Connection closed."));
             }
         }
 
@@ -127,7 +127,7 @@ namespace Surfus.Shell
         /// <summary>
         /// A task that reads messages from the incoming SSH server.
         /// </summary>
-        private Task _readLoop;
+        private Task? _readLoop;
 
         /// <summary>
         /// A semaphore that coordinates messages being sent to the SSH server.
@@ -152,12 +152,12 @@ namespace Surfus.Shell
         /// <summary>
         /// Banner holds the banner message sent by the SSH server after login. If null, no banner was sent.
         /// </summary>
-        public string Banner { get; private set; }
+        public string? Banner { get; private set; }
 
         /// <summary>
         /// When set, calls this callback function to determine if the host key is valid and if the connection should continue.
         /// </summary>
-        public Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>> HostKeyCallback { get; init; }
+        public Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>>? HostKeyCallback { get; init; }
 
         /// <summary>
         /// Configures which algorithms are offered during key exchange. Defaults to all supported algorithms.
@@ -200,7 +200,7 @@ namespace Surfus.Shell
         /// An SshClient that uses a custom stream factory for the transport.
         /// The factory returns a stream and an optional callback invoked when the client is closed.
         /// </summary>
-        public SshClient(Func<CancellationToken, Task<(Stream Stream, Func<ValueTask> OnCloseAsync)>> streamFactory)
+        public SshClient(Func<CancellationToken, Task<(Stream Stream, Func<ValueTask>? OnCloseAsync)>> streamFactory)
         {
             ArgumentNullException.ThrowIfNull(streamFactory);
             _streamFactory = streamFactory;
@@ -214,7 +214,7 @@ namespace Surfus.Shell
         public SshClient(Stream stream)
         {
             ArgumentNullException.ThrowIfNull(stream);
-            _streamFactory = _ => Task.FromResult<(Stream, Func<ValueTask>)>((stream, null));
+            _streamFactory = _ => Task.FromResult<(Stream, Func<ValueTask>?)>((stream, null));
             ConnectionInfo = new SshConnectionInfo();
         }
 
@@ -254,7 +254,7 @@ namespace Surfus.Shell
                 // Start the read loop. When the loop exits for any reason,
                 async Task readLoop()
                 {
-                    Exception loopError = null;
+                    Exception? loopError = null;
                     try
                     {
                         while (true)
@@ -429,7 +429,7 @@ namespace Surfus.Shell
         /// <param name="cancellationToken">The cancellation token used to cancel the terminal request</param>
         /// <param name="options">Optional terminal configuration (type, size). Defaults to xterm 80x24.</param>
         /// <returns>A task representing the state of the terminal request</returns>
-        public async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken, TerminalOptions options = null)
+        public async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken, TerminalOptions? options = null)
         {
             // Validate current state of SshClient
             if (!IsConnected)
@@ -587,7 +587,7 @@ namespace Surfus.Shell
         private async Task ReadMessageAsync(CancellationToken cancellationToken)
         {
             var sshPacketTask = ConnectionInfo.ReadCryptoAlgorithm.ReadPacketAsync(
-                _stream,
+                _stream!,
                 ConnectionInfo.InboundPacketSequence,
                 ConnectionInfo.ReadMacAlgorithm.OutputSize,
                 ConnectionInfo.ReadMacAlgorithm.IsEtm,
@@ -633,7 +633,7 @@ namespace Surfus.Shell
             // to provide the new read-side crypto before reading the next packet.
             if (messageEvent.Type == MessageType.SSH_MSG_NEWKEYS)
             {
-                var applyReadCrypto = await ConnectionInfo.KeyExchanger.GetNewReadKeysAsync(cancellationToken).ConfigureAwait(false);
+                var applyReadCrypto = await ConnectionInfo.KeyExchanger!.GetNewReadKeysAsync(cancellationToken).ConfigureAwait(false);
                 applyReadCrypto();
             }
         }
@@ -675,7 +675,7 @@ namespace Surfus.Shell
                     ? sshPacket.Length + 16 // AEAD tag appended by Encrypt
                     : sshPacket.Length;
 
-                await _stream
+                await _stream!
                     .WriteAsync(sshPacket.Buffer.AsMemory(sshPacket.Offset, writeLength), cancellationToken)
                     .ConfigureAwait(false);
 
@@ -716,7 +716,7 @@ namespace Surfus.Shell
         /// <summary>
         /// Throws an SshException if the SshClient is in an invalid state to continue.
         /// </summary>
-        private SshAuthentication _authentication;
+        private SshAuthentication? _authentication;
 
         private SshAuthentication EnsureAuthentication()
         {

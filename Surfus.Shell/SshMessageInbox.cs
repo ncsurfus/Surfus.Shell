@@ -18,12 +18,12 @@ namespace Surfus.Shell
             );
         }
 
-        internal Func<IClientMessage, CancellationToken, Task> OnSend { get; set; }
+        internal Func<IClientMessage, CancellationToken, Task>? OnSend { get; set; }
 
         internal ValueTask DeliverAsync(MessageEvent message, CancellationToken cancellationToken = default) =>
             _channel.Writer.WriteAsync(message, cancellationToken);
 
-        internal void Complete(Exception error = null) => _channel.Writer.TryComplete(error);
+        internal void Complete(Exception? error = null) => _channel.Writer.TryComplete(error);
 
         internal void OnError(Exception error) => Complete(error ?? new SshException("Connection closed."));
 

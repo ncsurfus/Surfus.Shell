@@ -134,7 +134,7 @@ public class PrivateKeyAuthTests
     private static byte[] BuildSshEcdsaBlob(ECParameters p, string curveName)
     {
         var keyType = $"ecdsa-sha2-{curveName}";
-        var q = new byte[1 + p.Q.X.Length + p.Q.Y.Length];
+        var q = new byte[1 + p.Q.X!.Length + p.Q.Y!.Length];
         q[0] = 0x04;
         p.Q.X.CopyTo(q, 1);
         p.Q.Y.CopyTo(q, 1 + p.Q.X.Length);

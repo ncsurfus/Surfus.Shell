@@ -48,7 +48,7 @@ namespace Surfus.Shell
         /// <param name="fileName">File name on the remote side.</param>
         /// <param name="permissions">Unix file permissions (default 0644).</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        public async Task UploadAsync(Stream source, long length, string remotePath, string fileName = null, string permissions = "0644", CancellationToken cancellationToken = default)
+        public async Task UploadAsync(Stream source, long length, string remotePath, string? fileName = null, string permissions = "0644", CancellationToken cancellationToken = default)
         {
             fileName ??= Path.GetFileName(remotePath);
             var remoteDir = GetDirectoryPart(remotePath);

@@ -9,9 +9,9 @@ namespace Surfus.Shell.Benchmarks;
 [MemoryDiagnoser]
 public class ChannelStreamBenchmarks
 {
-    private byte[] _1KB;
-    private byte[] _32KB;
-    private byte[] _100Bytes;
+    private byte[] _1KB = null!;
+    private byte[] _32KB = null!;
+    private byte[] _100Bytes = null!;
 
     [GlobalSetup]
     public void Setup()

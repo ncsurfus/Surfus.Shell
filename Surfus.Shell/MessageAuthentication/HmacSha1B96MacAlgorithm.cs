@@ -5,7 +5,7 @@ namespace Surfus.Shell.MessageAuthentication
 {
     public sealed class HmacSha1B96MacAlgorithm : MacAlgorithm
     {
-        private HMACSHA1 _macProvider;
+        private HMACSHA1 _macProvider = null!;
 
         public override int KeySize => 20;
         public override int OutputSize => 12;

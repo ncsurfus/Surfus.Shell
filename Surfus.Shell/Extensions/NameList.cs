@@ -6,7 +6,7 @@ namespace Surfus.Shell.Extensions
     internal record NameList
     {
         // Reference: https://tools.ietf.org/html/rfc4251#page-10
-        public NameList(params string[] names)
+        public NameList(params string[]? names)
         {
             if (names == null || names.Length == 0)
             {

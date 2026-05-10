@@ -16,7 +16,7 @@ namespace Surfus.Shell
     internal class SshKeyExchanger : IMessageHandler
     {
         private readonly SshConnectionInfo _connectionInfo;
-        private readonly Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>> _hostKeyCallback;
+        private readonly Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>>? _hostKeyCallback;
         private readonly SshAlgorithms _algorithms;
         private readonly SshMessageInbox _inbox = new();
         private readonly TaskCompletionSource _ready = new();
@@ -25,7 +25,7 @@ namespace Surfus.Shell
 
         internal SshKeyExchanger(
             SshConnectionInfo connectionInfo,
-            Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>> hostKeyCallback,
+            Func<ReadOnlyMemory<byte>, CancellationToken, Task<bool>>? hostKeyCallback,
             SshAlgorithms algorithms
         )
         {
