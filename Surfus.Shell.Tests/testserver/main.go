@@ -155,15 +155,18 @@ func handleConn(conn net.Conn, config *ssh.ServerConfig, shellMode string) {
 	go ssh.DiscardRequests(reqs)
 
 	for newChannel := range chans {
-		if newChannel.ChannelType() != "session" {
+		switch newChannel.ChannelType() {
+		case "session":
+			channel, requests, err := newChannel.Accept()
+			if err != nil {
+				return
+			}
+			go handleSession(channel, requests, shellMode)
+		case "direct-tcpip":
+			go handleDirectTcpIp(newChannel)
+		default:
 			newChannel.Reject(ssh.UnknownChannelType, "unknown channel type")
-			continue
 		}
-		channel, requests, err := newChannel.Accept()
-		if err != nil {
-			return
-		}
-		go handleSession(channel, requests, shellMode)
 	}
 }
 
@@ -195,6 +198,56 @@ func handleSession(channel ssh.Channel, requests <-chan *ssh.Request, shellMode 
 			}
 		}
 	}
+}
+
+// --- Direct TCP/IP forwarding: connects to the requested host:port ---
+
+func handleDirectTcpIp(newChannel ssh.NewChannel) {
+	// Parse the direct-tcpip payload: host(string), port(uint32), originator(string), originatorPort(uint32)
+	type directTcpIpMsg struct {
+		Host          string
+		Port          uint32
+		OriginatorIP  string
+		OriginatorPort uint32
+	}
+	var msg directTcpIpMsg
+	if err := ssh.Unmarshal(newChannel.ExtraData(), &msg); err != nil {
+		newChannel.Reject(ssh.ConnectionFailed, "failed to parse direct-tcpip request")
+		return
+	}
+
+	dest := net.JoinHostPort(msg.Host, fmt.Sprintf("%d", msg.Port))
+	conn, err := net.DialTimeout("tcp", dest, 5*time.Second)
+	if err != nil {
+		newChannel.Reject(ssh.ConnectionFailed, err.Error())
+		return
+	}
+
+	channel, requests, err := newChannel.Accept()
+	if err != nil {
+		conn.Close()
+		return
+	}
+	go ssh.DiscardRequests(requests)
+
+	// Bidirectional copy
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		io.Copy(conn, channel)
+		if tc, ok := conn.(*net.TCPConn); ok {
+			tc.CloseWrite()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		io.Copy(channel, conn)
+		channel.CloseWrite()
+	}()
+	wg.Wait()
+	channel.Close()
+	conn.Close()
 }
 
 // --- Echo shell: echoes input, responds to "exit" ---

@@ -471,6 +471,100 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Opens a direct-tcpip channel to the specified remote host and port through the SSH server.
+        /// </summary>
+        /// <param name="remoteHost">The destination host to connect to from the SSH server.</param>
+        /// <param name="remotePort">The destination port to connect to from the SSH server.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="originatorAddress">The originator IP address (default "127.0.0.1").</param>
+        /// <param name="originatorPort">The originator port (default 0).</param>
+        /// <returns>An SshChannel whose Stdin/Stdout provide the forwarded connection.</returns>
+        public async Task<SshChannel> CreateDirectTcpIpChannelAsync(
+            string remoteHost,
+            uint remotePort,
+            CancellationToken cancellationToken,
+            string originatorAddress = "127.0.0.1",
+            uint originatorPort = 0)
+        {
+            if (!IsConnected)
+            {
+                ThrowOnInvalidState();
+            }
+
+            var channel = new SshChannel((uint)Interlocked.Increment(ref _channelCounter));
+            channel.Registration = RegisterMessageHandler(channel);
+
+            _disposables.Add(channel);
+
+            var openMessage = new Messages.Channel.Open.ChannelOpenDirectTcpIp(
+                remoteHost, remotePort, originatorAddress, originatorPort, channel.ClientId);
+
+            await channel.OpenAsync(openMessage, cancellationToken).ConfigureAwait(false);
+            return channel;
+        }
+
+        /// <summary>
+        /// Listens on a local TCP port and forwards each accepted connection through the SSH server
+        /// to the specified remote host and port. Runs until the cancellation token is triggered.
+        /// Returns when cancelled; does not throw <see cref="OperationCanceledException"/>.
+        /// </summary>
+        /// <param name="localPort">The local port to listen on.</param>
+        /// <param name="remoteHost">The destination host to connect to from the SSH server.</param>
+        /// <param name="remotePort">The destination port to connect to from the SSH server.</param>
+        /// <param name="cancellationToken">Cancellation token to stop listening.</param>
+        /// <param name="localAddress">The local address to bind to (default loopback).</param>
+        public async Task ForwardLocalPortAsync(
+            int localPort,
+            string remoteHost,
+            uint remotePort,
+            CancellationToken cancellationToken,
+            System.Net.IPAddress? localAddress = null)
+        {
+            localAddress ??= System.Net.IPAddress.Loopback;
+            var listener = new System.Net.Sockets.TcpListener(localAddress, localPort);
+            listener.Start();
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    var tcpClient = await listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
+                    _ = ForwardConnectionAsync(tcpClient, remoteHost, remotePort, cancellationToken);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+            finally
+            {
+                listener.Stop();
+            }
+        }
+
+        private async Task ForwardConnectionAsync(
+            System.Net.Sockets.TcpClient tcpClient,
+            string remoteHost,
+            uint remotePort,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await using var channel = await CreateDirectTcpIpChannelAsync(remoteHost, remotePort, cancellationToken).ConfigureAwait(false);
+                var networkStream = tcpClient.GetStream();
+
+                var localToRemote = networkStream.CopyToAsync(channel.Stdin, cancellationToken);
+                var remoteToLocal = channel.Stdout.CopyToAsync(networkStream, cancellationToken);
+
+                var completed = await Task.WhenAny(localToRemote, remoteToLocal).ConfigureAwait(false);
+                await completed.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
+            catch (IOException) { }
+            catch (Exceptions.SshException) { }
+            finally
+            {
+                tcpClient.Dispose();
+            }
+        }
+
+        /// <summary>
         /// Initiates the SSH connection by exchanging versions.
         /// </summary>
         /// <param name="cancellationToken">A cancellation token used to cancel the version exchange.</param>
