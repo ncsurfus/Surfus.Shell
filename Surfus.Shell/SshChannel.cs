@@ -43,7 +43,7 @@ namespace Surfus.Shell
         /// </summary>
         internal int WindowRefill { get; set; } = 50000;
 
-        internal uint ServerId { get; set; }
+        public uint ServerId { get; private set; }
         internal uint ClientId { get; }
 
         /// <summary>
