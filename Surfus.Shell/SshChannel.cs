@@ -59,7 +59,7 @@ namespace Surfus.Shell
         /// <summary>
         /// When true, stderr data is interleaved into StandardOutput.
         /// </summary>
-        public bool CombineStderr { get; init; }
+        public bool CombineStderr { get; set; }
 
         /// <summary>Gets the writable stream for sending data to the remote process.</summary>
         public Stream StandardInput => Stdin;

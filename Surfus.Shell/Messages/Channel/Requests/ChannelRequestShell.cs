@@ -1,6 +1,6 @@
 ﻿namespace Surfus.Shell.Messages.Channel.Requests
 {
-    internal record ChannelRequestShell : ChannelRequest
+    public record ChannelRequestShell : ChannelRequest
     {
         public ChannelRequestShell(SshPacket packet, uint recipientChannel)
             : base(packet, "shell", recipientChannel) { }

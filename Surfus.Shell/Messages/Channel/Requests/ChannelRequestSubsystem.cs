@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel.Requests
 {
-    internal record ChannelRequestSubsystem : ChannelRequest
+    public record ChannelRequestSubsystem : ChannelRequest
     {
         public ChannelRequestSubsystem(SshPacket packet, uint recipientChannel)
             : base(packet, "subsystem", recipientChannel)

@@ -13,7 +13,7 @@ namespace Surfus.Shell
     public class SshCommand : IAsyncDisposable
     {
         private readonly SshChannel _channel;
-        private State _commandState = State.Initial;
+        private State _commandState;
 
         /// <summary>
         /// When true, stderr data is interleaved into StandardOutput.
@@ -43,20 +43,9 @@ namespace Surfus.Shell
         /// </summary>
         public int? ExitCode => _channel.ExitCode;
 
-        internal SshCommand(SshChannel channel)
+        public SshCommand(SshChannel channel)
         {
             _channel = channel;
-        }
-
-        internal async Task OpenAsync(CancellationToken cancellationToken)
-        {
-            if (_commandState != State.Initial)
-            {
-                throw new Exception("Command request was already attempted.");
-            }
-
-            _commandState = State.Errored;
-            await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
             _commandState = State.Opened;
         }
 

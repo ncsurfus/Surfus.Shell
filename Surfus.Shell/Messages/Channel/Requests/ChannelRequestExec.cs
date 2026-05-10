@@ -1,6 +1,6 @@
 namespace Surfus.Shell.Messages.Channel.Requests
 {
-    internal record ChannelRequestExec : ChannelRequest
+    public record ChannelRequestExec : ChannelRequest
     {
         public ChannelRequestExec(SshPacket packet, uint recipientChannel)
             : base(packet, "exec", recipientChannel)

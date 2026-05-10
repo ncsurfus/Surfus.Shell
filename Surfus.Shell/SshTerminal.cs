@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using Surfus.Shell.Messages.Channel.Open;
 using Surfus.Shell.Messages.Channel.Requests;
 
 namespace Surfus.Shell
@@ -43,13 +42,13 @@ namespace Surfus.Shell
         /// </summary>
         public int? ExitCode => _channel.ExitCode;
 
-        internal SshTerminal(SshChannel channel, TerminalOptions? options = null)
+        public SshTerminal(SshChannel channel, TerminalOptions? options = null)
         {
             _channel = channel;
             _options = options ?? new TerminalOptions();
         }
 
-        internal async Task OpenAsync(CancellationToken cancellationToken)
+        public async Task RequestAsync(CancellationToken cancellationToken)
         {
             if (_terminalState != State.Initial)
             {
@@ -58,7 +57,6 @@ namespace Surfus.Shell
 
             _terminalState = State.Errored;
 
-            await _channel.OpenAsync(new ChannelOpenSession(_channel.ClientId, 50000), cancellationToken).ConfigureAwait(false);
             await _channel
                 .RequestAsync(
                     new ChannelRequestPseudoTerminal(

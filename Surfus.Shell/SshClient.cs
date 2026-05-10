@@ -77,7 +77,7 @@ namespace Surfus.Shell
         /// Registers a message handler. Automatically wires OnSend to WriteMessageAsync.
         /// Returns a disposable that unregisters it.
         /// </summary>
-        internal IDisposable RegisterMessageHandler(IMessageHandler handler)
+        public IDisposable RegisterMessageHandler(IMessageHandler handler)
         {
             handler.OnSend = WriteMessageAsync;
             lock (_handlersLock)
@@ -150,9 +150,9 @@ namespace Surfus.Shell
         public SshConnectionInfo ConnectionInfo { get; }
 
         /// <summary>
-        /// Banner holds the banner message sent by the SSH server after login. If null, no banner was sent.
+        /// Called when the server sends a banner during authentication.
         /// </summary>
-        public string? Banner { get; private set; }
+        public Action<string>? OnBanner { get; init; }
 
         /// <summary>
         /// When set, calls this callback function to determine if the host key is valid and if the connection should continue.
@@ -400,91 +400,13 @@ namespace Surfus.Shell
         }
 
         /// <summary>
-        /// Creates a raw SSH channel. Use this to build custom channel types (subsystems, tunnels, etc.).
-        /// The channel is opened as a session and ready for requests.
+        /// Opens an SSH channel with the specified open message.
+        /// This is the generic channel-opening primitive; convenience methods are provided as extensions.
         /// </summary>
-        /// <param name="cancellationToken">The cancellation token used to cancel the channel request</param>
-        /// <returns>An opened SSH channel</returns>
-        public async Task<SshChannel> CreateChannelAsync(CancellationToken cancellationToken)
-        {
-            if (!IsConnected)
-            {
-                ThrowOnInvalidState();
-            }
-
-            var channel = new SshChannel((uint)Interlocked.Increment(ref _channelCounter));
-            channel.Registration = RegisterMessageHandler(channel);
-
-            _disposables.Add(channel);
-
-            await channel
-                .OpenAsync(new Messages.Channel.Open.ChannelOpenSession(channel.ClientId, 50000), cancellationToken)
-                .ConfigureAwait(false);
-            return channel;
-        }
-
-        /// <summary>
-        /// Requests a terminal from the SSH server.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token used to cancel the terminal request</param>
-        /// <param name="options">Optional terminal configuration (type, size). Defaults to xterm 80x24.</param>
-        /// <returns>A task representing the state of the terminal request</returns>
-        public async Task<SshTerminal> CreateTerminalAsync(CancellationToken cancellationToken, TerminalOptions? options = null)
-        {
-            // Validate current state of SshClient
-            if (!IsConnected)
-            {
-                ThrowOnInvalidState();
-            }
-
-            var channel = new SshChannel((uint)Interlocked.Increment(ref _channelCounter));
-            channel.Registration = RegisterMessageHandler(channel);
-            var terminal = new SshTerminal(channel, options);
-
-            _disposables.Add(terminal);
-
-            await terminal.OpenAsync(cancellationToken).ConfigureAwait(false);
-            return terminal;
-        }
-
-        /// <summary>
-        /// Requests the result of a command from the SSH server.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token used to cancel the terminal request</param>
-        /// <returns>A task representing the state of the terminal request</returns>
-        public async Task<SshCommand> CreateCommandAsync(CancellationToken cancellationToken, bool combineStderr = false)
-        {
-            // Validate current state of SshClient
-            if (!IsConnected)
-            {
-                ThrowOnInvalidState();
-            }
-
-            var channel = new SshChannel((uint)Interlocked.Increment(ref _channelCounter)) { CombineStderr = combineStderr };
-            channel.Registration = RegisterMessageHandler(channel);
-            var command = new SshCommand(channel) { CombineStderr = combineStderr };
-
-            _disposables.Add(command);
-
-            await command.OpenAsync(cancellationToken).ConfigureAwait(false);
-            return command;
-        }
-
-        /// <summary>
-        /// Opens a direct-tcpip channel to the specified remote host and port through the SSH server.
-        /// </summary>
-        /// <param name="remoteHost">The destination host to connect to from the SSH server.</param>
-        /// <param name="remotePort">The destination port to connect to from the SSH server.</param>
+        /// <param name="openMessage">The channel open message (e.g., ChannelOpenSession, ChannelOpenDirectTcpIp).</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <param name="originatorAddress">The originator IP address (default "127.0.0.1").</param>
-        /// <param name="originatorPort">The originator port (default 0).</param>
-        /// <returns>An SshChannel whose Stdin/Stdout provide the forwarded connection.</returns>
-        public async Task<SshChannel> CreateDirectTcpIpChannelAsync(
-            string remoteHost,
-            uint remotePort,
-            CancellationToken cancellationToken,
-            string originatorAddress = "127.0.0.1",
-            uint originatorPort = 0)
+        /// <returns>An opened SSH channel.</returns>
+        public async Task<SshChannel> OpenChannelAsync(ChannelOpen openMessage, CancellationToken cancellationToken)
         {
             if (!IsConnected)
             {
@@ -496,72 +418,9 @@ namespace Surfus.Shell
 
             _disposables.Add(channel);
 
-            var openMessage = new Messages.Channel.Open.ChannelOpenDirectTcpIp(
-                remoteHost, remotePort, originatorAddress, originatorPort, channel.ClientId);
-
-            await channel.OpenAsync(openMessage, cancellationToken).ConfigureAwait(false);
+            var message = openMessage with { SenderChannel = channel.ClientId };
+            await channel.OpenAsync(message, cancellationToken).ConfigureAwait(false);
             return channel;
-        }
-
-        /// <summary>
-        /// Listens on a local TCP port and forwards each accepted connection through the SSH server
-        /// to the specified remote host and port. Runs until the cancellation token is triggered.
-        /// Returns when cancelled; does not throw <see cref="OperationCanceledException"/>.
-        /// </summary>
-        /// <param name="localPort">The local port to listen on.</param>
-        /// <param name="remoteHost">The destination host to connect to from the SSH server.</param>
-        /// <param name="remotePort">The destination port to connect to from the SSH server.</param>
-        /// <param name="cancellationToken">Cancellation token to stop listening.</param>
-        /// <param name="localAddress">The local address to bind to (default loopback).</param>
-        public async Task ForwardLocalPortAsync(
-            int localPort,
-            string remoteHost,
-            uint remotePort,
-            CancellationToken cancellationToken,
-            System.Net.IPAddress? localAddress = null)
-        {
-            localAddress ??= System.Net.IPAddress.Loopback;
-            var listener = new System.Net.Sockets.TcpListener(localAddress, localPort);
-            listener.Start();
-            try
-            {
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    var tcpClient = await listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
-                    _ = ForwardConnectionAsync(tcpClient, remoteHost, remotePort, cancellationToken);
-                }
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-            finally
-            {
-                listener.Stop();
-            }
-        }
-
-        private async Task ForwardConnectionAsync(
-            System.Net.Sockets.TcpClient tcpClient,
-            string remoteHost,
-            uint remotePort,
-            CancellationToken cancellationToken)
-        {
-            try
-            {
-                await using var channel = await CreateDirectTcpIpChannelAsync(remoteHost, remotePort, cancellationToken).ConfigureAwait(false);
-                var networkStream = tcpClient.GetStream();
-
-                var localToRemote = networkStream.CopyToAsync(channel.Stdin, cancellationToken);
-                var remoteToLocal = channel.Stdout.CopyToAsync(networkStream, cancellationToken);
-
-                var completed = await Task.WhenAny(localToRemote, remoteToLocal).ConfigureAwait(false);
-                await completed.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) { }
-            catch (IOException) { }
-            catch (Exceptions.SshException) { }
-            finally
-            {
-                tcpClient.Dispose();
-            }
         }
 
         /// <summary>
@@ -738,7 +597,7 @@ namespace Surfus.Shell
         /// <param name="message">The message to be sent</param>
         /// <param name="cancellationToken">The cancellation token is used to cancel the write message</param>
         /// <returns></returns>
-        internal async Task WriteMessageAsync(IClientMessage message, CancellationToken cancellationToken)
+        public async Task WriteMessageAsync(IClientMessage message, CancellationToken cancellationToken)
         {
             if (message is NewKeysComplete)
             {
@@ -817,7 +676,7 @@ namespace Surfus.Shell
             if (_authentication == null)
             {
                 _authentication = new SshAuthentication(() => ConnectionInfo.SessionIdentifier);
-                _authentication.OnBanner = banner => Banner = banner;
+                _authentication.OnBanner = banner => { if (banner != null) OnBanner?.Invoke(banner); };
             }
             return _authentication;
         }

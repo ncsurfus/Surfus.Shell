@@ -1,6 +1,6 @@
 ﻿namespace Surfus.Shell.Messages.Channel.Open
 {
-    internal record ChannelOpenDirectTcpIp : ChannelOpen
+    public record ChannelOpenDirectTcpIp : ChannelOpen
     {
         internal ChannelOpenDirectTcpIp(SshPacket packet)
             : base(packet, "direct-tcpip")

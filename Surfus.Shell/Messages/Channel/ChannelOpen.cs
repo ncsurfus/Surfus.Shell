@@ -2,7 +2,7 @@ using Surfus.Shell.Messages.Channel.Open;
 
 namespace Surfus.Shell.Messages.Channel
 {
-    internal record ChannelOpen : IClientMessage
+    public record ChannelOpen : IClientMessage
     {
         protected ChannelOpen(SshPacket packet, string channelType)
         {
@@ -20,7 +20,7 @@ namespace Surfus.Shell.Messages.Channel
         }
 
         public string ChannelType { get; }
-        public uint SenderChannel { get; }
+        public uint SenderChannel { get; init; }
         public uint InitialWindowSize { get; }
         public uint MaximumPacketSize { get; } = 32000;
 

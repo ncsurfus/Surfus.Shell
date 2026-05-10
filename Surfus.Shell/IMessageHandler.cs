@@ -5,7 +5,7 @@ using Surfus.Shell.Messages;
 
 namespace Surfus.Shell
 {
-    internal interface IMessageHandler
+    public interface IMessageHandler
     {
         Func<IClientMessage, CancellationToken, Task> OnSend { set; }
         ValueTask ProcessMessageAsync(MessageEvent messageEvent);
