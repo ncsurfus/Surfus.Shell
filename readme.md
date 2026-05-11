@@ -128,12 +128,16 @@ var client = new SshClient("host")
 };
 ```
 
-### Banner Callback
+### Banner Callbacks
 
 ```csharp
 var client = new SshClient("host")
 {
-    OnBanner = banner => Console.WriteLine($"Server banner: {banner}")
+    // Called for each line the server sends before its version string (RFC 4253 §4.2)
+    OnConnectionBanner = line => Console.WriteLine($"Connection: {line}"),
+
+    // Called when the server sends a banner during authentication (RFC 4252)
+    OnAuthenticationBanner = banner => Console.WriteLine($"Auth: {banner}")
 };
 ```
 

@@ -150,9 +150,14 @@ namespace Surfus.Shell
         public SshConnectionInfo ConnectionInfo { get; }
 
         /// <summary>
-        /// Called when the server sends a banner during authentication.
+        /// Called when the server sends banner lines before the version string during connection (RFC 4253 §4.2).
         /// </summary>
-        public Action<string>? OnBanner { get; init; }
+        public Action<string>? OnConnectionBanner { get; init; }
+
+        /// <summary>
+        /// Called when the server sends a banner during authentication (RFC 4252 SSH_MSG_USERAUTH_BANNER).
+        /// </summary>
+        public Action<string>? OnAuthenticationBanner { get; init; }
 
         /// <summary>
         /// When set, calls this callback function to determine if the host key is valid and if the connection should continue.
@@ -426,110 +431,21 @@ namespace Surfus.Shell
         /// <summary>
         /// Initiates the SSH connection by exchanging versions.
         /// </summary>
-        /// <param name="cancellationToken">A cancellation token used to cancel the version exchange.</param>
-        /// <returns>A task representing the state of the version exchange</returns>
         private async Task<string> ExchangeVersionAsync(CancellationToken cancellationToken)
         {
             var (stream, onCloseAsync) = await _streamFactory(cancellationToken).ConfigureAwait(false);
             _stream = stream;
             _onCloseAsync = onCloseAsync;
 
-            // Buffer to receive their version.
-            var buffer = new byte[255];
-            var bufferPosition = 0;
-            var ignoreText = false;
-            var readingVersion = false;
+            var result = await SshVersionExchange.ExchangeAsync(
+                _stream, ConnectionInfo.ClientVersion, cancellationToken).ConfigureAwait(false);
 
-            // Some stream implementations (e.g. NetworkStream) may not respond to the
-            // cancellation token passed to ReadAsync. Use Task.WhenAny as a workaround.
-            var cancelled = new TaskCompletionSource<bool>();
-            using var ctReg = cancellationToken.Register(() => cancelled.SetResult(true));
-
-            while (bufferPosition == 0 || buffer[bufferPosition - 1] != '\n')
+            foreach (var line in result.BannerLines)
             {
-                if (bufferPosition == buffer.Length)
-                {
-                    throw new SshException($"Failed to exchange SSH version. Version size is greater than {buffer.Length}.");
-                }
-
-                var readTask = _stream
-                    .ReadAsync(buffer.AsMemory(bufferPosition, buffer.Length - bufferPosition), cancellationToken)
-                    .AsTask();
-                var result = await Task.WhenAny(cancelled.Task, readTask).ConfigureAwait(false);
-
-                if (result == cancelled.Task)
-                {
-                    throw new OperationCanceledException(
-                        "The operation was cancelled when reading the server version.",
-                        cancellationToken
-                    );
-                }
-
-                var readAmount = await readTask.ConfigureAwait(false);
-
-                if (readAmount <= 0)
-                {
-                    if (bufferPosition == 0)
-                    {
-                        throw new SshException("Failed to exchange SSH version. No data was sent.");
-                    }
-                    throw new SshException("Failed to exchange SSH version. Connection was closed.");
-                }
-
-                if (readingVersion || bufferPosition + readAmount < 4)
-                {
-                    bufferPosition += readAmount;
-                }
-                else if (!ignoreText && buffer[0] == 'S' && buffer[1] == 'S' && buffer[2] == 'H' && buffer[3] == '-')
-                {
-                    bufferPosition += readAmount;
-                    readingVersion = true;
-                }
-                else
-                {
-                    ignoreText = true;
-                    for (var i = 0; i != bufferPosition + readAmount; i++)
-                    {
-                        if (buffer[i] == '\n')
-                        {
-                            for (var j = 0; j != bufferPosition + readAmount - i - 1; j++)
-                            {
-                                buffer[j] = buffer[i + j + 1];
-                            }
-                            bufferPosition = bufferPosition - i + readAmount - 1;
-                            readAmount = 0;
-
-                            if (bufferPosition > 4 && buffer[0] == 'S' && buffer[1] == 'S' && buffer[2] == 'H' && buffer[3] == '-')
-                            {
-                                readingVersion = true;
-                                i = bufferPosition + readAmount - 1;
-                            }
-                            else
-                            {
-                                i = -1;
-                            }
-                        }
-                    }
-
-                    if (!readingVersion)
-                    {
-                        bufferPosition = 0;
-                    }
-                }
+                OnConnectionBanner?.Invoke(line);
             }
 
-            var version =
-                buffer[bufferPosition - 2] == '\r'
-                    ? Encoding.ASCII.GetString(buffer, 0, bufferPosition - 2)
-                    : Encoding.ASCII.GetString(buffer, 0, bufferPosition - 1);
-            if (!version.StartsWith("SSH-1.99-") && !version.StartsWith("SSH-2.0-"))
-            {
-                throw new SshException("Server version is not supported.");
-            }
-            var clientVersionBytes = Encoding.UTF8.GetBytes(ConnectionInfo.ClientVersion + "\n");
-            await _stream.WriteAsync(clientVersionBytes.AsMemory(), cancellationToken).ConfigureAwait(false);
-            await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-            return version;
+            return result.ServerVersion;
         }
 
         /// <summary>
@@ -676,7 +592,7 @@ namespace Surfus.Shell
             if (_authentication == null)
             {
                 _authentication = new SshAuthentication(() => ConnectionInfo.SessionIdentifier);
-                _authentication.OnBanner = banner => { if (banner != null) OnBanner?.Invoke(banner); };
+                _authentication.OnBanner = banner => { if (banner != null) OnAuthenticationBanner?.Invoke(banner); };
             }
             return _authentication;
         }
