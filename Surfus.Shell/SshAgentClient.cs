@@ -36,13 +36,21 @@ namespace Surfus.Shell
         private const byte SSH_AGENT_SIGN_RESPONSE = 14;
         private const byte SSH_AGENT_FAILURE = 5;
 
-        private readonly Socket _socket;
-        private readonly NetworkStream _stream;
+        private readonly Socket? _socket;
+        private readonly Stream _stream;
 
         private SshAgentClient(Socket socket)
         {
             _socket = socket;
             _stream = new NetworkStream(socket, ownsSocket: false);
+        }
+
+        /// <summary>
+        /// Creates an SSH agent client using the provided stream.
+        /// </summary>
+        public SshAgentClient(Stream stream)
+        {
+            _stream = stream ?? throw new ArgumentNullException(nameof(stream));
         }
 
         /// <summary>
@@ -71,7 +79,7 @@ namespace Surfus.Shell
         /// </summary>
         public async Task<List<SshAgentKey>> ListKeysAsync(CancellationToken cancellationToken = default)
         {
-            await SendAsync(new[] { SSH_AGENTC_REQUEST_IDENTITIES }, cancellationToken).ConfigureAwait(false);
+            await SendAsync([SSH_AGENTC_REQUEST_IDENTITIES], cancellationToken).ConfigureAwait(false);
             var response = await ReceiveAsync(cancellationToken).ConfigureAwait(false);
             var reader = new ByteReader(response);
 
@@ -194,7 +202,7 @@ namespace Surfus.Shell
         public void Dispose()
         {
             _stream.Dispose();
-            _socket.Dispose();
+            _socket?.Dispose();
         }
     }
 }

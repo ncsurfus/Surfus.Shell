@@ -44,9 +44,13 @@ await client.AuthenticateAsync("user", "pass", ct);
 // Keyboard-interactive
 await client.AuthenticateAsync("user", (prompt, ct) => Task.FromResult("password"), ct);
 
-// SSH agent
+// SSH agent (via SSH_AUTH_SOCK)
 var agent = await SshAgentClient.ConnectAsync(ct);
 await client.AuthenticateAsync("user", agent, ct);
+
+// SSH agent over a custom stream
+using var agent2 = new SshAgentClient(myAgentStream);
+await client.AuthenticateAsync("user", agent2, ct);
 
 // Private key
 var key = PrivateKeyAuth.FromFile("/path/to/key");
