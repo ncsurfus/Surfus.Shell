@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
@@ -98,61 +99,68 @@ namespace Surfus.Shell.Crypto
             }
 
             var blockSize = _decryptor!.InputBlockSize;
-            var expectedPacketSize = 128;
-            var buffer = new byte[4 + blockSize + expectedPacketSize + hmacSize];
 
-            ByteWriter.WriteUint(buffer.AsSpan(0), packetSequenceNumber); // Write first uint, which is the packet sequence number.
-            var packetStart = 4; // This is where we actually start adding packet data, skipping the provided packet sequence number..
-            var bufferPosition = 4; // Tracks where we last wrote data into our buffer.
-
-            // Read enough data until we have at least 1 block.
-            while (bufferPosition != blockSize + packetStart)
+            // Read the first encrypted block to determine packet length.
+            var firstBlock = ArrayPool<byte>.Shared.Rent(blockSize);
+            try
             {
-                var bytesRead = await stream.ReadAsync(
-                    buffer.AsMemory(bufferPosition, blockSize + packetStart - bufferPosition),
-                    cancellationToken
-                );
-                if (bytesRead == 0)
+                var firstBlockPos = 0;
+                while (firstBlockPos < blockSize)
                 {
-                    throw new SshException("Connection closed.");
+                    var bytesRead = await stream.ReadAsync(
+                        firstBlock.AsMemory(firstBlockPos, blockSize - firstBlockPos),
+                        cancellationToken
+                    );
+                    if (bytesRead == 0)
+                    {
+                        throw new SshException("Connection closed.");
+                    }
+                    firstBlockPos += bytesRead;
                 }
-                bufferPosition += bytesRead;
-            }
 
-            _decryptor.TransformBlock(buffer, bufferPosition - blockSize, blockSize, buffer, bufferPosition - blockSize); // Decrypt the first block in the buffer.
+                _decryptor.TransformBlock(firstBlock, 0, blockSize, firstBlock, 0);
 
-            var sshPacketSize = ByteReader.ReadUInt32(buffer.AsSpan(4)); // Get the length of the packet.
-            if (sshPacketSize > 35000)
-            {
-                throw new SshException("Invalid message sent, packet was to large!");
-            }
-            int bufferLength = (int)(4 + 4 + sshPacketSize + hmacSize); // Calculate the full size of what our buffer *should* be. uint (packetSequenceNumber) + uint (packet size) + packet + hmac size
-
-            if (buffer.Length < bufferLength) // Check to see if we need a bigger buffer and should allocate additional data.
-            {
-                Array.Resize(ref buffer, bufferLength);
-            }
-
-            while (bufferPosition != bufferLength) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
-            {
-                var bytesRead = await stream.ReadAsync(
-                    buffer.AsMemory(bufferPosition, bufferLength - bufferPosition),
-                    cancellationToken
-                );
-                if (bytesRead == 0)
+                var sshPacketSize = ByteReader.ReadUInt32(firstBlock.AsSpan(0));
+                if (sshPacketSize > 35000)
                 {
-                    throw new SshException("Connection closed.");
+                    throw new SshException("Invalid message sent, packet was too large!");
                 }
-                bufferPosition += bytesRead;
-            }
 
-            if (sshPacketSize > blockSize) // Check if this was more than a single block..
+                int bufferLength = (int)(4 + 4 + sshPacketSize + hmacSize);
+                var buffer = ArrayPool<byte>.Shared.Rent(bufferLength);
+
+                // Write sequence number and copy decrypted first block.
+                ByteWriter.WriteUint(buffer.AsSpan(0), packetSequenceNumber);
+                firstBlock.AsSpan(0, blockSize).CopyTo(buffer.AsSpan(4));
+                var bufferPosition = 4 + blockSize;
+
+                // Read remaining data.
+                while (bufferPosition < bufferLength)
+                {
+                    var bytesRead = await stream.ReadAsync(
+                        buffer.AsMemory(bufferPosition, bufferLength - bufferPosition),
+                        cancellationToken
+                    );
+                    if (bytesRead == 0)
+                    {
+                        throw new SshException("Connection closed.");
+                    }
+                    bufferPosition += bytesRead;
+                }
+
+                // Decrypt remaining blocks (first block already decrypted).
+                var remainingCiphertext = bufferLength - 4 - blockSize - hmacSize;
+                if (remainingCiphertext > 0)
+                {
+                    _decryptor.TransformBlock(buffer, 4 + blockSize, remainingCiphertext, buffer, 4 + blockSize);
+                }
+
+                return new SshPacket(buffer, 4, bufferLength - 4 - hmacSize, pooled: true);
+            }
+            finally
             {
-                // Decrypt everything except the first block as that was already decrypted!
-                _decryptor.TransformBlock(buffer, 4 + blockSize, bufferLength - 4 - blockSize - hmacSize, buffer, 4 + blockSize);
+                ArrayPool<byte>.Shared.Return(firstBlock);
             }
-
-            return new SshPacket(buffer, 4, bufferLength - 4 - hmacSize);
         }
 
         private async Task<SshPacket> ReadPacketEtmAsync(
@@ -163,33 +171,39 @@ namespace Surfus.Shell.Crypto
         )
         {
             // ETM: packet length is plaintext, body is encrypted, MAC covers seq + length + ciphertext.
-            var buffer = new byte[4 + 4 + 128 + hmacSize]; // seq(4) + length(4) + estimated body + hmac
-
-            ByteWriter.WriteUint(buffer.AsSpan(0), packetSequenceNumber);
-            var bufferPosition = 4;
-
-            // Read the 4-byte plaintext packet length.
-            while (bufferPosition < 8)
+            // Read the 4-byte plaintext packet length into a small rented buffer.
+            var lengthBuf = ArrayPool<byte>.Shared.Rent(4);
+            uint sshPacketSize;
+            try
             {
-                var bytesRead = await stream.ReadAsync(buffer.AsMemory(bufferPosition, 8 - bufferPosition), cancellationToken).ConfigureAwait(false);
-                if (bytesRead == 0)
+                var lengthPos = 0;
+                while (lengthPos < 4)
                 {
-                    throw new SshException("Connection closed.");
+                    var bytesRead = await stream.ReadAsync(lengthBuf.AsMemory(lengthPos, 4 - lengthPos), cancellationToken).ConfigureAwait(false);
+                    if (bytesRead == 0)
+                    {
+                        throw new SshException("Connection closed.");
+                    }
+                    lengthPos += bytesRead;
                 }
-                bufferPosition += bytesRead;
+                sshPacketSize = ByteReader.ReadUInt32(lengthBuf.AsSpan(0));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(lengthBuf);
             }
 
-            var sshPacketSize = ByteReader.ReadUInt32(buffer.AsSpan(4));
             if (sshPacketSize > 35000)
             {
                 throw new SshException("Invalid message sent, packet was too large!");
             }
 
             int bufferLength = (int)(4 + 4 + sshPacketSize + hmacSize);
-            if (buffer.Length < bufferLength)
-            {
-                Array.Resize(ref buffer, bufferLength);
-            }
+            var buffer = ArrayPool<byte>.Shared.Rent(bufferLength);
+
+            ByteWriter.WriteUint(buffer.AsSpan(0), packetSequenceNumber);
+            ByteWriter.WriteUint(buffer.AsSpan(4), sshPacketSize);
+            var bufferPosition = 8;
 
             // Read encrypted body + MAC.
             while (bufferPosition < bufferLength)
@@ -202,9 +216,7 @@ namespace Surfus.Shell.Crypto
                 bufferPosition += bytesRead;
             }
 
-            // Return packet with ciphertext intact — MAC verification happens in SshClient before decryption.
-            // SshPacket.Length = 4 (packet_length) + sshPacketSize, so MAC is at offset Length+4.
-            return new SshPacket(buffer, 4, (int)(4 + sshPacketSize));
+            return new SshPacket(buffer, 4, (int)(4 + sshPacketSize), pooled: true);
         }
     }
 }

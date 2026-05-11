@@ -505,6 +505,8 @@ namespace Surfus.Shell
                 var applyReadCrypto = await ConnectionInfo.KeyExchanger!.GetNewReadKeysAsync(cancellationToken).ConfigureAwait(false);
                 applyReadCrypto();
             }
+
+            sshPacket.Return();
         }
 
         /// <summary>

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Security.Cryptography;
 
 namespace Surfus.Shell
@@ -128,10 +129,15 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Whether this packet's buffer was rented from ArrayPool.
+        /// </summary>
+        private bool _pooled;
+
+        /// <summary>
         /// Constructs an SSH Packet from incoming data.
         /// </summary>
         /// <param name="buffer"></param>
-        internal SshPacket(byte[] buffer, int packetStart, int packetLength)
+        internal SshPacket(byte[] buffer, int packetStart, int packetLength, bool pooled = false)
         {
             // An extra 4 bytes were allocated at the start of the packet for the HMAC.
             // First 4 bytes of buffer is the size.
@@ -142,6 +148,28 @@ namespace Surfus.Shell
             Reader = new ByteReader(((ReadOnlyMemory<byte>)Buffer).Slice(5 + packetStart)); // Start reading after the first 5 bytes of the packet (skipping the packet length and padding amount)
             Offset = packetStart;
             Length = packetLength;
+            _pooled = pooled;
+        }
+
+        /// <summary>
+        /// Returns the buffer to the ArrayPool if it was rented. Call only when the packet is no longer needed.
+        /// </summary>
+        internal void Return()
+        {
+            if (_pooled)
+            {
+                _pooled = false;
+                ArrayPool<byte>.Shared.Return(Buffer);
+            }
+        }
+
+        /// <summary>
+        /// Detaches the buffer from the pool so it won't be returned. Use when the packet
+        /// is queued for later consumption (e.g., inbox delivery).
+        /// </summary>
+        internal void Detach()
+        {
+            _pooled = false;
         }
     }
 }

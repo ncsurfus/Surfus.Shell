@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Buffers.Binary;
 using System.IO;
 using System.Security.Cryptography;
@@ -64,47 +65,66 @@ namespace Surfus.Shell.Crypto
             CancellationToken cancellationToken
         )
         {
-            var lengthBuf = new byte[4];
-            await ReadExactAsync(stream, lengthBuf, cancellationToken).ConfigureAwait(false);
+            var lengthBuf = ArrayPool<byte>.Shared.Rent(4);
+            int packetSize;
+            try
+            {
+                await ReadExactAsync(stream, lengthBuf, 4, cancellationToken).ConfigureAwait(false);
+                packetSize = (int)ByteReader.ReadUInt32(lengthBuf.AsSpan(0));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(lengthBuf);
+            }
 
-            var packetSize = (int)ByteReader.ReadUInt32(lengthBuf);
             if (packetSize > 35000)
             {
                 throw new SshException("Invalid message sent, packet was too large!");
             }
 
-            var ciphertextAndTag = new byte[packetSize + TagSize];
-            await ReadExactAsync(stream, ciphertextAndTag, cancellationToken).ConfigureAwait(false);
-
-            var body = ciphertextAndTag.AsSpan(0, packetSize);
-            var tag = ciphertextAndTag.AsSpan(packetSize, TagSize);
-
+            var ciphertextAndTag = ArrayPool<byte>.Shared.Rent(packetSize + TagSize);
             try
             {
-                _aesGcm!.Decrypt(_nonce, body, tag, body, lengthBuf);
+                await ReadExactAsync(stream, ciphertextAndTag, packetSize + TagSize, cancellationToken).ConfigureAwait(false);
+
+                var body = ciphertextAndTag.AsSpan(0, packetSize);
+                var tag = ciphertextAndTag.AsSpan(packetSize, TagSize);
+
+                // Need the length bytes for AAD
+                var aad = new byte[4];
+                ByteWriter.WriteUint(aad.AsSpan(0), (uint)packetSize);
+
+                try
+                {
+                    _aesGcm!.Decrypt(_nonce, body, tag, body, aad);
+                }
+                catch (CryptographicException)
+                {
+                    throw new SshException("GCM authentication failed.");
+                }
+
+                IncrementNonce();
+
+                // Build SshPacket: [4 bytes seq_num][4 bytes packet_length][decrypted body]
+                var buffer = ArrayPool<byte>.Shared.Rent(4 + 4 + packetSize);
+                ByteWriter.WriteUint(buffer.AsSpan(0), packetSequenceNumber);
+                ByteWriter.WriteUint(buffer.AsSpan(4), (uint)packetSize);
+                body.CopyTo(buffer.AsSpan(8));
+
+                return new SshPacket(buffer, 4, 4 + packetSize, pooled: true);
             }
-            catch (CryptographicException)
+            finally
             {
-                throw new SshException("GCM authentication failed.");
+                ArrayPool<byte>.Shared.Return(ciphertextAndTag);
             }
-
-            IncrementNonce();
-
-            // Build SshPacket: [4 bytes seq_num][4 bytes packet_length][decrypted body]
-            var buffer = new byte[4 + 4 + packetSize];
-            ByteWriter.WriteUint(buffer.AsSpan(0), packetSequenceNumber);
-            lengthBuf.CopyTo(buffer.AsSpan(4));
-            body.CopyTo(buffer.AsSpan(8));
-
-            return new SshPacket(buffer, 4, 4 + packetSize);
         }
 
-        private static async Task ReadExactAsync(Stream stream, byte[] buffer, CancellationToken ct)
+        private static async Task ReadExactAsync(Stream stream, byte[] buffer, int count, CancellationToken ct)
         {
             var pos = 0;
-            while (pos < buffer.Length)
+            while (pos < count)
             {
-                var n = await stream.ReadAsync(buffer.AsMemory(pos, buffer.Length - pos), ct).ConfigureAwait(false);
+                var n = await stream.ReadAsync(buffer.AsMemory(pos, count - pos), ct).ConfigureAwait(false);
                 if (n == 0)
                 {
                     throw new SshException("Connection closed.");

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,53 +44,54 @@ namespace Surfus.Shell.Crypto
         )
         {
             var blockSize = CipherBlockSize;
-            var expectedPacketSize = 768; // We're going to initialize the buffer to the average expected packet length. Unencrypted size will be higher due to BigIntegers in initial key exchange!
-            var buffer = new byte[4 + blockSize + expectedPacketSize + hmacSize]; // Array Length: uint (packetSequenceNumber) + uint (packet size) + expectedPacketSize + hmac size
 
-            ByteWriter.WriteUint(buffer.AsSpan(0), packetSequenceNumber); // Write first uint, which is the packet sequence number.
-            var packetStart = 4; // This is where we actually start adding packet data, skipping the provided packet sequence number..
-            var bufferPosition = 4; // Tracks where we last wrote data into our buffer.
-
-            // Read enough data until we have at least 1 block.
-            while (bufferPosition != blockSize + packetStart)
+            // Read the first block to get the packet length.
+            var firstBlock = ArrayPool<byte>.Shared.Rent(blockSize);
+            uint sshPacketSize;
+            try
             {
-                var bytesRead = await stream.ReadAsync(
-                    buffer.AsMemory(bufferPosition, blockSize + packetStart - bufferPosition),
-                    cancellationToken
-                );
-                if (bytesRead == 0)
+                var pos = 0;
+                while (pos < blockSize)
                 {
-                    throw new SshException("Connection closed.");
+                    var bytesRead = await stream.ReadAsync(firstBlock.AsMemory(pos, blockSize - pos), cancellationToken);
+                    if (bytesRead == 0)
+                    {
+                        throw new SshException("Connection closed.");
+                    }
+                    pos += bytesRead;
                 }
-                bufferPosition += bytesRead;
-            }
+                sshPacketSize = ByteReader.ReadUInt32(firstBlock.AsSpan(0));
 
-            var sshPacketSize = ByteReader.ReadUInt32(buffer.AsSpan(4)); // Get the length of the packet.
-            if (sshPacketSize > 35000)
-            {
-                throw new SshException("Invalid message sent, packet was to large!");
-            }
-            int bufferLength = (int)(4 + 4 + sshPacketSize + hmacSize); // Calculate the full size of what our buffer *should* be.
-
-            if (buffer.Length < bufferLength) // Check to see if we need a bigger buffer and should allocate additional data.
-            {
-                Array.Resize(ref buffer, bufferLength); // Array Length: uint (packetSequenceNumber) + uint (packet size) + packet + hmac size
-            }
-
-            while (bufferPosition != bufferLength) // Read the rest of the data from the buffer. This loop may not even run if we've already read everything..
-            {
-                var bytesRead = await stream.ReadAsync(
-                    buffer.AsMemory(bufferPosition, bufferLength - bufferPosition),
-                    cancellationToken
-                );
-                if (bytesRead == 0)
+                if (sshPacketSize > 35000)
                 {
-                    throw new SshException("Connection closed.");
+                    throw new SshException("Invalid message sent, packet was too large!");
                 }
-                bufferPosition += bytesRead;
-            }
 
-            return new SshPacket(buffer, 4, bufferLength - 4 - hmacSize);
+                int bufferLength = (int)(4 + 4 + sshPacketSize + hmacSize);
+                var buffer = ArrayPool<byte>.Shared.Rent(bufferLength);
+
+                ByteWriter.WriteUint(buffer.AsSpan(0), packetSequenceNumber);
+                // Copy the full first block (length + start of body) into the buffer.
+                firstBlock.AsSpan(0, blockSize).CopyTo(buffer.AsSpan(4));
+                var bufferPosition = 4 + blockSize;
+
+                // Read the rest of the packet.
+                while (bufferPosition < bufferLength)
+                {
+                    var bytesRead = await stream.ReadAsync(buffer.AsMemory(bufferPosition, bufferLength - bufferPosition), cancellationToken);
+                    if (bytesRead == 0)
+                    {
+                        throw new SshException("Connection closed.");
+                    }
+                    bufferPosition += bytesRead;
+                }
+
+                return new SshPacket(buffer, 4, bufferLength - 4 - hmacSize, pooled: true);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(firstBlock);
+            }
         }
 
         /// <summary>

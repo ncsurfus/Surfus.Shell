@@ -20,8 +20,11 @@ namespace Surfus.Shell
 
         internal Func<IClientMessage, CancellationToken, Task>? OnSend { get; set; }
 
-        internal ValueTask DeliverAsync(MessageEvent message, CancellationToken cancellationToken = default) =>
-            _channel.Writer.WriteAsync(message, cancellationToken);
+        internal ValueTask DeliverAsync(MessageEvent message, CancellationToken cancellationToken = default)
+        {
+            message.Packet.Detach();
+            return _channel.Writer.WriteAsync(message, cancellationToken);
+        }
 
         internal void Complete(Exception? error = null) => _channel.Writer.TryComplete(error);
 
