@@ -14,18 +14,19 @@ namespace Surfus.Shell.Messages.Channel
         {
             RecipientChannel = packet.Reader.ReadUInt32();
             DataTypeCode = (DataType)packet.Reader.ReadUInt32();
-            Data = packet.Reader.ReadBinaryString();
+            DataArray = packet.Reader.ReadBinaryString();
         }
 
         public ChannelExtendedData(uint recipientChannel, uint dataTypeCode, ReadOnlyMemory<byte> data)
         {
             RecipientChannel = recipientChannel;
             DataTypeCode = (DataType)dataTypeCode;
-            Data = data;
+            DataArray = data.ToArray();
         }
 
         public DataType DataTypeCode { get; }
-        public ReadOnlyMemory<byte> Data { get; }
+        internal byte[] DataArray { get; }
+        public ReadOnlyMemory<byte> Data => DataArray;
 
         public uint RecipientChannel { get; }
 

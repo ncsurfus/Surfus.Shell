@@ -246,17 +246,17 @@ namespace Surfus.Shell
             switch (messageEvent.Message)
             {
                 case ChannelData data:
-                    Stdout.Push(data.Data.Span);
+                    Stdout.Push(data.DataArray);
                     break;
 
                 case ChannelExtendedData extData:
                     if (CombineStderr)
                     {
-                        Stdout.Push(extData.Data.Span);
+                        Stdout.Push(extData.DataArray);
                     }
                     else
                     {
-                        Stderr.Push(extData.Data.Span);
+                        Stderr.Push(extData.DataArray);
                     }
                     break;
 

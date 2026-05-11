@@ -7,16 +7,21 @@ namespace Surfus.Shell.Messages.Channel
         public ChannelData(SshPacket packet)
         {
             RecipientChannel = packet.Reader.ReadUInt32();
-            Data = packet.Reader.ReadBinaryString();
+            DataArray = packet.Reader.ReadBinaryString();
         }
 
         public ChannelData(uint recipientChannel, ReadOnlyMemory<byte> data)
         {
             RecipientChannel = recipientChannel;
-            Data = data;
+            DataArray = data.ToArray();
         }
 
-        public ReadOnlyMemory<byte> Data { get; }
+        /// <summary>
+        /// The raw data array. Use this to avoid an extra copy when pushing to ChannelStream.
+        /// </summary>
+        internal byte[] DataArray { get; }
+
+        public ReadOnlyMemory<byte> Data => DataArray;
 
         public uint RecipientChannel { get; }
 

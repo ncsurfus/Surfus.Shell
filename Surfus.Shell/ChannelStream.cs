@@ -64,6 +64,25 @@ namespace Surfus.Shell
         }
 
         /// <summary>
+        /// Pushes an already-owned byte array into the stream without copying.
+        /// The array is consumed by the stream and must not be reused by the caller.
+        /// </summary>
+        internal void Push(byte[] data)
+        {
+            if (data.Length == 0)
+            {
+                return;
+            }
+
+            if (Interlocked.Add(ref _bufferedBytes, data.Length) > MaxBufferSize)
+            {
+                throw new SshException("Channel received too much data.");
+            }
+
+            _channel.Writer.TryWrite(data);
+        }
+
+        /// <summary>
         /// Signals that no more data will be pushed.
         /// </summary>
         internal void Complete()
