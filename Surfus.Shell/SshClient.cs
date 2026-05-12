@@ -526,7 +526,7 @@ namespace Surfus.Shell
             await _writeSemaphore.WaitAsync(cancellationToken);
             try
             {
-                var sshPacket = new SshPacket(message.GetByteWriter(), Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8), ConnectionInfo.WriteMacAlgorithm.IsEtm);
+                var sshPacket = new SshPacket(message.GetByteWriter(), Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8), ConnectionInfo.WriteMacAlgorithm.IsEtm || ConnectionInfo.WriteCryptoAlgorithm.IsAead);
                 ByteWriter.WriteUint(sshPacket.Buffer.AsSpan(SshPacket.SequenceIndex), ConnectionInfo.OutboundPacketSequence);
 
                 byte[] macOutput;

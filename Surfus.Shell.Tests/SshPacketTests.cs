@@ -110,4 +110,37 @@ public class SshPacketTests
             Assert.Equal(0u, (packetSize + 4) % (uint)multiplier);
         }
     }
+
+    [Theory]
+    [InlineData(8)]
+    [InlineData(16)]
+    [InlineData(32)]
+    public void Constructor_ByteWriter_EtmPadding_BodyAlignedToBlockSize(int blockSize)
+    {
+        // For ETM/AEAD ciphers, the encrypted body (packet_length value = padding_length + payload + padding)
+        // must be aligned to the block size. The 4-byte packet_length field is NOT encrypted.
+        var writer = new ByteWriter(MessageType.SSH_MSG_SERVICE_REQUEST, 20);
+        writer.WriteAsciiString("ssh-userauth");
+
+        var packet = new SshPacket(writer, paddingMultiplier: blockSize, isEtm: true);
+        var packetSize = ByteReader.ReadUInt32(packet.Buffer.AsSpan(SshPacket.PacketSizeIndex));
+
+        // packetSize is the body length (1 byte padding_length + payload + padding).
+        // This must be a multiple of the block size for ETM/AEAD.
+        Assert.Equal(0u, packetSize % (uint)blockSize);
+    }
+
+    [Fact]
+    public void Constructor_ByteWriter_NonEtmPadding_TotalAlignedToBlockSize()
+    {
+        // For non-ETM ciphers, the entire encrypted content (4-byte length + body) must be aligned.
+        var writer = new ByteWriter(MessageType.SSH_MSG_SERVICE_REQUEST, 20);
+        writer.WriteAsciiString("ssh-userauth");
+
+        var packet = new SshPacket(writer, paddingMultiplier: 16, isEtm: false);
+        var packetSize = ByteReader.ReadUInt32(packet.Buffer.AsSpan(SshPacket.PacketSizeIndex));
+
+        // packetSize + 4 (the length field itself) must be a multiple of block size
+        Assert.Equal(0u, (packetSize + 4) % 16u);
+    }
 }
