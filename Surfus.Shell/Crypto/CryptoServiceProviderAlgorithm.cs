@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
@@ -120,7 +121,7 @@ namespace Surfus.Shell.Crypto
 
                 _decryptor.TransformBlock(firstBlock, 0, blockSize, firstBlock, 0);
 
-                var sshPacketSize = ByteReader.ReadUInt32(firstBlock.AsSpan(0));
+                var sshPacketSize = BinaryPrimitives.ReadUInt32BigEndian(firstBlock.AsSpan(0));
                 if (sshPacketSize > 35000)
                 {
                     throw new SshException("Invalid message sent, packet was too large!");
@@ -186,7 +187,7 @@ namespace Surfus.Shell.Crypto
                     }
                     lengthPos += bytesRead;
                 }
-                sshPacketSize = ByteReader.ReadUInt32(lengthBuf.AsSpan(0));
+                sshPacketSize = BinaryPrimitives.ReadUInt32BigEndian(lengthBuf.AsSpan(0));
             }
             finally
             {

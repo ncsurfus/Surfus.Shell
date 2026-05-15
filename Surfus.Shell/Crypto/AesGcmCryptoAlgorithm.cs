@@ -70,16 +70,16 @@ namespace Surfus.Shell.Crypto
             try
             {
                 await ReadExactAsync(stream, lengthBuf, 4, cancellationToken).ConfigureAwait(false);
-                packetSize = (int)ByteReader.ReadUInt32(lengthBuf.AsSpan(0));
+                var rawSize = BinaryPrimitives.ReadUInt32BigEndian(lengthBuf.AsSpan(0));
+                if (rawSize > 35000)
+                {
+                    throw new SshException("Invalid message sent, packet was too large!");
+                }
+                packetSize = (int)rawSize;
             }
             finally
             {
                 ArrayPool<byte>.Shared.Return(lengthBuf);
-            }
-
-            if (packetSize > 35000)
-            {
-                throw new SshException("Invalid message sent, packet was too large!");
             }
 
             var ciphertextAndTag = ArrayPool<byte>.Shared.Rent(packetSize + TagSize);

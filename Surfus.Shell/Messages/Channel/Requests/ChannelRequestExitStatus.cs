@@ -16,11 +16,12 @@ namespace Surfus.Shell.Messages.Channel.Requests
 
         public uint ExitStatus { get; }
 
-        public override ByteWriter GetByteWriter()
+        public override int GetPayloadSize() => base.GetPayloadSize() + 4;
+
+        public override void WritePayload(ref SpanWriter writer)
         {
-            var writer = GetByteWriter(4);
-            writer.WriteUint(ExitStatus);
-            return writer;
+            base.WritePayload(ref writer);
+            writer.WriteUInt32(ExitStatus);
         }
     }
 }

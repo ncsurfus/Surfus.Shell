@@ -14,11 +14,11 @@ namespace Surfus.Shell.Messages.KeyExchange.Ecdh
         public MessageType Type => MessageType.SSH_MSG_KEX_Exchange_30;
         public byte MessageId => (byte)Type;
 
-        public ByteWriter GetByteWriter()
+        public int GetPayloadSize() => 4 + ClientPublicKey.Length;
+
+        public void WritePayload(ref SpanWriter writer)
         {
-            var writer = new ByteWriter(Type, ClientPublicKey.GetBinaryStringSize());
             writer.WriteBinaryString(ClientPublicKey);
-            return writer;
         }
     }
 }

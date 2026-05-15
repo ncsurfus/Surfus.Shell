@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
-using Surfus.Shell.Messages.Channel.Requests;
+using Surfus.Shell.MessageViews.Channel;
 
 namespace Surfus.Shell
 {
@@ -158,15 +158,16 @@ namespace Surfus.Shell
 
             while (true)
             {
-                var msg = await Inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
-                switch (msg.Message)
+                using var msg = await Inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
+                switch (msg.Type)
                 {
-                    case ChannelOpenConfirmation confirm:
+                    case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
+                        var confirm = new ChannelOpenConfirmationView(msg.Payload);
                         ServerId = confirm.SenderChannel;
                         Interlocked.Exchange(ref _sendWindow, confirm.InitialWindowSize);
                         _opened = true;
                         return;
-                    case ChannelOpenFailure:
+                    case MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE:
                         throw new SshException("Server refused to open channel.");
                 }
             }
@@ -212,7 +213,7 @@ namespace Surfus.Shell
                     throw new SshException("Channel closed.");
                 }
 
-                await Inbox.SendAsync(new ChannelData(ServerId, buffer.Slice(offset, claimed).ToArray()), cancellationToken).ConfigureAwait(false);
+                await Inbox.SendAsync(new ChannelData(ServerId, buffer.Slice(offset, claimed)), cancellationToken).ConfigureAwait(false);
                 offset += claimed;
             }
         }
@@ -230,68 +231,71 @@ namespace Surfus.Shell
             set => Inbox.OnSend = value;
         }
 
-        async ValueTask IMessageHandler.ProcessMessageAsync(MessageEvent messageEvent)
+        async ValueTask<bool> IMessageHandler.ProcessMessageAsync(MessageEvent messageEvent)
         {
-            if (messageEvent.Message is not IChannelRecipient r || r.RecipientChannel != ClientId)
-            {
-                return;
-            }
+            // All channel messages have recipient channel as the first 4 bytes of payload
+            var recipientChannel = new SpanReader(messageEvent.Payload).ReadUInt32();
+            if (recipientChannel != ClientId) return false;
 
             if (!_opened)
             {
                 await Inbox.DeliverAsync(messageEvent).ConfigureAwait(false);
-                return;
+                return true;
             }
 
-            switch (messageEvent.Message)
+            switch (messageEvent.Type)
             {
-                case ChannelData data:
-                    Stdout.Push(data.DataArray);
-                    break;
+                case MessageType.SSH_MSG_CHANNEL_DATA:
+                    Stdout.Push(messageEvent);
+                    return true;
 
-                case ChannelExtendedData extData:
-                    if (CombineStderr)
-                    {
-                        Stdout.Push(extData.DataArray);
-                    }
-                    else
-                    {
-                        Stderr.Push(extData.DataArray);
-                    }
-                    break;
+                case MessageType.SSH_MSG_CHANNEL_EXTENDED_DATA:
+                    (CombineStderr ? Stdout : Stderr).Push(messageEvent);
+                    return true;
 
-                case ChannelWindowAdjust adjust:
-                    var newWindow = Interlocked.Add(ref _sendWindow, adjust.BytesToAdd);
-                    if (newWindow > uint.MaxValue)
+                case MessageType.SSH_MSG_CHANNEL_WINDOW_ADJUST:
+                {
+                    var msg = new ChannelWindowAdjustView(messageEvent.Payload);
+                    long current, updated;
+                    do
                     {
-                        Interlocked.Exchange(ref _sendWindow, uint.MaxValue);
-                    }
+                        current = Interlocked.Read(ref _sendWindow);
+                        updated = Math.Min(current + msg.BytesToAdd, uint.MaxValue);
+                    } while (Interlocked.CompareExchange(ref _sendWindow, updated, current) != current);
                     _sendWindowSignal.Writer.TryWrite(true);
-                    break;
+                    return false;
+                }
 
-                case ChannelSuccess:
+                case MessageType.SSH_MSG_CHANNEL_SUCCESS:
                     DequeueRequest(true);
-                    break;
+                    return false;
 
-                case ChannelFailure:
+                case MessageType.SSH_MSG_CHANNEL_FAILURE:
                     DequeueRequest(false);
-                    break;
+                    return false;
 
-                case ChannelRequestExitStatus exitStatus:
-                    ExitCode = (int)exitStatus.ExitStatus;
-                    break;
+                case MessageType.SSH_MSG_CHANNEL_REQUEST:
+                {
+                    var req = new ChannelRequestView(messageEvent.Payload);
+                    if (req.RequestType.Is("exit-status"u8))
+                        ExitCode = (int)req.ExitStatus;
+                    return false;
+                }
 
-                case ChannelEof:
+                case MessageType.SSH_MSG_CHANNEL_EOF:
                     Stdout.Complete();
                     Stderr.Complete();
-                    break;
+                    return false;
 
-                case ChannelClose:
+                case MessageType.SSH_MSG_CHANNEL_CLOSE:
                     Interlocked.Exchange(ref _closed, 1);
                     Stdout.Complete();
                     Stderr.Complete();
                     _sendWindowSignal.Writer.TryComplete();
-                    break;
+                    return false;
+
+                default:
+                    return false;
             }
         }
 

@@ -23,11 +23,16 @@ namespace Surfus.Shell.Authentication
             CancellationToken cancellationToken
         )
         {
-            var message = (UaInfoRequest)messageEvent.Message!;
-            var responses = new string[message.PromptNumber];
-            for (var i = 0; i < responses.Length; i++)
+            var infoReq = new MessageViews.UserAuth.UserAuthInfoRequestView(messageEvent.Payload);
+            var count = (int)infoReq.PromptCount;
+            var prompts = new string[count];
+            var echo = new bool[count];
+            infoReq.ReadPrompts(prompts, echo);
+
+            var responses = new string[count];
+            for (var i = 0; i < count; i++)
             {
-                responses[i] = await _responseCallback(message.Prompt[i], cancellationToken).ConfigureAwait(false);
+                responses[i] = await _responseCallback(prompts[i], cancellationToken).ConfigureAwait(false);
             }
             return new UaInfoResponse((uint)responses.Length, responses);
         }

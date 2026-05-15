@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-
 namespace Surfus.Shell.Messages
 {
     internal record Disconnect : IClientMessage
@@ -52,18 +50,13 @@ namespace Surfus.Shell.Messages
         /// </summary>
         public byte MessageId => (byte)Type;
 
-        /// <summary>
-        /// Gets the unencrypted SSH packet bytes.
-        /// </summary>
-        /// <returns></returns>
-        public ByteWriter GetByteWriter()
+        public int GetPayloadSize() => 4 + Description.GetStringSize() + LanguageTag.GetStringSize();
+
+        public void WritePayload(ref SpanWriter writer)
         {
-            var writer = new ByteWriter(Type, 4 + Description.GetStringSize() + LanguageTag.GetStringSize());
-            writer.WriteUint(ReasonId);
+            writer.WriteUInt32(ReasonId);
             writer.WriteString(Description);
             writer.WriteString(LanguageTag);
-
-            return writer;
         }
     }
 }

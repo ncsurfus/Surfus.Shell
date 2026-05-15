@@ -1,11 +1,25 @@
 ﻿namespace Surfus.Shell.Messages
 {
-    public interface IClientMessage : IMessage
+    public interface IClientMessage
     {
         /// <summary>
-        /// Gets the unencrypted SSH packet bytes.
+        /// The type of SSH message this class represents.
         /// </summary>
-        /// <returns></returns>
-        ByteWriter GetByteWriter();
+        MessageType Type { get; }
+
+        /// <summary>
+        /// The byte identifier of the SSH message type.
+        /// </summary>
+        byte MessageId => (byte)Type;
+
+        /// <summary>
+        /// Returns the size in bytes of the payload (excluding the message type byte).
+        /// </summary>
+        int GetPayloadSize();
+
+        /// <summary>
+        /// Writes the payload (excluding the message type byte) into the provided writer.
+        /// </summary>
+        void WritePayload(ref SpanWriter writer);
     }
 }

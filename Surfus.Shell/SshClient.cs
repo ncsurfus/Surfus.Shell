@@ -4,14 +4,12 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Surfus.Shell.Authentication;
 using Surfus.Shell.Exceptions;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.Channel;
-using Surfus.Shell.Messages.UserAuth;
 
 [assembly: InternalsVisibleTo("Surfus.Shell.Tests")]
 
@@ -256,7 +254,7 @@ namespace Surfus.Shell
                 var keyExchangeTask = ConnectionInfo.KeyExchanger.HandleKeyExchangeAsync(cancellationToken);
                 await ConnectionInfo.KeyExchanger.Ready.ConfigureAwait(false);
 
-                // Start the read loop. When the loop exits for any reason,
+                // Start the read loop. When the loop exits for any reason, cancel and notify handlers.
                 async Task readLoop()
                 {
                     Exception? loopError = null;
@@ -481,7 +479,8 @@ namespace Surfus.Shell
 
             ConnectionInfo.InboundPacketSequence =
                 ConnectionInfo.InboundPacketSequence != uint.MaxValue ? ConnectionInfo.InboundPacketSequence + 1 : 0;
-            var messageEvent = new MessageEvent(sshPacket);
+
+            var messageEvent = new MessageEvent(sshPacket, sshPacket.PooledBuffer);
 
             // Key Exchange Messages
             switch (messageEvent.Type)
@@ -491,11 +490,16 @@ namespace Surfus.Shell
                     break;
             }
 
-            // Deliver to registered message handlers
+            // Deliver to registered message handlers. Short-circuit if a handler claims the message.
+            var claimed = false;
             var handlers = _messageHandlers;
             foreach (var handler in handlers)
             {
-                await handler.ProcessMessageAsync(messageEvent).ConfigureAwait(false);
+                claimed = await handler.ProcessMessageAsync(messageEvent).ConfigureAwait(false);
+                if (claimed)
+                {
+                    break;
+                }
             }
 
             // After delivering SSH_MSG_NEWKEYS, wait for the key exchanger
@@ -506,7 +510,11 @@ namespace Surfus.Shell
                 applyReadCrypto();
             }
 
-            sshPacket.Return();
+            // If nobody claimed the message, dispose it (returns buffer to pool).
+            if (!claimed)
+            {
+                messageEvent.Dispose();
+            }
         }
 
         /// <summary>
@@ -526,40 +534,47 @@ namespace Surfus.Shell
             await _writeSemaphore.WaitAsync(cancellationToken);
             try
             {
-                var sshPacket = new SshPacket(message.GetByteWriter(), Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8), ConnectionInfo.WriteMacAlgorithm.IsEtm || ConnectionInfo.WriteCryptoAlgorithm.IsAead);
-                ByteWriter.WriteUint(sshPacket.Buffer.AsSpan(SshPacket.SequenceIndex), ConnectionInfo.OutboundPacketSequence);
+                var blockSize = Math.Max(ConnectionInfo.WriteCryptoAlgorithm.CipherBlockSize, 8);
+                var isEtm = ConnectionInfo.WriteMacAlgorithm.IsEtm || ConnectionInfo.WriteCryptoAlgorithm.IsAead;
+                var sshPacket = SshPacket.Create(message, ConnectionInfo.OutboundPacketSequence, blockSize, isEtm);
 
-                byte[] macOutput;
-                if (ConnectionInfo.WriteMacAlgorithm.IsEtm)
+                try
                 {
-                    // ETM: encrypt body (not packet length), then MAC over seq + length + ciphertext
-                    ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset + 4, sshPacket.Length - 4);
-                    macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
+                    byte[]? macOutput = null;
+                    if (ConnectionInfo.WriteMacAlgorithm.IsEtm)
+                    {
+                        ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset + 4, sshPacket.Length - 4);
+                        macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
+                    }
+                    else if (ConnectionInfo.WriteCryptoAlgorithm.IsAead)
+                    {
+                        ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
+                    }
+                    else
+                    {
+                        macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
+                        ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
+                    }
+
+                    var writeLength = ConnectionInfo.WriteCryptoAlgorithm.IsAead
+                        ? sshPacket.Length + 16
+                        : sshPacket.Length;
+
+                    await _stream!.WriteAsync(sshPacket.Buffer.AsMemory(sshPacket.Offset, writeLength), cancellationToken).ConfigureAwait(false);
+
+                    if (macOutput != null && ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
+                    {
+                        await _stream.WriteAsync(macOutput.AsMemory(0, ConnectionInfo.WriteMacAlgorithm.OutputSize), cancellationToken).ConfigureAwait(false);
+                    }
+
+                    await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                    ConnectionInfo.OutboundPacketSequence =
+                        ConnectionInfo.OutboundPacketSequence != uint.MaxValue ? ConnectionInfo.OutboundPacketSequence + 1 : 0;
                 }
-                else
+                finally
                 {
-                    macOutput = ConnectionInfo.WriteMacAlgorithm.ComputeHash(ConnectionInfo.OutboundPacketSequence, sshPacket);
-                    ConnectionInfo.WriteCryptoAlgorithm.Encrypt(sshPacket.Buffer, sshPacket.Offset, sshPacket.Length);
+                    sshPacket.Return();
                 }
-
-                var writeLength = ConnectionInfo.WriteCryptoAlgorithm.IsAead
-                    ? sshPacket.Length + 16 // AEAD tag appended by Encrypt
-                    : sshPacket.Length;
-
-                await _stream!
-                    .WriteAsync(sshPacket.Buffer.AsMemory(sshPacket.Offset, writeLength), cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (ConnectionInfo.WriteMacAlgorithm.OutputSize != 0)
-                {
-                    await _stream
-                        .WriteAsync(macOutput.AsMemory(0, ConnectionInfo.WriteMacAlgorithm.OutputSize), cancellationToken)
-                        .ConfigureAwait(false);
-                }
-
-                await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-                ConnectionInfo.OutboundPacketSequence =
-                    ConnectionInfo.OutboundPacketSequence != uint.MaxValue ? ConnectionInfo.OutboundPacketSequence + 1 : 0;
             }
             finally
             {
@@ -578,9 +593,9 @@ namespace Surfus.Shell
             if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
             {
                 _sshClientState = State.Closed;
+                _closeCts.Cancel();
                 ConnectionInfo.Dispose();
                 _stream?.Dispose();
-                _writeSemaphore.Dispose();
             }
         }
 
@@ -625,12 +640,13 @@ namespace Surfus.Shell
             {
                 try
                 {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                     await WriteMessageAsync(
                             new Messages.Disconnect(
                                 Messages.Disconnect.DisconnectReason.SSH_DISCONNECT_BY_APPLICATION,
                                 "Client disconnecting"
                             ),
-                            CancellationToken.None
+                            cts.Token
                         )
                         .ConfigureAwait(false);
                 }
@@ -662,6 +678,7 @@ namespace Surfus.Shell
                 catch (Exception) { }
             }
             _closeCts.Dispose();
+            _writeSemaphore.Dispose();
         }
 
         /// <summary>

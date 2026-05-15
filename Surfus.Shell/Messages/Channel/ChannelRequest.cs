@@ -26,9 +26,13 @@ namespace Surfus.Shell.Messages.Channel
         public MessageType Type { get; } = MessageType.SSH_MSG_CHANNEL_REQUEST;
         public byte MessageId => (byte)Type;
 
-        public virtual ByteWriter GetByteWriter()
+        public virtual int GetPayloadSize() => 4 + RequestType.GetAsciiStringSize() + 1;
+
+        public virtual void WritePayload(ref SpanWriter writer)
         {
-            return GetByteWriter(0);
+            writer.WriteUInt32(RecipientChannel);
+            writer.WriteAsciiString(RequestType);
+            writer.WriteByte(WantReply ? (byte)1 : (byte)0);
         }
 
         public static ChannelRequest FromBuffer(SshPacket packet)
@@ -49,15 +53,6 @@ namespace Surfus.Shell.Messages.Channel
                 default:
                     return new ChannelRequest(packet, requestType, recipientChannel);
             }
-        }
-
-        protected ByteWriter GetByteWriter(int additionalSize)
-        {
-            var writer = new ByteWriter(Type, 4 + RequestType.GetAsciiStringSize() + 1 + additionalSize);
-            writer.WriteUint(RecipientChannel);
-            writer.WriteAsciiString(RequestType);
-            writer.WriteByte(WantReply ? (byte)1 : (byte)0);
-            return writer;
         }
     }
 }

@@ -16,13 +16,13 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellmanGroup
         public MessageType Type => MessageType.SSH_MSG_KEX_Exchange_34;
         public byte MessageId => (byte)Type;
 
-        public ByteWriter GetByteWriter()
+        public int GetPayloadSize() => 12;
+
+        public void WritePayload(ref SpanWriter writer)
         {
-            var writer = new ByteWriter(Type, 12);
-            writer.WriteUint(Min);
-            writer.WriteUint(N);
-            writer.WriteUint(Max);
-            return writer;
+            writer.WriteUInt32(Min);
+            writer.WriteUInt32(N);
+            writer.WriteUInt32(Max);
         }
     }
 }

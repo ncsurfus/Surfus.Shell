@@ -19,12 +19,13 @@ namespace Surfus.Shell.Messages.Channel.Open
         public string OriginatorAddress { get; }
         public uint OriginatorPort { get; }
 
-        public override ByteWriter GetByteWriter()
+        public override int GetPayloadSize() => base.GetPayloadSize() + OriginatorAddress.GetStringSize() + 4;
+
+        public override void WritePayload(ref SpanWriter writer)
         {
-            var writer = GetByteWriter(OriginatorAddress.GetStringSize() + 4);
+            base.WritePayload(ref writer);
             writer.WriteString(OriginatorAddress);
-            writer.WriteUint(OriginatorPort);
-            return writer;
+            writer.WriteUInt32(OriginatorPort);
         }
     }
 }

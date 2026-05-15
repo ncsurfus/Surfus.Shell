@@ -59,6 +59,7 @@ namespace Surfus.Shell
                 {
                     _initialKexComplete.TrySetException(ex);
                     _ready.TrySetException(ex);
+                    _inbox.OnError(ex);
                 }
             }
         }
@@ -95,7 +96,7 @@ namespace Surfus.Shell
                     _connectionInfo.SessionIdentifier = sessionIdentifier.ToArray();
                 }
 
-                await _inbox.ReadAsync(MessageType.SSH_MSG_NEWKEYS, cancellationToken).ConfigureAwait(false);
+                (await _inbox.ReadAsync(MessageType.SSH_MSG_NEWKEYS, cancellationToken).ConfigureAwait(false)).Dispose();
 
                 // Send NewKeys with OLD crypto, then apply new write crypto
                 await _inbox.SendAsync(new NewKeys(), cancellationToken).ConfigureAwait(false);
@@ -120,7 +121,12 @@ namespace Surfus.Shell
 
         private async Task<KexInit> ReadKexInitAsync(CancellationToken cancellationToken)
         {
-            return await _inbox.ReadAsync<KexInit>(cancellationToken).ConfigureAwait(false);
+            using var msg = await _inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
+            if (msg.Type != MessageType.SSH_MSG_KEXINIT)
+            {
+                throw new Exceptions.SshException($"Expected SSH_MSG_KEXINIT but received {msg.Type}.");
+            }
+            return new KexInit(msg.Packet);
         }
 
         private void ApplyWriteCrypto(
@@ -212,13 +218,15 @@ namespace Surfus.Shell
             set => _inbox.OnSend = value;
         }
 
-        public async ValueTask ProcessMessageAsync(MessageEvent messageEvent)
+        public async ValueTask<bool> ProcessMessageAsync(MessageEvent messageEvent)
         {
             var id = (int)messageEvent.Type;
             if (id >= 20 && id <= 49)
             {
                 await _inbox.DeliverAsync(messageEvent).ConfigureAwait(false);
+                return true; // claimed — inbox consumer will dispose
             }
+            return false;
         }
 
         public void OnError(Exception error) => _inbox.OnError(error);

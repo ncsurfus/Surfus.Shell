@@ -25,14 +25,15 @@
         public string OriginatorAddress { get; }
         public uint OriginatorPort { get; }
 
-        public override ByteWriter GetByteWriter()
+        public override int GetPayloadSize() => base.GetPayloadSize() + Host.GetStringSize() + 4 + OriginatorAddress.GetStringSize() + 4;
+
+        public override void WritePayload(ref SpanWriter writer)
         {
-            var writer = GetByteWriter(Host.GetStringSize() + 4 + OriginatorAddress.GetStringSize() + 4);
+            base.WritePayload(ref writer);
             writer.WriteString(Host);
-            writer.WriteUint(Port);
+            writer.WriteUInt32(Port);
             writer.WriteString(OriginatorAddress);
-            writer.WriteUint(OriginatorPort);
-            return writer;
+            writer.WriteUInt32(OriginatorPort);
         }
     }
 }

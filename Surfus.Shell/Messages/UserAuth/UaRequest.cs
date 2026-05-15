@@ -52,7 +52,7 @@ namespace Surfus.Shell.Messages.UserAuth
         public MessageType Type { get; } = MessageType.SSH_MSG_USERAUTH_REQUEST;
         public byte MessageId => (byte)Type;
 
-        public ByteWriter GetByteWriter()
+        public int GetPayloadSize()
         {
             var size = Username.GetStringSize() + ServiceName.GetAsciiStringSize() + MethodName.GetAsciiStringSize();
             if (MethodName == "password")
@@ -71,8 +71,11 @@ namespace Surfus.Shell.Messages.UserAuth
                     size += Signature.GetBinaryStringSize();
                 }
             }
+            return size;
+        }
 
-            var writer = new ByteWriter(Type, size);
+        public void WritePayload(ref SpanWriter writer)
+        {
             writer.WriteString(Username);
             writer.WriteAsciiString(ServiceName);
             writer.WriteAsciiString(MethodName);
@@ -96,8 +99,6 @@ namespace Surfus.Shell.Messages.UserAuth
                     writer.WriteBinaryString(Signature);
                 }
             }
-
-            return writer;
         }
     }
-};
+}

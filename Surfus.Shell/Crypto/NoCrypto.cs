@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -60,7 +61,7 @@ namespace Surfus.Shell.Crypto
                     }
                     pos += bytesRead;
                 }
-                sshPacketSize = ByteReader.ReadUInt32(firstBlock.AsSpan(0));
+                sshPacketSize = BinaryPrimitives.ReadUInt32BigEndian(firstBlock.AsSpan(0));
 
                 if (sshPacketSize > 35000)
                 {

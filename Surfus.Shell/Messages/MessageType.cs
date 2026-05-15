@@ -1,6 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
-
-namespace Surfus.Shell.Messages
+﻿namespace Surfus.Shell.Messages
 {
     /// <summary>
     /// SSH Message Types
@@ -45,11 +43,6 @@ namespace Surfus.Shell.Messages
         /// <summary>
         /// New Keys Message. After this message is sent both parties will switchover to the new crypto as determiend
         /// </summary>
-        [SuppressMessage(
-            "StyleCop.CSharp.DocumentationRules",
-            "SA1650:ElementDocumentationMustBeSpelledCorrectly",
-            Justification = "Reviewed. Suppression is OK here."
-        )]
         SSH_MSG_NEWKEYS = 21,
 
         /// <summary>

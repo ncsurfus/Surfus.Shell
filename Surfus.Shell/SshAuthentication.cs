@@ -60,7 +60,7 @@ namespace Surfus.Shell
             }
 
             await _inbox.SendAsync(new Messages.ServiceRequest("ssh-userauth"), cancellationToken).ConfigureAwait(false);
-            var msg = await ReadAuthMessageAsync(cancellationToken).ConfigureAwait(false);
+            using var msg = await ReadAuthMessageAsync(cancellationToken).ConfigureAwait(false);
 
             if (msg.Type != MessageType.SSH_MSG_SERVICE_ACCEPT)
             {
@@ -77,7 +77,7 @@ namespace Surfus.Shell
 
             while (true)
             {
-                var msg = await ReadAuthMessageAsync(cancellationToken).ConfigureAwait(false);
+                using var msg = await ReadAuthMessageAsync(cancellationToken).ConfigureAwait(false);
 
                 switch (msg.Type)
                 {
@@ -115,14 +115,18 @@ namespace Surfus.Shell
 
                 if (msg.Type == MessageType.SSH_MSG_USERAUTH_BANNER)
                 {
-                    OnBanner?.Invoke((msg.Message as UaBanner)?.Message);
+                    var banner = new MessageViews.UserAuth.UserAuthBannerView(msg.Payload);
+                    OnBanner?.Invoke(banner.Message.ToString());
+                    msg.Dispose();
                     continue;
                 }
 
                 if (msg.Type == MessageType.SSH_MSG_DISCONNECT)
                 {
-                    var disconnect = (Disconnect)msg.Message!;
-                    throw new SshDisconnectException(disconnect.Reason);
+                    var reader = new SpanReader(msg.Payload);
+                    var reason = (Disconnect.DisconnectReason)reader.ReadUInt32();
+                    msg.Dispose();
+                    throw new SshDisconnectException(reason);
                 }
 
                 return msg;
@@ -134,15 +138,16 @@ namespace Surfus.Shell
             set => _inbox.OnSend = value;
         }
 
-        public ValueTask ProcessMessageAsync(MessageEvent messageEvent)
+        public async ValueTask<bool> ProcessMessageAsync(MessageEvent messageEvent)
         {
             var id = (int)messageEvent.Type;
             // Only deliver service accept (6), disconnect (1), and auth-range messages (50-79)
             if (id == 6 || id == 1 || (id >= 50 && id <= 79))
             {
-                return _inbox.DeliverAsync(messageEvent);
+                await _inbox.DeliverAsync(messageEvent).ConfigureAwait(false);
+                return true; // claimed — inbox consumer will dispose
             }
-            return ValueTask.CompletedTask;
+            return false;
         }
 
         public void OnError(Exception error) => _inbox.OnError(error);

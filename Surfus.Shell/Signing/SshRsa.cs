@@ -7,8 +7,9 @@ namespace Surfus.Shell.Signing
     {
         internal SshRsa(ReadOnlyMemory<byte> publicCertificate)
         {
-            var reader = new ByteReader(publicCertificate);
-            if (Name != reader.ReadString())
+            var reader = new SpanReader(publicCertificate.Span);
+            var keyType = reader.ReadSshAsciiString();
+            if (!keyType.Is("ssh-rsa"u8))
             {
                 throw new Exception($"Expected {Name} signature type");
             }
@@ -17,7 +18,6 @@ namespace Surfus.Shell.Signing
             var modulus = reader.ReadRsaParameter();
 
             RsaParameters = new RSAParameters { Exponent = exponent, Modulus = modulus };
-
             KeySize = modulus.Length * 8;
         }
 
@@ -27,17 +27,18 @@ namespace Surfus.Shell.Signing
 
         public override bool VerifySignature(ReadOnlySpan<byte> data, ReadOnlySpan<byte> signature)
         {
-            using (var rsaService = RSA.Create())
-            {
-                var reader = new ByteReader(signature.ToArray());
-                rsaService.ImportParameters(RsaParameters);
-                if (Name != reader.ReadString())
-                {
-                    throw new Exception($"Expected {Name} signature type");
-                }
+            using var rsaService = RSA.Create();
+            rsaService.ImportParameters(RsaParameters);
 
-                return rsaService.VerifyData(data, reader.ReadBinaryString(), HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
+            var reader = new SpanReader(signature);
+            var sigType = reader.ReadSshAsciiString();
+            if (!sigType.Is("ssh-rsa"u8))
+            {
+                throw new Exception($"Expected {Name} signature type");
             }
+
+            var sigData = reader.ReadBinaryString();
+            return rsaService.VerifyData(data, sigData, HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1);
         }
     }
 }

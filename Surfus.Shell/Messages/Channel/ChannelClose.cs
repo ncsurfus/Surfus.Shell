@@ -2,11 +2,6 @@ namespace Surfus.Shell.Messages.Channel
 {
     internal record ChannelClose : IClientMessage, IChannelRecipient
     {
-        public ChannelClose(SshPacket packet)
-        {
-            RecipientChannel = packet.Reader.ReadUInt32();
-        }
-
         public ChannelClose(uint recipientChannel)
         {
             RecipientChannel = recipientChannel;
@@ -17,11 +12,11 @@ namespace Surfus.Shell.Messages.Channel
         public MessageType Type { get; } = MessageType.SSH_MSG_CHANNEL_CLOSE;
         public byte MessageId => (byte)Type;
 
-        public ByteWriter GetByteWriter()
+        public int GetPayloadSize() => 4;
+
+        public void WritePayload(ref SpanWriter writer)
         {
-            var writer = new ByteWriter(Type, 4);
-            writer.WriteUint(RecipientChannel);
-            return writer;
+            writer.WriteUInt32(RecipientChannel);
         }
     }
 }

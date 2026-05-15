@@ -22,14 +22,15 @@ namespace Surfus.Shell.Messages.Channel.Requests
         public uint TerminalWidthPixels { get; }
         public uint TerminalHeightPixels { get; }
 
-        public override ByteWriter GetByteWriter()
+        public override int GetPayloadSize() => base.GetPayloadSize() + 16;
+
+        public override void WritePayload(ref SpanWriter writer)
         {
-            var writer = GetByteWriter(16);
-            writer.WriteUint(TerminalWidthCharacters);
-            writer.WriteUint(TerminalHeightRows);
-            writer.WriteUint(TerminalWidthPixels);
-            writer.WriteUint(TerminalHeightPixels);
-            return writer;
+            base.WritePayload(ref writer);
+            writer.WriteUInt32(TerminalWidthCharacters);
+            writer.WriteUInt32(TerminalHeightRows);
+            writer.WriteUInt32(TerminalWidthPixels);
+            writer.WriteUInt32(TerminalHeightPixels);
         }
     }
 }

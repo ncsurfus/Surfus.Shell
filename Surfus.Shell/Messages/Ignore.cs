@@ -17,11 +17,11 @@ namespace Surfus.Shell.Messages
         public MessageType Type { get; } = MessageType.SSH_MSG_IGNORE;
         public byte MessageId => (byte)Type;
 
-        public ByteWriter GetByteWriter()
+        public int GetPayloadSize() => Data.GetStringSize();
+
+        public void WritePayload(ref SpanWriter writer)
         {
-            var writer = new ByteWriter(Type, Data.GetStringSize());
             writer.WriteString(Data);
-            return writer;
         }
     }
 }

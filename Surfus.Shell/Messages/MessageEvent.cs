@@ -1,34 +1,28 @@
-﻿using Surfus.Shell.Messages.Channel;
-using Surfus.Shell.Messages.KeyExchange;
-using Surfus.Shell.Messages.UserAuth;
+﻿using System;
+using System.Buffers;
+using System.Threading;
 
 namespace Surfus.Shell.Messages
 {
     /// <summary>
-    /// Holds the buffer containing the message and provides support to cast the message into the appropriate IMessage.
+    /// Holds the packet buffer and message type. Implements IDisposable to return the buffer to the pool.
+    /// The consumer that claims this message is responsible for disposing it.
+    /// If unclaimed, the read loop disposes it.
     /// </summary>
-    public class MessageEvent
+    public sealed class MessageEvent : IDisposable
     {
-        /// <summary>
-        /// Caches the message for property Message.
-        /// </summary>
-        private volatile IMessage? _message;
+        private byte[]? _pooledBuffer;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="MessageEvent"/> class.
-        /// </summary>
-        /// <param name="packet">
-        /// The packet containing the message data.
-        /// </param>
-        public MessageEvent(SshPacket packet)
+        internal MessageEvent(SshPacket packet, byte[]? pooledBuffer = null)
         {
             Packet = packet;
+            _pooledBuffer = pooledBuffer;
             TypeId = packet.Reader.ReadByte();
             Type = (MessageType)TypeId;
         }
 
         /// <summary>
-        /// Gets the raw buffer of the message.
+        /// Gets the raw packet.
         /// </summary>
         public SshPacket Packet { get; }
 
@@ -43,64 +37,27 @@ namespace Surfus.Shell.Messages
         public MessageType Type { get; }
 
         /// <summary>
-        /// Gets the IMessage from the buffer.
+        /// Gets the raw payload bytes after the message type byte as a Span.
+        /// Only valid while this MessageEvent has not been disposed.
         /// </summary>
-        public IMessage? Message
+        public ReadOnlySpan<byte> Payload
         {
             get
             {
-                if (_message != null)
-                {
-                    return _message;
-                }
+                var bytes = Packet.Reader.Bytes;
+                return bytes.Span.Slice(Packet.Reader.Position);
+            }
+        }
 
-                switch (Type)
-                {
-                    case MessageType.SSH_MSG_KEXINIT:
-                        return _message = new KexInit(Packet);
-                    case MessageType.SSH_MSG_NEWKEYS:
-                        return _message = new NewKeys();
-                    case MessageType.SSH_MSG_IGNORE:
-                        return _message = new Ignore(Packet);
-                    case MessageType.SSH_MSG_UNIMPLEMENTED:
-                        return _message = new Unimplemented(Packet);
-                    case MessageType.SSH_MSG_DISCONNECT:
-                        return _message = new Disconnect(Packet);
-                    case MessageType.SSH_MSG_SERVICE_ACCEPT:
-                        return _message = new ServiceAccept(Packet);
-                    case MessageType.SSH_MSG_USERAUTH_INFO_REQUEST:
-                        return _message = new UaInfoRequest(Packet);
-                    case MessageType.SSH_MSG_USERAUTH_FAILURE:
-                        return _message = new UaFailure();
-                    case MessageType.SSH_MSG_USERAUTH_SUCCESS:
-                        return _message = new UaSuccess();
-                    case MessageType.SSH_MSG_USERAUTH_BANNER:
-                        return _message = new UaBanner(Packet);
-                    case MessageType.SSH_MSG_CHANNEL_OPEN:
-                        return _message = ChannelOpen.FromBuffer(Packet);
-                    case MessageType.SSH_MSG_CHANNEL_CLOSE:
-                        return _message = new ChannelClose(Packet);
-                    case MessageType.SSH_MSG_CHANNEL_EOF:
-                        return _message = new ChannelEof(Packet);
-                    case MessageType.SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
-                        return _message = new ChannelOpenConfirmation(Packet);
-                    case MessageType.SSH_MSG_CHANNEL_OPEN_FAILURE:
-                        return _message = new ChannelOpenFailure(Packet);
-                    case MessageType.SSH_MSG_CHANNEL_REQUEST:
-                        return _message = ChannelRequest.FromBuffer(Packet);
-                    case MessageType.SSH_MSG_CHANNEL_DATA:
-                        return _message = new ChannelData(Packet);
-                    case MessageType.SSH_MSG_CHANNEL_EXTENDED_DATA:
-                        return _message = new ChannelExtendedData(Packet);
-                    case MessageType.SSH_MSG_CHANNEL_SUCCESS:
-                        return _message = new ChannelSuccess(Packet);
-                    case MessageType.SSH_MSG_CHANNEL_FAILURE:
-                        return _message = new ChannelFailure(Packet);
-                    case MessageType.SSH_MSG_CHANNEL_WINDOW_ADJUST:
-                        return _message = new ChannelWindowAdjust(Packet);
-                    default:
-                        return _message;
-                }
+        /// <summary>
+        /// Returns the packet buffer to the pool. Safe to call multiple times.
+        /// </summary>
+        public void Dispose()
+        {
+            var buf = Interlocked.Exchange(ref _pooledBuffer, null);
+            if (buf != null)
+            {
+                ArrayPool<byte>.Shared.Return(buf);
             }
         }
     }

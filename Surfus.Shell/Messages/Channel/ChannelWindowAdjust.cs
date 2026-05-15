@@ -2,12 +2,6 @@ namespace Surfus.Shell.Messages.Channel
 {
     internal record ChannelWindowAdjust : IClientMessage, IChannelRecipient
     {
-        public ChannelWindowAdjust(SshPacket packet)
-        {
-            RecipientChannel = packet.Reader.ReadUInt32();
-            BytesToAdd = packet.Reader.ReadUInt32();
-        }
-
         public ChannelWindowAdjust(uint recipientChannel, uint bytesToAdd)
         {
             RecipientChannel = recipientChannel;
@@ -21,12 +15,12 @@ namespace Surfus.Shell.Messages.Channel
         public MessageType Type { get; } = MessageType.SSH_MSG_CHANNEL_WINDOW_ADJUST;
         public byte MessageId => (byte)Type;
 
-        public ByteWriter GetByteWriter()
+        public int GetPayloadSize() => 8;
+
+        public void WritePayload(ref SpanWriter writer)
         {
-            var writer = new ByteWriter(Type, 8);
-            writer.WriteUint(RecipientChannel);
-            writer.WriteUint(BytesToAdd);
-            return writer;
+            writer.WriteUInt32(RecipientChannel);
+            writer.WriteUInt32(BytesToAdd);
         }
     }
 }

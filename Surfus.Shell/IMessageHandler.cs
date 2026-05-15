@@ -8,7 +8,13 @@ namespace Surfus.Shell
     public interface IMessageHandler
     {
         Func<IClientMessage, CancellationToken, Task> OnSend { set; }
-        ValueTask ProcessMessageAsync(MessageEvent messageEvent);
+
+        /// <summary>
+        /// Processes a message. Returns true if this handler claims ownership of the message's
+        /// buffer (via the lease). When claimed, no further handlers are called and the handler
+        /// is responsible for disposing the lease.
+        /// </summary>
+        ValueTask<bool> ProcessMessageAsync(MessageEvent messageEvent);
         void OnError(Exception error);
     }
 }

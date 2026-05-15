@@ -1,5 +1,3 @@
-using Surfus.Shell.Messages.Channel.Open;
-
 namespace Surfus.Shell.Messages.Channel
 {
     public record ChannelOpen : IClientMessage
@@ -27,38 +25,14 @@ namespace Surfus.Shell.Messages.Channel
         public MessageType Type { get; } = MessageType.SSH_MSG_CHANNEL_OPEN;
         public byte MessageId => (byte)Type;
 
-        public virtual ByteWriter GetByteWriter()
-        {
-            return GetByteWriter(0);
-        }
+        public virtual int GetPayloadSize() => ChannelType.GetAsciiStringSize() + 12;
 
-        public static ChannelOpen FromBuffer(SshPacket packet)
+        public virtual void WritePayload(ref SpanWriter writer)
         {
-            var channelType = packet.Reader.ReadAsciiString();
-
-            switch (channelType)
-            {
-                case "session":
-                    return new ChannelOpenSession(packet);
-                case "x11":
-                    return new ChannelOpenX11(packet);
-                case "forwarded-tcpip":
-                    return new ChannelOpenForwardedTcpIp(packet);
-                case "direct-tcpip":
-                    return new ChannelOpenDirectTcpIp(packet);
-                default:
-                    return new ChannelOpen(packet, channelType);
-            }
-        }
-
-        protected ByteWriter GetByteWriter(int additionalSize)
-        {
-            var writer = new ByteWriter(Type, 12 + ChannelType.GetAsciiStringSize() + additionalSize);
             writer.WriteAsciiString(ChannelType);
-            writer.WriteUint(SenderChannel);
-            writer.WriteUint(InitialWindowSize);
-            writer.WriteUint(MaximumPacketSize);
-            return writer;
+            writer.WriteUInt32(SenderChannel);
+            writer.WriteUInt32(InitialWindowSize);
+            writer.WriteUInt32(MaximumPacketSize);
         }
     }
 }

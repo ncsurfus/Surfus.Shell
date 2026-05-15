@@ -8,7 +8,12 @@ namespace Surfus.Shell.Messages
         public MessageType Type { get; } = MessageType.SSH_MSG_NEWKEYS;
         public byte MessageId => (byte)Type;
 
-        public ByteWriter GetByteWriter()
+        public int GetPayloadSize()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void WritePayload(ref SpanWriter writer)
         {
             throw new NotImplementedException();
         }

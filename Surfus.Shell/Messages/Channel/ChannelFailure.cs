@@ -2,11 +2,6 @@ namespace Surfus.Shell.Messages.Channel
 {
     internal record ChannelFailure : IClientMessage, IChannelRecipient
     {
-        public ChannelFailure(SshPacket packet)
-        {
-            RecipientChannel = packet.Reader.ReadUInt32();
-        }
-
         public ChannelFailure(uint recipientChannel)
         {
             RecipientChannel = recipientChannel;
@@ -17,11 +12,11 @@ namespace Surfus.Shell.Messages.Channel
         public MessageType Type { get; } = MessageType.SSH_MSG_CHANNEL_FAILURE;
         public byte MessageId => (byte)Type;
 
-        public ByteWriter GetByteWriter()
+        public int GetPayloadSize() => 4;
+
+        public void WritePayload(ref SpanWriter writer)
         {
-            var writer = new ByteWriter(Type, 4);
-            writer.WriteUint(RecipientChannel);
-            return writer;
+            writer.WriteUInt32(RecipientChannel);
         }
     }
 }

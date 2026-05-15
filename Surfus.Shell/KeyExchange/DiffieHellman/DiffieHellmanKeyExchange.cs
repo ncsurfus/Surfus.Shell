@@ -111,43 +111,48 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
         public override async Task<KeyExchangeResult> ExchangeAsync(CancellationToken cancellationToken)
         {
             await _context.Inbox.SendAsync(new DhInit(E), cancellationToken).ConfigureAwait(false);
-            var dhReplyMessage = await _context
+            using var dhReplyMessage = await _context
                 .Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_31, cancellationToken)
                 .ConfigureAwait(false);
-            var reply = new DhReply(dhReplyMessage.Packet);
+            var reply = new MessageViews.KeyExchange.DhReplyView(dhReplyMessage.Payload);
+
+            // Copy fields that outlive this scope
+            var serverHostKey = reply.ServerPublicHostKeyAndCertificates.ToArray();
+            var hSignature = reply.HSignature.ToArray();
+            var f = new BigInt(reply.F);
 
             // Verify 'F' is in the range of [1, p-1]
-            if (reply.F.BigInteger < 1 || reply.F.BigInteger > P.BigInteger - 1)
+            if (f.BigInteger < 1 || f.BigInteger > P.BigInteger - 1)
             {
                 throw new SshException("Invalid 'F' from server!");
             }
 
             // Generate the shared secret 'K'
-            var k = new BigInt(BigInteger.ModPow(reply.F.BigInteger, X.BigInteger, P.BigInteger));
+            var k = new BigInt(BigInteger.ModPow(f.BigInteger, X.BigInteger, P.BigInteger));
 
             // Prepare the signing algorithm from the servers public key.
             var signingAlgorithm = _context.Algorithms.CreateSigner(
                 _kexInitExchangeResult.ServerHostKeyAlgorithm,
-                reply.ServerPublicHostKeyAndCertificates
+                serverHostKey
             );
 
-            _context.ServerCertificate = reply.ServerPublicHostKeyAndCertificates;
+            _context.ServerCertificate = serverHostKey;
             _context.ServerCertificateSize = signingAlgorithm.KeySize;
 
-            if (_context.HostKeyCallback != null && !await _context.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates, cancellationToken).ConfigureAwait(false))
+            if (_context.HostKeyCallback != null && !await _context.HostKeyCallback(serverHostKey, cancellationToken).ConfigureAwait(false))
             {
                 throw new SshException("Rejected Host Key.");
             }
 
-            // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.s
+            // Generate 'H', the computed hash.
             var totalBytes =
                 _context.ClientVersion.GetStringSize()
                 + _context.ServerVersion.GetStringSize()
                 + _kexInitExchangeResult.Client.GetKexInitBinaryStringSize()
                 + _kexInitExchangeResult.Server.GetKexInitBinaryStringSize()
-                + reply.ServerPublicHostKeyAndCertificates.GetBinaryStringSize()
+                + ((ReadOnlyMemory<byte>)serverHostKey).GetBinaryStringSize()
                 + E.GetBigIntegerSize()
-                + reply.F.GetBigIntegerSize()
+                + f.GetBigIntegerSize()
                 + k.GetBigIntegerSize();
 
             var byteWriter = new ByteWriter(totalBytes);
@@ -155,15 +160,15 @@ namespace Surfus.Shell.KeyExchange.DiffieHellman
             byteWriter.WriteString(_context.ServerVersion);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Client);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Server);
-            byteWriter.WriteBinaryString(reply.ServerPublicHostKeyAndCertificates);
+            byteWriter.WriteBinaryString((ReadOnlyMemory<byte>)serverHostKey);
             byteWriter.WriteBigInteger(E);
-            byteWriter.WriteBigInteger(reply.F);
+            byteWriter.WriteBigInteger(f);
             byteWriter.WriteBigInteger(k);
 
             var h = Hash(byteWriter.Bytes);
 
             // Use the signing algorithm to verify the data sent by the server is correct.
-            if (!signingAlgorithm.VerifySignature(h, reply.HSignature.Span))
+            if (!signingAlgorithm.VerifySignature(h, hSignature))
             {
                 throw new SshException("Invalid Host Signature.");
             }

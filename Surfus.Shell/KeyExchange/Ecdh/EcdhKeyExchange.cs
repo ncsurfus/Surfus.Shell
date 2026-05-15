@@ -53,11 +53,16 @@ namespace Surfus.Shell.KeyExchange.Ecdh
 
             await _context.Inbox.SendAsync(new EcdhInit(qC), cancellationToken).ConfigureAwait(false);
 
-            var replyMessage = await _context.Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_31, cancellationToken).ConfigureAwait(false);
-            var reply = new EcdhReply(replyMessage.Packet);
+            using var replyMessage = await _context.Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_31, cancellationToken).ConfigureAwait(false);
+            var reply = new MessageViews.KeyExchange.EcdhReplyView(replyMessage.Payload);
+
+            // Copy fields that outlive this scope
+            var serverHostKey = reply.ServerPublicHostKeyAndCertificates.ToArray();
+            var serverPublicKey = reply.ServerPublicKey.ToArray();
+            var hSignature = reply.HSignature.ToArray();
 
             // Parse server's public key (uncompressed point)
-            var qS = reply.ServerPublicKey.Span;
+            var qS = serverPublicKey.AsSpan();
             if (qS[0] != 0x04)
             {
                 throw new SshException("Server ECDH public key is not in uncompressed format.");
@@ -82,13 +87,13 @@ namespace Surfus.Shell.KeyExchange.Ecdh
 
             var signingAlgorithm = _context.Algorithms.CreateSigner(
                 _kexInitExchangeResult.ServerHostKeyAlgorithm,
-                reply.ServerPublicHostKeyAndCertificates
+                serverHostKey
             );
 
-            _context.ServerCertificate = reply.ServerPublicHostKeyAndCertificates;
+            _context.ServerCertificate = serverHostKey;
             _context.ServerCertificateSize = signingAlgorithm.KeySize;
 
-            if (_context.HostKeyCallback != null && !await _context.HostKeyCallback(reply.ServerPublicHostKeyAndCertificates, cancellationToken).ConfigureAwait(false))
+            if (_context.HostKeyCallback != null && !await _context.HostKeyCallback(serverHostKey, cancellationToken).ConfigureAwait(false))
             {
                 throw new SshException("Rejected Host Key.");
             }
@@ -100,9 +105,9 @@ namespace Surfus.Shell.KeyExchange.Ecdh
                 + _context.ServerVersion.GetStringSize()
                 + _kexInitExchangeResult.Client.GetKexInitBinaryStringSize()
                 + _kexInitExchangeResult.Server.GetKexInitBinaryStringSize()
-                + reply.ServerPublicHostKeyAndCertificates.GetBinaryStringSize()
+                + ((ReadOnlyMemory<byte>)serverHostKey).GetBinaryStringSize()
                 + qCMem.GetBinaryStringSize()
-                + reply.ServerPublicKey.GetBinaryStringSize()
+                + ((ReadOnlyMemory<byte>)serverPublicKey).GetBinaryStringSize()
                 + k.GetBigIntegerSize();
 
             var byteWriter = new ByteWriter(totalBytes);
@@ -110,9 +115,9 @@ namespace Surfus.Shell.KeyExchange.Ecdh
             byteWriter.WriteString(_context.ServerVersion);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Client);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Server);
-            byteWriter.WriteBinaryString(reply.ServerPublicHostKeyAndCertificates);
+            byteWriter.WriteBinaryString((ReadOnlyMemory<byte>)serverHostKey);
             byteWriter.WriteBinaryString(qCMem);
-            byteWriter.WriteBinaryString(reply.ServerPublicKey);
+            byteWriter.WriteBinaryString((ReadOnlyMemory<byte>)serverPublicKey);
             byteWriter.WriteBigInteger(k);
 
             byte[] h;
@@ -121,7 +126,7 @@ namespace Surfus.Shell.KeyExchange.Ecdh
                 h = hashAlg.ComputeHash(byteWriter.Bytes);
             }
 
-            if (!signingAlgorithm.VerifySignature(h, reply.HSignature.Span))
+            if (!signingAlgorithm.VerifySignature(h, hSignature))
             {
                 throw new SshException("Invalid Host Signature.");
             }

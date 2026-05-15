@@ -9,18 +9,19 @@ namespace Surfus.Shell.Messages.Channel.Requests
         }
 
         public ChannelRequestSubsystem(uint recipientChannel, bool wantReply, string subsystem)
-            : base(recipientChannel, "subsysem", wantReply)
+            : base(recipientChannel, "subsystem", wantReply)
         {
             Subsystem = subsystem;
         }
 
         public string Subsystem { get; }
 
-        public override ByteWriter GetByteWriter()
+        public override int GetPayloadSize() => base.GetPayloadSize() + Subsystem.GetStringSize();
+
+        public override void WritePayload(ref SpanWriter writer)
         {
-            var writer = GetByteWriter(Subsystem.GetStringSize());
+            base.WritePayload(ref writer);
             writer.WriteString(Subsystem);
-            return writer;
         }
     }
 }

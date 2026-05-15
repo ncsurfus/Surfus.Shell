@@ -9,19 +9,18 @@ public class MessageSerializationTests
     public void ServiceRequest_WritesCorrectMessageType()
     {
         var msg = new ServiceRequest("ssh-userauth");
-        var writer = msg.GetByteWriter();
-
-        Assert.Equal((byte)MessageType.SSH_MSG_SERVICE_REQUEST, writer.Bytes[SshPacket.DataIndex]);
+        Assert.Equal(MessageType.SSH_MSG_SERVICE_REQUEST, msg.Type);
     }
 
     [Fact]
     public void ServiceRequest_WritesServiceName()
     {
         var msg = new ServiceRequest("ssh-userauth");
-        var writer = msg.GetByteWriter();
+        var buffer = new byte[msg.GetPayloadSize()];
+        var writer = new SpanWriter(buffer);
+        msg.WritePayload(ref writer);
 
-        // Read back: skip to after message type byte
-        var reader = new ByteReader(((ReadOnlyMemory<byte>)writer.Bytes).Slice(SshPacket.DataIndex + 1));
+        var reader = new ByteReader((ReadOnlyMemory<byte>)buffer);
         Assert.Equal("ssh-userauth", reader.ReadString());
     }
 
@@ -29,10 +28,7 @@ public class MessageSerializationTests
     public void Ignore_RoundTrip()
     {
         var original = new Ignore("test data");
-        var writer = original.GetByteWriter();
-
-        // Build a read packet from the writer's buffer
-        var packet = MakeReadPacket(writer);
+        var packet = MakeReadPacket(original);
         var parsed = new Ignore(packet);
         Assert.Equal("test data", parsed.Data);
     }
@@ -41,9 +37,7 @@ public class MessageSerializationTests
     public void Disconnect_RoundTrip()
     {
         var original = new Disconnect(Disconnect.DisconnectReason.SSH_DISCONNECT_BY_APPLICATION, "goodbye", "en");
-        var writer = original.GetByteWriter();
-
-        var packet = MakeReadPacket(writer);
+        var packet = MakeReadPacket(original);
         var parsed = new Disconnect(packet);
         Assert.Equal(Disconnect.DisconnectReason.SSH_DISCONNECT_BY_APPLICATION, parsed.Reason);
         Assert.Equal("goodbye", parsed.Description);
@@ -54,9 +48,7 @@ public class MessageSerializationTests
     public void Disconnect_NullLanguageTag()
     {
         var original = new Disconnect(Disconnect.DisconnectReason.SSH_DISCONNECT_PROTOCOL_ERROR, "error");
-        var writer = original.GetByteWriter();
-
-        var packet = MakeReadPacket(writer);
+        var packet = MakeReadPacket(original);
         var parsed = new Disconnect(packet);
         Assert.Equal("error", parsed.Description);
         Assert.Equal(string.Empty, parsed.LanguageTag);
@@ -88,10 +80,15 @@ public class MessageSerializationTests
     public void MessageEvent_ParsesType()
     {
         var original = new Ignore("test");
-        var writer = original.GetByteWriter();
+        var payloadSize = original.GetPayloadSize();
+        // Build a full packet buffer: [0..3]=seq, [4..7]=packetSize, [8]=paddingLen, [9]=msgType, [10..]=payload
+        var buffer = new byte[10 + payloadSize + 255];
+        buffer[SshPacket.DataIndex] = original.MessageId;
+        var payloadSpan = buffer.AsSpan(SshPacket.DataIndex + 1);
+        var writer = new SpanWriter(payloadSpan);
+        original.WritePayload(ref writer);
 
-        // MessageEvent expects to read the type byte itself, so build packet at DataIndex
-        var packet = new SshPacket(writer.Bytes, packetStart: SshPacket.PacketSizeIndex, packetLength: writer.DataLength + 5);
+        var packet = new SshPacket(buffer, packetStart: SshPacket.PacketSizeIndex, packetLength: payloadSize + 1 + 5);
         var messageEvent = new MessageEvent(packet);
 
         Assert.Equal(MessageType.SSH_MSG_IGNORE, messageEvent.Type);
@@ -99,16 +96,19 @@ public class MessageSerializationTests
     }
 
     /// <summary>
-    /// Creates a read-oriented SshPacket from a ByteWriter, positioned after the message type byte.
-    /// This simulates how incoming packets are parsed: the MessageEvent reads the type byte,
-    /// then the message constructor reads the remaining fields.
+    /// Creates a read-oriented SshPacket from a message, positioned after the message type byte.
     /// </summary>
-    private static SshPacket MakeReadPacket(ByteWriter writer)
+    private static SshPacket MakeReadPacket(IClientMessage msg)
     {
-        // The writer buffer layout: [0..3]=seq, [4..7]=packetSize, [8]=paddingLen, [9]=msgType, [10..]=data
-        // For reading, we create a packet starting at PacketSizeIndex (4) so the reader starts at index 5 (after packet header)
-        // But we need the reader to start after the message type byte (index 10 = DataIndex + 1)
-        var packet = new SshPacket(writer.Bytes, packetStart: SshPacket.PacketSizeIndex, packetLength: writer.DataLength + 5);
+        var payloadSize = msg.GetPayloadSize();
+        // Layout: [0..3]=seq, [4..7]=packetSize, [8]=paddingLen, [9]=msgType, [10..]=payload, [padding up to 255]
+        var buffer = new byte[10 + payloadSize + 255];
+        buffer[SshPacket.DataIndex] = msg.MessageId;
+        var payloadSpan = buffer.AsSpan(SshPacket.DataIndex + 1, payloadSize);
+        var writer = new SpanWriter(payloadSpan);
+        msg.WritePayload(ref writer);
+
+        var packet = new SshPacket(buffer, packetStart: SshPacket.PacketSizeIndex, packetLength: payloadSize + 1 + 5);
         packet.Reader.ReadByte(); // consume message type byte
         return packet;
     }

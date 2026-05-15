@@ -9,13 +9,11 @@ namespace Surfus.Shell.Signing
             : base(publicCertificate) { }
 
         public override string Name { get; } = "ecdsa-sha2-nistp384";
-
         public override ECCurve Curve => ECCurve.NamedCurves.nistP384;
-
         public override string CurveName { get; } = "nistp384";
-
         public override HashAlgorithmName HashName => HashAlgorithmName.SHA384;
-
         public override int FieldSizeBytes => 48;
+        protected override ReadOnlySpan<byte> NameBytes => "ecdsa-sha2-nistp384"u8;
+        protected override ReadOnlySpan<byte> CurveNameBytes => "nistp384"u8;
     }
 }

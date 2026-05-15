@@ -1,3 +1,5 @@
+using System;
+
 namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
 {
     internal record DhInit : IClientMessage
@@ -12,11 +14,17 @@ namespace Surfus.Shell.Messages.KeyExchange.DiffieHellman
         public MessageType Type => MessageType.SSH_MSG_KEX_Exchange_30;
         public byte MessageId => (byte)Type;
 
-        public ByteWriter GetByteWriter()
+        public int GetPayloadSize() => 4 + E.Length;
+
+        public void WritePayload(ref SpanWriter writer)
         {
-            var writer = new ByteWriter(Type, E.GetBigIntegerSize());
-            writer.WriteBigInteger(E);
-            return writer;
+            writer.WriteUInt32((uint)E.Length);
+            var dest = writer.Remaining.Slice(0, E.Length);
+            if (!E.BigInteger.TryWriteBytes(dest, out _, isUnsigned: false, isBigEndian: true))
+            {
+                throw new Exceptions.SshException("Failed to write BigInteger.");
+            }
+            writer.WriteBytes(dest);
         }
     }
 }

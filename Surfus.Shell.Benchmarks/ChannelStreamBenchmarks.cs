@@ -1,8 +1,10 @@
 using System;
+using System.Buffers.Binary;
 using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Surfus.Shell;
+using Surfus.Shell.Messages;
 
 namespace Surfus.Shell.Benchmarks;
 
@@ -12,6 +14,18 @@ public class ChannelStreamBenchmarks
     private byte[] _1KB = null!;
     private byte[] _32KB = null!;
     private byte[] _100Bytes = null!;
+
+    private static MessageEvent CreateChannelData(byte[] data)
+    {
+        var totalLen = 4 + 4 + 1 + 1 + 4 + 4 + data.Length;
+        var buf = new byte[totalLen];
+        BinaryPrimitives.WriteUInt32BigEndian(buf.AsSpan(4), (uint)(1 + 1 + 4 + 4 + data.Length));
+        buf[8] = 0;
+        buf[9] = (byte)MessageType.SSH_MSG_CHANNEL_DATA;
+        BinaryPrimitives.WriteUInt32BigEndian(buf.AsSpan(14), (uint)data.Length);
+        data.CopyTo(buf, 18);
+        return new MessageEvent(new SshPacket(buf, packetStart: 4, packetLength: totalLen - 4));
+    }
 
     [GlobalSetup]
     public void Setup()
@@ -28,21 +42,21 @@ public class ChannelStreamBenchmarks
     public void Push_SmallPacket()
     {
         using var stream = new ChannelStream();
-        stream.Push(_1KB);
+        stream.Push(CreateChannelData(_1KB));
     }
 
     [Benchmark]
     public void Push_LargePacket()
     {
         using var stream = new ChannelStream();
-        stream.Push(_32KB);
+        stream.Push(CreateChannelData(_32KB));
     }
 
     [Benchmark]
     public async Task PushAndRead_SmallPacket()
     {
         using var stream = new ChannelStream();
-        stream.Push(_1KB);
+        stream.Push(CreateChannelData(_1KB));
         var buf = new byte[1024];
         await stream.ReadAsync(buf, 0, buf.Length, CancellationToken.None);
     }
@@ -51,7 +65,7 @@ public class ChannelStreamBenchmarks
     public async Task PushAndRead_LargePacket()
     {
         using var stream = new ChannelStream();
-        stream.Push(_32KB);
+        stream.Push(CreateChannelData(_32KB));
         var buf = new byte[32 * 1024];
         await stream.ReadAsync(buf, 0, buf.Length, CancellationToken.None);
     }
@@ -61,7 +75,7 @@ public class ChannelStreamBenchmarks
     {
         using var stream = new ChannelStream();
         for (int i = 0; i < 100; i++)
-            stream.Push(_100Bytes);
+            stream.Push(CreateChannelData(_100Bytes));
     }
 
     [Benchmark]
@@ -75,7 +89,7 @@ public class ChannelStreamBenchmarks
         {
             var chunk = _1KB;
             for (int i = 0; i < totalBytes / chunkSize; i++)
-                stream.Push(chunk);
+                stream.Push(CreateChannelData(chunk));
             stream.Complete();
         });
 

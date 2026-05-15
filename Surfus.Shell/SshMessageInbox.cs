@@ -20,11 +20,8 @@ namespace Surfus.Shell
 
         internal Func<IClientMessage, CancellationToken, Task>? OnSend { get; set; }
 
-        internal ValueTask DeliverAsync(MessageEvent message, CancellationToken cancellationToken = default)
-        {
-            message.Packet.Detach();
-            return _channel.Writer.WriteAsync(message, cancellationToken);
-        }
+        internal ValueTask DeliverAsync(MessageEvent message, CancellationToken cancellationToken = default) =>
+            _channel.Writer.WriteAsync(message, cancellationToken);
 
         internal void Complete(Exception? error = null) => _channel.Writer.TryComplete(error);
 
@@ -47,20 +44,10 @@ namespace Surfus.Shell
             var msg = await ReadAsync(cancellationToken).ConfigureAwait(false);
             if (msg.Type != expected)
             {
+                msg.Dispose();
                 throw new SshException($"Expected {expected} but received {msg.Type}.");
             }
             return msg;
-        }
-
-        internal async ValueTask<T> ReadAsync<T>(CancellationToken cancellationToken)
-            where T : class, IMessage
-        {
-            var msg = await ReadAsync(cancellationToken).ConfigureAwait(false);
-            if (msg.Message is T typed)
-            {
-                return typed;
-            }
-            throw new SshException($"Expected {typeof(T).Name} but received {msg.Type}.");
         }
 
         internal Task SendAsync(IClientMessage message, CancellationToken cancellationToken)

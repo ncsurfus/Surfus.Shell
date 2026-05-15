@@ -50,20 +50,21 @@ namespace Surfus.Shell.Messages.Channel.Requests
         public string TermEnvironment { get; }
         public uint TerminalWidthCharacters { get; }
         public uint TerminalHeightRows { get; }
-        public uint TerminalWidthPixels { get; } = 640;
-        public uint TerminalHeightPixels { get; } = 480;
+        public uint TerminalWidthPixels { get; }
+        public uint TerminalHeightPixels { get; }
         public ReadOnlyMemory<byte> TerminalModes { get; } = ReadOnlyMemory<byte>.Empty;
 
-        public override ByteWriter GetByteWriter()
+        public override int GetPayloadSize() => base.GetPayloadSize() + TermEnvironment.GetStringSize() + 16 + TerminalModes.GetBinaryStringSize();
+
+        public override void WritePayload(ref SpanWriter writer)
         {
-            var writer = GetByteWriter(TermEnvironment.GetStringSize() + 16 + TerminalModes.GetBinaryStringSize());
+            base.WritePayload(ref writer);
             writer.WriteString(TermEnvironment);
-            writer.WriteUint(TerminalWidthCharacters);
-            writer.WriteUint(TerminalHeightRows);
-            writer.WriteUint(TerminalWidthPixels);
-            writer.WriteUint(TerminalHeightPixels);
+            writer.WriteUInt32(TerminalWidthCharacters);
+            writer.WriteUInt32(TerminalHeightRows);
+            writer.WriteUInt32(TerminalWidthPixels);
+            writer.WriteUInt32(TerminalHeightPixels);
             writer.WriteBinaryString(TerminalModes);
-            return writer;
         }
     }
 }

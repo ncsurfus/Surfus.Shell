@@ -23,7 +23,7 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
         /// <summary>
         /// The minimum group size.
         /// </summary>
-        private const uint MinimumGroupSize = 1024;
+        private const uint MinimumGroupSize = 2048;
 
         /// <summary>
         /// The preferred group size.
@@ -108,78 +108,82 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             await _context
                 .Inbox.SendAsync(new DhgRequest(MinimumGroupSize, PreferredGroupSize, MaximumGroupSize), cancellationToken)
                 .ConfigureAwait(false);
-            var dhgGroupMessage = await _context
+            using var dhgGroupMessage = await _context
                 .Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_31, cancellationToken)
                 .ConfigureAwait(false);
 
-            var dhgGroup = new DhgGroup(dhgGroupMessage.Packet);
+            var dhgGroupView = new MessageViews.KeyExchange.DhgGroupView(dhgGroupMessage.Payload);
+            var p = new BigInt(dhgGroupView.P);
+            var g = new BigInt(dhgGroupView.G);
 
             // Validate server-provided DH group parameters
-            if (dhgGroup.P.BigInteger.GetBitLength() < 2048)
+            if (p.BigInteger.GetBitLength() < 2048)
             {
                 throw new SshException("Server DH group P is too small (must be at least 2048 bits).");
             }
-            if (dhgGroup.P.BigInteger % 2 == 0)
+            if (p.BigInteger % 2 == 0)
             {
                 throw new SshException("Server DH group P must be odd.");
             }
-            if (dhgGroup.G.BigInteger <= 1 || dhgGroup.G.BigInteger >= dhgGroup.P.BigInteger - 1)
+            if (g.BigInteger <= 1 || g.BigInteger >= p.BigInteger - 1)
             {
                 throw new SshException("Server DH group G is out of valid range.");
             }
 
             // Generate random number 'x'.
-            var x = GenerateRandomBigInteger(1, (dhgGroup.P.BigInteger - 1) / 2);
+            var x = GenerateRandomBigInteger(1, (p.BigInteger - 1) / 2);
 
             // Generate 'e'.
-            var e = new BigInt(BigInteger.ModPow(dhgGroup.G.BigInteger, x, dhgGroup.P.BigInteger));
+            var e = new BigInt(BigInteger.ModPow(g.BigInteger, x, p.BigInteger));
 
             await _context.Inbox.SendAsync(new DhgInit(e), cancellationToken).ConfigureAwait(false);
-            var dhgReplyMessage = await _context
+            using var dhgReplyMessage = await _context
                 .Inbox.ReadAsync(MessageType.SSH_MSG_KEX_Exchange_33, cancellationToken)
                 .ConfigureAwait(false);
 
-            // Send 'e' to the server with the 'Init' message.
-            var replyMessage = new DhgReply(dhgReplyMessage.Packet);
+            var replyView = new MessageViews.KeyExchange.DhgReplyView(dhgReplyMessage.Payload);
+            var serverHostKey = replyView.ServerPublicHostKeyAndCertificates.ToArray();
+            var f = new BigInt(replyView.F);
+            var hSignature = replyView.HSignature.ToArray();
 
             // Verify 'F' is in the range of [1, p-1]
-            if (replyMessage.F.BigInteger < 1 || replyMessage.F.BigInteger > dhgGroup.P.BigInteger - 1)
+            if (f.BigInteger < 1 || f.BigInteger > p.BigInteger - 1)
             {
                 throw new SshException("Invalid 'F' from server!");
             }
 
             // Generate the shared secret 'K'
-            var k = new BigInt(BigInteger.ModPow(replyMessage.F.BigInteger, x, dhgGroup.P.BigInteger));
+            var k = new BigInt(BigInteger.ModPow(f.BigInteger, x, p.BigInteger));
 
             // Prepare the signing algorithm from the servers public key.
             _signingAlgorithm = _context.Algorithms.CreateSigner(
                 _kexInitExchangeResult.ServerHostKeyAlgorithm,
-                replyMessage.ServerPublicHostKeyAndCertificates
+                serverHostKey
             );
 
-            _context.ServerCertificate = replyMessage.ServerPublicHostKeyAndCertificates;
+            _context.ServerCertificate = serverHostKey;
             _context.ServerCertificateSize = _signingAlgorithm.KeySize;
 
-            if (_context.HostKeyCallback != null && !await _context.HostKeyCallback(replyMessage.ServerPublicHostKeyAndCertificates, cancellationToken).ConfigureAwait(false))
+            if (_context.HostKeyCallback != null && !await _context.HostKeyCallback(serverHostKey, cancellationToken).ConfigureAwait(false))
             {
                 throw new SshException("Rejected Host Key.");
             }
 
-            // Generate 'H', the computed hash. If data has been tampered via man-in-the-middle-attack 'H' will be incorrect and the connection will be terminated.
+            // Generate 'H', the computed hash.
             var totalBytes =
                 _context.ClientVersion.GetStringSize()
                 + _context.ServerVersion.GetStringSize()
                 + _kexInitExchangeResult.Client.GetKexInitBinaryStringSize()
                 + _kexInitExchangeResult.Server.GetKexInitBinaryStringSize()
-                + replyMessage.ServerPublicHostKeyAndCertificates.GetBinaryStringSize()
+                + ((ReadOnlyMemory<byte>)serverHostKey).GetBinaryStringSize()
                 + 4
                 + 4
                 + 4
                 + // Min/Desired/Max Sizes
-                dhgGroup.P.GetBigIntegerSize()
-                + dhgGroup.G.GetBigIntegerSize()
+                p.GetBigIntegerSize()
+                + g.GetBigIntegerSize()
                 + e.GetBigIntegerSize()
-                + replyMessage.F.GetBigIntegerSize()
+                + f.GetBigIntegerSize()
                 + k.GetBigIntegerSize();
 
             var byteWriter = new ByteWriter(totalBytes);
@@ -187,20 +191,20 @@ namespace Surfus.Shell.KeyExchange.DiffieHellmanGroupExchange
             byteWriter.WriteString(_context.ServerVersion);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Client);
             byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Server);
-            byteWriter.WriteBinaryString(replyMessage.ServerPublicHostKeyAndCertificates);
-            byteWriter.WriteUint(1024);
-            byteWriter.WriteUint(2048);
-            byteWriter.WriteUint(8192);
-            byteWriter.WriteBigInteger(dhgGroup.P);
-            byteWriter.WriteBigInteger(dhgGroup.G);
+            byteWriter.WriteBinaryString((ReadOnlyMemory<byte>)serverHostKey);
+            byteWriter.WriteUint(MinimumGroupSize);
+            byteWriter.WriteUint(PreferredGroupSize);
+            byteWriter.WriteUint(MaximumGroupSize);
+            byteWriter.WriteBigInteger(p);
+            byteWriter.WriteBigInteger(g);
             byteWriter.WriteBigInteger(e);
-            byteWriter.WriteBigInteger(replyMessage.F);
+            byteWriter.WriteBigInteger(f);
             byteWriter.WriteBigInteger(k);
 
             var h = Hash(byteWriter.Bytes);
 
             // Use the signing algorithm to verify the data sent by the server is correct.
-            if (!_signingAlgorithm.VerifySignature(h, replyMessage.HSignature.Span))
+            if (!_signingAlgorithm.VerifySignature(h, hSignature))
             {
                 throw new SshException("Invalid Host Signature.");
             }

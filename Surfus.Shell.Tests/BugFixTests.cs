@@ -191,7 +191,10 @@ public class BugFixTests
 
         var packet = new SshPacket(buffer, packetStart: 0, packetLength: pos);
         var msgEvent = new MessageEvent(packet);
-        var ex = Assert.Throws<SshException>(() => _ = msgEvent.Message);
+        var ex = Assert.Throws<SshException>(() =>
+        {
+            _ = new MessageViews.UserAuth.UserAuthInfoRequestView(msgEvent.Payload);
+        });
         Assert.Contains("Too many prompts", ex.Message);
     }
 

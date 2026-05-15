@@ -25,7 +25,7 @@ namespace Surfus.Shell.Tests
                     var chunk = new byte[size];
                     for (int i = 0; i < size; i++)
                         chunk[i] = value++;
-                    stream.Push(chunk);
+                    stream.Push(TestMessageFactory.CreateChannelData(chunk));
                     remaining -= size;
                 }
                 stream.Complete();

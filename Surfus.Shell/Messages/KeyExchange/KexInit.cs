@@ -86,6 +86,18 @@ namespace Surfus.Shell.Messages.KeyExchange
             return writer;
         }
 
+        public int GetPayloadSize() => GetSize() - 1;
+
+        public void WritePayload(ref SpanWriter writer)
+        {
+            var bw = GetByteWriter();
+            // ByteWriter message layout: [4 seq][4 pktlen][1 padlen][1 type][payload...][padding space]
+            // DataIndex = 9, payload starts at DataIndex+1 (after type byte)
+            var payloadStart = SshPacket.DataIndex + 1; // 10
+            var payloadLength = bw.DataLength - 1; // DataLength includes the type byte
+            writer.WriteBytes(bw.Bytes.AsSpan(payloadStart, payloadLength));
+        }
+
         public int GetSize()
         {
             return ByteSizer.GetByteSize()

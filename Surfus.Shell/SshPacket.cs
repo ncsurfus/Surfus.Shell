@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Security.Cryptography;
+using System.Threading;
+using Surfus.Shell.Messages;
 
 namespace Surfus.Shell
 {
@@ -131,12 +134,50 @@ namespace Surfus.Shell
         /// <summary>
         /// Whether this packet's buffer was rented from ArrayPool.
         /// </summary>
-        private bool _pooled;
+        private readonly bool _fromPool;
+
+        /// <summary>
+        /// Creates an outbound packet from an IClientMessage, writing directly into a pooled buffer.
+        /// The caller must call Return() or dispose via the pooled buffer when done.
+        /// </summary>
+        internal static SshPacket Create(IClientMessage message, uint sequenceNumber, int blockSize, bool isEtm)
+        {
+            var payloadSize = 1 + message.GetPayloadSize(); // type byte + payload
+
+            // Compute padding
+            var alignBase = isEtm ? (1 + payloadSize) : (5 + payloadSize);
+            var paddingLength = -(alignBase % blockSize) + blockSize * 2;
+            paddingLength = paddingLength <= 255 ? paddingLength : paddingLength - blockSize;
+
+            // packet_length = padding_length_byte + payload + padding
+            var packetLength = 1 + payloadSize + paddingLength;
+            var tagSize = 16; // max AEAD tag — caller trims if not AEAD
+            var bufferSize = 4 + 4 + packetLength + tagSize;
+
+            var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(bufferSize);
+
+            // [0..4]   sequence number
+            BinaryPrimitives.WriteUInt32BigEndian(buffer.AsSpan(0), sequenceNumber);
+
+            // [4..8]   packet_length
+            BinaryPrimitives.WriteUInt32BigEndian(buffer.AsSpan(4), (uint)packetLength);
+
+            // [8]      padding_length
+            buffer[8] = (byte)paddingLength;
+            // [9..]    message type + payload
+            var writer = new SpanWriter(buffer.AsSpan(9));
+            writer.WriteByte((byte)message.Type);
+            message.WritePayload(ref writer);
+
+            // padding
+            RandomNumberGenerator.Fill(buffer.AsSpan(9 + payloadSize, paddingLength));
+
+            return new SshPacket(buffer, packetStart: 4, packetLength: 4 + packetLength, pooled: true);
+        }
 
         /// <summary>
         /// Constructs an SSH Packet from incoming data.
         /// </summary>
-        /// <param name="buffer"></param>
         internal SshPacket(byte[] buffer, int packetStart, int packetLength, bool pooled = false)
         {
             // An extra 4 bytes were allocated at the start of the packet for the HMAC.
@@ -148,28 +189,29 @@ namespace Surfus.Shell
             Reader = new ByteReader(((ReadOnlyMemory<byte>)Buffer).Slice(5 + packetStart)); // Start reading after the first 5 bytes of the packet (skipping the packet length and padding amount)
             Offset = packetStart;
             Length = packetLength;
-            _pooled = pooled;
+            _fromPool = pooled;
         }
 
         /// <summary>
-        /// Returns the buffer to the ArrayPool if it was rented. Call only when the packet is no longer needed.
+        /// The buffer if it was rented from the pool, null otherwise.
+        /// Used to pass ownership to MessageEvent.
+        /// </summary>
+        internal byte[]? PooledBuffer => _fromPool ? Buffer : null;
+
+        /// <summary>
+        /// Returns the buffer to the pool if it was rented. Safe to call multiple times.
+        /// </summary>
+        private int _returned;
+
+        /// <summary>
+        /// Returns the buffer to the pool if it was rented. Safe to call multiple times.
         /// </summary>
         internal void Return()
         {
-            if (_pooled)
+            if (_fromPool && Interlocked.CompareExchange(ref _returned, 1, 0) == 0)
             {
-                _pooled = false;
                 ArrayPool<byte>.Shared.Return(Buffer);
             }
-        }
-
-        /// <summary>
-        /// Detaches the buffer from the pool so it won't be returned. Use when the packet
-        /// is queued for later consumption (e.g., inbox delivery).
-        /// </summary>
-        internal void Detach()
-        {
-            _pooled = false;
         }
     }
 }

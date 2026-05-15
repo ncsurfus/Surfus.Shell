@@ -7,21 +7,24 @@ namespace Surfus.Shell.Signing
     {
         internal ECDsaBase(ReadOnlyMemory<byte> publicCertificate)
         {
-            var reader = new ByteReader(publicCertificate);
-            if (Name != reader.ReadString())
+            var reader = new SpanReader(publicCertificate.Span);
+            var keyType = reader.ReadSshAsciiString();
+            if (!keyType.Is(NameBytes))
             {
                 throw new Exception($"Expected {Name} signature type!");
             }
 
-            if (CurveName != reader.ReadString())
+            var curveName = reader.ReadSshAsciiString();
+            if (!curveName.Is(CurveNameBytes))
             {
-                throw new Exception($"Expected {CurveName} signature type!");
+                throw new Exception($"Expected {CurveName} curve!");
             }
 
-            // https://www.rfc-editor.org/rfc/rfc5656#section-3.1
-            // TODO: Point Compression. This is not implemented in OpenSSH and I am
-            // also ignoring it here.
-            var qBytes = reader.ReadBinaryString().AsMemory();
+            var qBytes = reader.ReadBinaryString();
+            if (qBytes.Length == 0 || qBytes[0] != 0x04)
+            {
+                throw new Exception("Unsupported EC point format (expected uncompressed 0x04).");
+            }
             var x = qBytes.Slice(1, (qBytes.Length - 1) / 2);
             var y = qBytes.Slice(1 + x.Length, x.Length);
             Parameters = new ECParameters
@@ -33,40 +36,42 @@ namespace Surfus.Shell.Signing
         }
 
         public ECParameters Parameters { get; }
-
         public abstract HashAlgorithmName HashName { get; }
-
         public abstract ECCurve Curve { get; }
-
         public abstract string CurveName { get; }
-
         public override int KeySize { get; }
-
         public abstract int FieldSizeBytes { get; }
+
+        /// <summary>UTF-8 bytes of the algorithm name for zero-alloc comparison.</summary>
+        protected abstract ReadOnlySpan<byte> NameBytes { get; }
+
+        /// <summary>UTF-8 bytes of the curve name for zero-alloc comparison.</summary>
+        protected abstract ReadOnlySpan<byte> CurveNameBytes { get; }
 
         public override bool VerifySignature(ReadOnlySpan<byte> data, ReadOnlySpan<byte> signature)
         {
-            // https://www.rfc-editor.org/rfc/rfc5656#section-3.1.2
             using var ecdsa = ECDsa.Create(Parameters);
 
-            var reader = new ByteReader(signature.ToArray());
-            if (Name != reader.ReadString())
+            var reader = new SpanReader(signature);
+            var sigType = reader.ReadSshAsciiString();
+            if (!sigType.Is(NameBytes))
             {
                 throw new Exception($"Expected {Name} signature type!");
             }
 
-            // r and s must each be zero-padded to the curve's field size.
             var blob = reader.ReadBinaryString();
-            var blobReader = new ByteReader(blob);
+            var blobReader = new SpanReader(blob);
             var r = blobReader.ReadBigInteger();
             var s = blobReader.ReadBigInteger();
 
             var fieldSize = FieldSizeBytes;
             var rsSignature = new byte[fieldSize * 2];
-            var rBytes = (int)r.BigInteger.GetByteCount(true);
-            var sBytes = (int)s.BigInteger.GetByteCount(true);
-            r.BigInteger.TryWriteBytes(rsSignature.AsSpan(fieldSize - rBytes, rBytes), out _, true, true);
-            s.BigInteger.TryWriteBytes(rsSignature.AsSpan(fieldSize * 2 - sBytes, sBytes), out _, true, true);
+            var rBytes = (int)r.GetByteCount(true);
+            var sBytes = (int)s.GetByteCount(true);
+            if (rBytes > fieldSize || sBytes > fieldSize || r.Sign <= 0 || s.Sign <= 0)
+                return false;
+            r.TryWriteBytes(rsSignature.AsSpan(fieldSize - rBytes, rBytes), out _, true, true);
+            s.TryWriteBytes(rsSignature.AsSpan(fieldSize * 2 - sBytes, sBytes), out _, true, true);
 
             return ecdsa.VerifyData(data, rsSignature, HashName);
         }

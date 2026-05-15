@@ -97,11 +97,6 @@ namespace Surfus.Shell
             return new BigInt(value, length);
         }
 
-        internal static BigInteger ReadBigInteger(ReadOnlySpan<byte> bytes)
-        {
-            return new BigInteger(bytes, isUnsigned: true, isBigEndian: true);
-        }
-
         internal static BigInteger ReadBigInteger(byte[] buffer)
         {
             return new BigInteger(buffer, isUnsigned: true, isBigEndian: true);

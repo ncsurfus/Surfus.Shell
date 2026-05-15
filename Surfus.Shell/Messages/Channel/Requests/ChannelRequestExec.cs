@@ -16,11 +16,12 @@ namespace Surfus.Shell.Messages.Channel.Requests
 
         public string Command { get; }
 
-        public override ByteWriter GetByteWriter()
+        public override int GetPayloadSize() => base.GetPayloadSize() + Command.GetStringSize();
+
+        public override void WritePayload(ref SpanWriter writer)
         {
-            var writer = GetByteWriter(Command.GetStringSize());
+            base.WritePayload(ref writer);
             writer.WriteString(Command);
-            return writer;
         }
     }
 }

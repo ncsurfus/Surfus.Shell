@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
@@ -20,7 +21,8 @@ namespace Surfus.Shell
         {
             KeyBlob = keyBlob;
             Comment = comment;
-            KeyType = new ByteReader(keyBlob).ReadString();
+            var reader = new SpanReader(keyBlob.Span);
+            KeyType = reader.ReadAsciiString();
         }
     }
 
@@ -81,7 +83,7 @@ namespace Surfus.Shell
         {
             await SendAsync([SSH_AGENTC_REQUEST_IDENTITIES], cancellationToken).ConfigureAwait(false);
             var response = await ReceiveAsync(cancellationToken).ConfigureAwait(false);
-            var reader = new ByteReader(response);
+            var reader = new SpanReader(response);
 
             var type = reader.ReadByte();
             if (type == SSH_AGENT_FAILURE)
@@ -97,8 +99,8 @@ namespace Surfus.Shell
             var keys = new List<SshAgentKey>(count);
             for (var i = 0; i < count; i++)
             {
-                var keyBlob = reader.ReadBinaryString();
-                var comment = reader.ReadString();
+                var keyBlob = reader.ReadBinaryString().ToArray();
+                var comment = reader.ReadUtf8String();
                 keys.Add(new SshAgentKey(keyBlob, comment));
             }
             return keys;
@@ -131,7 +133,7 @@ namespace Surfus.Shell
 
             await SendAsync(buf, cancellationToken).ConfigureAwait(false);
             var response = await ReceiveAsync(cancellationToken).ConfigureAwait(false);
-            var reader = new ByteReader(response);
+            var reader = new SpanReader(response);
 
             var type = reader.ReadByte();
             if (type == SSH_AGENT_FAILURE)
@@ -143,7 +145,7 @@ namespace Surfus.Shell
                 throw new Exceptions.SshException($"Unexpected agent response type: {type}");
             }
 
-            return reader.ReadBinaryString();
+            return reader.ReadBinaryString().ToArray();
         }
 
         private async Task SendAsync(byte[] payload, CancellationToken cancellationToken)
@@ -159,7 +161,7 @@ namespace Surfus.Shell
         {
             var lengthBuf = new byte[4];
             await ReadExactAsync(lengthBuf, cancellationToken).ConfigureAwait(false);
-            var length = (int)ByteReader.ReadUInt32(lengthBuf.AsSpan(0));
+            var length = (int)BinaryPrimitives.ReadUInt32BigEndian(lengthBuf.AsSpan(0));
             if (length > 256 * 1024)
             {
                 throw new Exceptions.SshException("Agent response too large.");
