@@ -303,8 +303,8 @@ namespace Surfus.Shell
         {
             Inbox.OnError(error);
             Interlocked.Exchange(ref _closed, 1);
-            Stdout.Complete();
-            Stderr.Complete();
+            Stdout.Complete(error);
+            Stderr.Complete(error);
             _sendWindowSignal.Writer.TryComplete();
             lock (_pendingRequests)
             {

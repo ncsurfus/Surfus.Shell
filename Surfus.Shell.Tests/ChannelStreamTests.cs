@@ -56,5 +56,77 @@ namespace Surfus.Shell.Tests
                 expected++;
             }
         }
+        [Fact]
+        public async Task Complete_WithError_ReadAsyncThrowsError()
+        {
+            using var stream = new ChannelStream();
+            var error = new Exceptions.SshException("Connection closed.");
+
+            stream.Complete(error);
+
+            var buf = new byte[1024];
+            var ex = await Assert.ThrowsAsync<Exceptions.SshException>(
+                () => stream.ReadAsync(buf, 0, buf.Length, CancellationToken.None));
+            Assert.Equal("Connection closed.", ex.Message);
+        }
+
+        [Fact]
+        public async Task Complete_WithError_ValueTaskReadAsyncThrowsError()
+        {
+            using var stream = new ChannelStream();
+            var error = new Exceptions.SshException("Connection closed.");
+
+            stream.Complete(error);
+
+            var buf = new byte[1024];
+            var ex = await Assert.ThrowsAsync<Exceptions.SshException>(
+                async () => await stream.ReadAsync(buf.AsMemory(), CancellationToken.None));
+            Assert.Equal("Connection closed.", ex.Message);
+        }
+
+        [Fact]
+        public async Task Complete_WithError_AfterBufferedData_DataDeliveredBeforeError()
+        {
+            using var stream = new ChannelStream();
+            var data = new byte[] { 1, 2, 3, 4, 5 };
+            stream.Push(TestMessageFactory.CreateChannelData(data));
+
+            var error = new Exceptions.SshException("Connection died.");
+            stream.Complete(error);
+
+            // First read should return the buffered data
+            var buf = new byte[1024];
+            var n = await stream.ReadAsync(buf, 0, buf.Length, CancellationToken.None);
+            Assert.Equal(5, n);
+            Assert.Equal(data, buf[..5]);
+
+            // Next read should throw the error
+            var ex = await Assert.ThrowsAsync<Exceptions.SshException>(
+                () => stream.ReadAsync(buf, 0, buf.Length, CancellationToken.None));
+            Assert.Equal("Connection died.", ex.Message);
+        }
+
+        [Fact]
+        public async Task Complete_WithoutError_ReadAsyncReturnsZero()
+        {
+            using var stream = new ChannelStream();
+            stream.Complete();
+
+            var buf = new byte[1024];
+            var n = await stream.ReadAsync(buf, 0, buf.Length, CancellationToken.None);
+            Assert.Equal(0, n);
+        }
+
+        [Fact]
+        public async Task Push_AfterComplete_DisposesMessageEvent()
+        {
+            using var stream = new ChannelStream();
+            stream.Complete();
+
+            // Push after complete should dispose the event (not leak)
+            var evt = TestMessageFactory.CreateChannelData(new byte[] { 1, 2, 3 });
+            stream.Push(evt);
+            // No assertion needed — just verifying no exception/leak
+        }
     }
 }

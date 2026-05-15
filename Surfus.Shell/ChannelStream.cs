@@ -66,10 +66,13 @@ namespace Surfus.Shell
             }
         }
 
-        internal void Complete()
+        internal void Complete(Exception? error = null)
         {
-            _channel.Writer.TryComplete();
+            _error = error;
+            _channel.Writer.TryComplete(error);
         }
+
+        private volatile Exception? _error;
 
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
@@ -85,9 +88,15 @@ namespace Surfus.Shell
             if (totalCopied == 0)
             {
                 if (!await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    if (_error is { } err) throw err;
                     return 0;
+                }
                 if (!_channel.Reader.TryRead(out var evt))
+                {
+                    if (_error is { } err) throw err;
                     return 0;
+                }
 
                 ReleaseCurrent();
                 _currentEvent = evt;
@@ -115,9 +124,15 @@ namespace Surfus.Shell
             if (totalCopied == 0)
             {
                 if (!await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    if (_error is { } err) throw err;
                     return 0;
+                }
                 if (!_channel.Reader.TryRead(out var evt))
+                {
+                    if (_error is { } err) throw err;
                     return 0;
+                }
 
                 ReleaseCurrent();
                 _currentEvent = evt;

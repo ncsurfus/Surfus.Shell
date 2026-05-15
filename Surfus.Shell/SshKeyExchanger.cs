@@ -60,6 +60,7 @@ namespace Surfus.Shell
                     _initialKexComplete.TrySetException(ex);
                     _ready.TrySetException(ex);
                     _inbox.OnError(ex);
+                    _newReadKeys.Writer.TryComplete(ex);
                 }
             }
         }
