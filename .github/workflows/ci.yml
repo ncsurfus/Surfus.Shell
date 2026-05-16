@@ -28,6 +28,9 @@ jobs:
 
       - uses: jdx/mise-action@v2
 
+      - name: Build test server
+        run: cd Surfus.Shell.Tests/testserver && go build -o testserver .
+
       - name: Run benchmarks
         run: dotnet run --project Surfus.Shell.Benchmarks -c Release -- --filter "*Throughput*" --job short --exporters json
 
