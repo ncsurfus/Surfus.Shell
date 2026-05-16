@@ -154,7 +154,7 @@ namespace Surfus.Shell
             var tagSize = 16; // max AEAD tag — caller trims if not AEAD
             var bufferSize = 4 + 4 + packetLength + tagSize;
 
-            var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(bufferSize);
+            var buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
 
             // [0..4]   sequence number
             BinaryPrimitives.WriteUInt32BigEndian(buffer.AsSpan(0), sequenceNumber);

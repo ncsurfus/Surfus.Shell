@@ -3,13 +3,12 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Surfus.Shell.Authentication;
-using Surfus.Shell.Compression;
-using Surfus.Shell.Crypto;
 using Surfus.Shell.KeyExchange;
 using Surfus.Shell.MessageAuthentication;
 using Surfus.Shell.Messages;
 using Surfus.Shell.Messages.KeyExchange;
+using Surfus.Shell.Extensions;
+using Surfus.Shell.MessageViews.KeyExchange;
 
 namespace Surfus.Shell
 {
@@ -72,12 +71,36 @@ namespace Surfus.Shell
 
             while (true)
             {
-                var serverKexInit = await ReadKexInitAsync(cancellationToken).ConfigureAwait(false);
+                // Read server KexInit
+                using var serverMsg = await _inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
+                if (serverMsg.Type != MessageType.SSH_MSG_KEXINIT)
+                {
+                    throw new Exceptions.SshException($"Expected SSH_MSG_KEXINIT but received {serverMsg.Type}.");
+                }
 
+                // Build our KexInit
                 var clientKexInit = new KexInit(_algorithms);
+
+                // Parse server view and negotiate — all synchronous, before any await
+                var serverPayload = serverMsg.Payload;
+                var serverView = new KexInitView(serverPayload);
+
+                var kexResult = new KexInitExchangeResult(
+                    clientKexInit,
+                    serverMsg.RawMessage.Slice(0, 1 + serverView.BytesConsumed),
+                    keyExchangeAlgorithm: NegotiateAlgorithm(clientKexInit.KexAlgorithms, serverView.KexAlgorithms),
+                    serverHostKeyAlgorithm: NegotiateAlgorithm(clientKexInit.ServerHostKeyAlgorithms, serverView.ServerHostKeyAlgorithms),
+                    encryptionClientToServer: NegotiateAlgorithm(clientKexInit.EncryptionClientToServer, serverView.EncryptionClientToServer),
+                    encryptionServerToClient: NegotiateAlgorithm(clientKexInit.EncryptionServerToClient, serverView.EncryptionServerToClient),
+                    messageAuthenticationClientToServer: NegotiateAlgorithm(clientKexInit.MacClientToServer, serverView.MacClientToServer),
+                    messageAuthenticationServerToClient: NegotiateAlgorithm(clientKexInit.MacServerToClient, serverView.MacServerToClient),
+                    compressionClientToServer: NegotiateAlgorithm(clientKexInit.CompressionClientToServer, serverView.CompressionClientToServer),
+                    compressionServerToClient: NegotiateAlgorithm(clientKexInit.CompressionServerToClient, serverView.CompressionServerToClient)
+                );
+
+                // Now safe to await — view is no longer referenced
                 await _inbox.SendAsync(clientKexInit, cancellationToken).ConfigureAwait(false);
 
-                var kexResult = new KexInitExchangeResult(clientKexInit, serverKexInit);
                 var kexContext = new KexContext(
                     _inbox,
                     _connectionInfo.ClientVersion,
@@ -120,14 +143,16 @@ namespace Surfus.Shell
             }
         }
 
-        private async Task<KexInit> ReadKexInitAsync(CancellationToken cancellationToken)
+        private static string NegotiateAlgorithm(NameList client, SshNameList server)
         {
-            using var msg = await _inbox.ReadAsync(cancellationToken).ConfigureAwait(false);
-            if (msg.Type != MessageType.SSH_MSG_KEXINIT)
+            foreach (var name in client.Names)
             {
-                throw new Exceptions.SshException($"Expected SSH_MSG_KEXINIT but received {msg.Type}.");
+                if (server.Contains(System.Text.Encoding.ASCII.GetBytes(name)))
+                    return name;
             }
-            return new KexInit(msg.Packet);
+            throw new Exceptions.SshException(
+                $"No common cipher was found. Key exchange failed.\r\nClient Supports: {client.AsString}.\r\nServer Supports: {server.ToString()}"
+            );
         }
 
         private void ApplyWriteCrypto(

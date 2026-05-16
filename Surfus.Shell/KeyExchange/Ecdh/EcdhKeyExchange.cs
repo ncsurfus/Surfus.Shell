@@ -103,8 +103,8 @@ namespace Surfus.Shell.KeyExchange.Ecdh
             var totalBytes =
                 _context.ClientVersion.GetStringSize()
                 + _context.ServerVersion.GetStringSize()
-                + _kexInitExchangeResult.Client.GetKexInitBinaryStringSize()
-                + _kexInitExchangeResult.Server.GetKexInitBinaryStringSize()
+                + _kexInitExchangeResult.ClientBinaryStringSize
+                + _kexInitExchangeResult.ServerBinaryStringSize
                 + ((ReadOnlyMemory<byte>)serverHostKey).GetBinaryStringSize()
                 + qCMem.GetBinaryStringSize()
                 + ((ReadOnlyMemory<byte>)serverPublicKey).GetBinaryStringSize()
@@ -113,8 +113,8 @@ namespace Surfus.Shell.KeyExchange.Ecdh
             var byteWriter = new ByteWriter(totalBytes);
             byteWriter.WriteString(_context.ClientVersion);
             byteWriter.WriteString(_context.ServerVersion);
-            byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Client);
-            byteWriter.WriteKexInitBinaryString(_kexInitExchangeResult.Server);
+            byteWriter.WriteBinaryString(_kexInitExchangeResult.ClientBytes);
+            byteWriter.WriteBinaryString(_kexInitExchangeResult.ServerBytes);
             byteWriter.WriteBinaryString((ReadOnlyMemory<byte>)serverHostKey);
             byteWriter.WriteBinaryString(qCMem);
             byteWriter.WriteBinaryString((ReadOnlyMemory<byte>)serverPublicKey);

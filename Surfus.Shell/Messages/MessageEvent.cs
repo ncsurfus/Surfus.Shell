@@ -50,6 +50,12 @@ namespace Surfus.Shell.Messages
         }
 
         /// <summary>
+        /// Gets the raw message bytes (type byte + payload) as a Memory.
+        /// Suitable for capturing data that needs to outlive the event (e.g., exchange hash).
+        /// </summary>
+        public ReadOnlyMemory<byte> RawMessage => Packet.Reader.Bytes.Slice(Packet.Reader.Position - 1);
+
+        /// <summary>
         /// Returns the packet buffer to the pool. Safe to call multiple times.
         /// </summary>
         public void Dispose()

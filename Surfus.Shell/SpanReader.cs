@@ -76,6 +76,14 @@ internal ref struct SpanReader
         return result;
     }
 
+    public SshNameList ReadNameList()
+    {
+        var length = (int)ReadUInt32();
+        var result = new SshNameList(_remaining.Slice(0, length));
+        _remaining = _remaining.Slice(length);
+        return result;
+    }
+
     /// <summary>
     /// Reads an RSA parameter (binary string with leading zero stripped).
     /// Allocates a byte[] since RSAParameters requires owned arrays.
