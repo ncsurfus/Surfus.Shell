@@ -12,16 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Build Go test server
-        run: cd Surfus.Shell.Tests/testserver && go build -o testserver .
+      - uses: jdx/mise-action@v2
 
       - name: Build
         run: dotnet build
@@ -35,16 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Build Go test server
-        run: cd Surfus.Shell.Tests/testserver && go build -o testserver .
+      - uses: jdx/mise-action@v2
 
       - name: Run benchmarks
         run: dotnet run --project Surfus.Shell.Benchmarks -c Release -- --filter "*Throughput*" --job short --exporters json

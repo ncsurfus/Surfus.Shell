@@ -1,0 +1,3 @@
+[tools]
+dotnet = "9"
+go = "1.26"
