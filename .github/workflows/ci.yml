@@ -18,7 +18,16 @@ jobs:
         run: dotnet build
 
       - name: Test
-        run: dotnet test --no-build --verbosity normal
+        run: dotnet test --no-build --verbosity normal --collect:"XPlat Code Coverage"
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: "**/coverage.cobertura.xml"
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
 
   benchmark:
     runs-on: ubuntu-latest
