@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build Go test server
+        run: cd Surfus.Shell.Tests/testserver && go build -o testserver .
+
+      - name: Build
+        run: dotnet build
+
+      - name: Test
+        run: dotnet test --no-build --verbosity normal
+
+  benchmark:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build Go test server
+        run: cd Surfus.Shell.Tests/testserver && go build -o testserver .
+
+      - name: Run benchmarks
+        run: dotnet run --project Surfus.Shell.Benchmarks -c Release -- --filter "*Throughput*" --job short --exporters json
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: Surfus.Shell.Benchmarks/BenchmarkDotNet.Artifacts/
