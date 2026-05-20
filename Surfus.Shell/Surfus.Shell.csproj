@@ -17,6 +17,10 @@
     <PackageProjectUrl>https://github.com/ncsurfus/Surfus.Shell</PackageProjectUrl>
     <RepositoryUrl>https://github.com/ncsurfus/Surfus.Shell</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <Version Condition=" '$(Configuration)' == 'Debug' ">$(Version)-Debug</Version>
   </PropertyGroup>
   <ItemGroup>
