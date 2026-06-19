@@ -43,6 +43,9 @@ namespace Surfus.Shell
         /// </summary>
         public int? ExitCode => _channel.ExitCode;
 
+        /// <summary>
+        /// Wraps an already-opened session channel as a command.
+        /// </summary>
         public SshCommand(SshChannel channel)
         {
             _channel = channel;
@@ -70,7 +73,8 @@ namespace Surfus.Shell
                         opts.Columns,
                         opts.Rows,
                         opts.WidthPixels,
-                        opts.HeightPixels
+                        opts.HeightPixels,
+                        opts.BuildTerminalModes()
                     ),
                     cancellationToken
                 )
@@ -92,6 +96,9 @@ namespace Surfus.Shell
             _commandState = State.Started;
         }
 
+        /// <summary>
+        /// Closes the channel if open and disposes underlying resources.
+        /// </summary>
         public async ValueTask DisposeAsync()
         {
             if (_commandState == State.Opened || _commandState == State.Started)

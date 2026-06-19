@@ -6,6 +6,7 @@ Surfus.Shell is an SSH client library for .NET.
 
 - Fully asynchronous API
 - Terminal sessions, command execution, and SCP file transfers
+- Configurable terminal modes (echo, newline translation, raw modes)
 - Local port forwarding (direct-tcpip)
 - SSH agent authentication
 - Private key authentication
@@ -69,6 +70,36 @@ await terminal.StandardInput.WriteAsync("ls -la\n"u8.ToArray(), ct);
 var buf = new byte[4096];
 var n = await terminal.StandardOutput.ReadAsync(buf, ct);
 var output = Encoding.UTF8.GetString(buf, 0, n);
+```
+
+### Terminal Modes
+
+```csharp
+// Disable echo — useful for automation to avoid reading back sent commands
+var terminal = await client.CreateTerminalAsync(ct, new TerminalOptions
+{
+    Echo = false,
+    OutputNewlineTranslation = false,
+});
+
+// Custom terminal size
+var terminal = await client.CreateTerminalAsync(ct, new TerminalOptions
+{
+    Columns = 200,
+    Rows = 50,
+    TerminalType = "xterm-256color",
+});
+
+// Full control with explicit mode list (RFC 4254 §8)
+var terminal = await client.CreateTerminalAsync(ct, new TerminalOptions
+{
+    RawTerminalModes = new[]
+    {
+        TerminalMode.Echo(false),
+        TerminalMode.Onlcr(false),
+        new TerminalMode(70, 0), // any opcode by number
+    },
+});
 ```
 
 ### Execute a Command

@@ -173,9 +173,11 @@ func handleConn(conn net.Conn, config *ssh.ServerConfig, shellMode string) {
 func handleSession(channel ssh.Channel, requests <-chan *ssh.Request, shellMode string) {
 	defer channel.Close()
 
+	var termModes []byte
 	for req := range requests {
 		switch req.Type {
 		case "pty-req":
+			termModes = parsePtyModes(req.Payload)
 			req.Reply(true, nil)
 		case "shell":
 			req.Reply(true, nil)
@@ -183,7 +185,7 @@ func handleSession(channel ssh.Channel, requests <-chan *ssh.Request, shellMode 
 			case "cisco":
 				runCiscoShell(channel)
 			default:
-				runEchoShell(channel)
+				runEchoShell(channel, termModes)
 			}
 			return
 		case "exec":
@@ -198,6 +200,28 @@ func handleSession(channel ssh.Channel, requests <-chan *ssh.Request, shellMode 
 			}
 		}
 	}
+}
+
+// parsePtyModes extracts the encoded terminal modes bytes from a pty-req payload.
+// Layout: term(string) + width_chars(u32) + height_rows(u32) + width_px(u32) + height_px(u32) + modes(string)
+func parsePtyModes(payload []byte) []byte {
+	if len(payload) < 4 {
+		return nil
+	}
+	// Skip TERM string
+	termLen := int(payload[0])<<24 | int(payload[1])<<16 | int(payload[2])<<8 | int(payload[3])
+	off := 4 + termLen
+	// Skip 4 uint32 fields (16 bytes)
+	off += 16
+	if off+4 > len(payload) {
+		return nil
+	}
+	modesLen := int(payload[off])<<24 | int(payload[off+1])<<16 | int(payload[off+2])<<8 | int(payload[off+3])
+	off += 4
+	if off+modesLen > len(payload) {
+		return nil
+	}
+	return payload[off : off+modesLen]
 }
 
 // --- Direct TCP/IP forwarding: connects to the requested host:port ---
@@ -252,8 +276,11 @@ func handleDirectTcpIp(newChannel ssh.NewChannel) {
 
 // --- Echo shell: echoes input, responds to "exit" ---
 
-func runEchoShell(ch ssh.Channel) {
+func runEchoShell(ch ssh.Channel, termModes []byte) {
 	defer ch.Close()
+	if len(termModes) > 0 {
+		ch.Write([]byte("TERMMODES:" + fmt.Sprintf("%x", termModes) + "\r\n"))
+	}
 	ch.Write([]byte("$ "))
 
 	buf := make([]byte, 4096)

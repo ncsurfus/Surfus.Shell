@@ -42,12 +42,20 @@ namespace Surfus.Shell
         /// </summary>
         public int? ExitCode => _channel.ExitCode;
 
+        /// <summary>
+        /// Wraps an already-opened session channel as a terminal.
+        /// Call <see cref="RequestAsync"/> to request the PTY and shell.
+        /// </summary>
         public SshTerminal(SshChannel channel, TerminalOptions? options = null)
         {
             _channel = channel;
             _options = options ?? new TerminalOptions();
         }
 
+        /// <summary>
+        /// Requests a pseudo-terminal and starts a shell on the server.
+        /// Must be called exactly once; throws if called again.
+        /// </summary>
         public async Task RequestAsync(CancellationToken cancellationToken)
         {
             if (_terminalState != State.Initial)
@@ -66,7 +74,8 @@ namespace Surfus.Shell
                         _options.Columns,
                         _options.Rows,
                         _options.WidthPixels,
-                        _options.HeightPixels
+                        _options.HeightPixels,
+                        _options.BuildTerminalModes()
                     ),
                     cancellationToken
                 )
@@ -91,6 +100,10 @@ namespace Surfus.Shell
                 .ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Closes the channel if open and disposes underlying resources.
+        /// Safe to call multiple times.
+        /// </summary>
         public async ValueTask DisposeAsync()
         {
             if (_terminalState == State.Opened)
